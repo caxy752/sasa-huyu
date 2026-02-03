@@ -28,7 +28,8 @@ import RiskDisclaimer from '../components/risk-disclaimer';
 import RiskCalculatorButton from '../components/risk-calculator-button/risk-calculator-button';
 import BotBuilder from '../pages/bot-builder';
 import Main from '../pages/main';
-import OverUnder from '../pages/OverUnder'; // <--- NEW TAB IMPORTED
+import OverUnder from '../pages/OverUnder';
+import MakotiMagic from '../pages/MakotiMagic'; // <--- LOAD MAKOTI MAGIC
 import './app.scss';
 import 'react-toastify/dist/ReactToastify.css';
 import '../components/bot-notification/bot-notification.scss';
@@ -203,15 +204,24 @@ const AppContent = observer(() => {
                 <BlocklyLoading />
                 <div className='bot-dashboard bot' data-testid='dt_bot_dashboard'>
                     <Audio />
-                    {/* Only show OverUnder when its tab is active in store */}
-                    {store.common.active_tab === 'over_under' ? (
-                        <OverUnder />
-                    ) : (
-                        <>
-                            <Main />
-                            <BotBuilder />
-                        </>
-                    )}
+                    
+                    {/* UPDATED MULTI-TAB SWITCHER */}
+                    {(() => {
+                        if (store.common.active_tab === 'over_under') {
+                            return <OverUnder />;
+                        } else if (store.common.active_tab === 'makoti_magic') {
+                            return <MakotiMagic />;
+                        } else {
+                            // This is your safe zone (Main & BotBuilder)
+                            return (
+                                <>
+                                    <Main />
+                                    <BotBuilder />
+                                </>
+                            );
+                        }
+                    })()}
+
                     <BotStopped />
                     <TransactionDetailsModal />
                     <ToastContainer limit={3} draggable={false} />
