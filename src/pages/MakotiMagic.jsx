@@ -6,28 +6,25 @@ import { api_base } from '@/external/bot-skeleton';
 const MakotiMagic = observer(() => {
     const { client } = useStore();
     
-    // UI State
     const [is_hunting, setIsHunting] = useState(false);
     const [stake, setStake] = useState(0.35);
     const [results, setResults] = useState([]);
     const [total_pl, setTotalPL] = useState(0);
 
-    // Speed Refs (Bypasses React's slow render cycle)
     const hunt_active = useRef(false);
-    const last_digit_ref = useRef(null);
 
-    // 1. DYNAMIC RESULT TRACKER
+    // RESULT LISTENER - Captures what actually happened on the server
     useEffect(() => {
         const result_sub = api_base.api.onMessage().subscribe((msg) => {
             const data = msg.data;
             if (data.msg_type === 'proposal_open_contract' && data.proposal_open_contract.is_sold) {
                 const contract = data.proposal_open_contract;
-                const win = contract.status === 'won';
                 const profit = contract.profit;
 
                 const new_result = {
                     id: contract.contract_id,
                     stake: contract.buy_price,
+                    prediction: contract.barrier, // This is what we predicted
                     entry: contract.entry_tick_display_value.slice(-1),
                     exit: contract.exit_tick_display_value.slice(-1),
                     status: contract.status.toUpperCase(),
@@ -41,8 +38,8 @@ const MakotiMagic = observer(() => {
         return () => result_sub.unsubscribe();
     }, []);
 
-    // 2. ULTRA-SPEED EXECUTION ENGINE
-    const fireInstantStrike = useCallback((digit) => {
+    // THE SPEED-STRIKE: This uses the intercepted digit AS the prediction
+    const fireInstantStrike = useCallback((intercepted_digit) => {
         if (!hunt_active.current) return;
 
         api_base.api.send({
@@ -56,16 +53,14 @@ const MakotiMagic = observer(() => {
                 duration: 1,
                 duration_unit: 't',
                 symbol: '1HZ100V', 
-                barrier: parseInt(digit) 
+                barrier: parseInt(intercepted_digit) // TARGETING THE SAME DIGIT
             }
         });
 
-        // Kill hunt immediately after firing to prevent multi-buying
         hunt_active.current = false;
         setIsHunting(false);
     }, [stake, client.currency]);
 
-    // 3. PACKET INTERCEPTOR
     useEffect(() => {
         let tick_sub;
         if (is_hunting) {
@@ -74,7 +69,8 @@ const MakotiMagic = observer(() => {
                 if (hunt_active.current && msg.data.msg_type === 'tick') {
                     const quote = msg.data.tick.quote.toString();
                     const digit = quote.charAt(quote.length - 1);
-                    last_digit_ref.current = digit;
+                    
+                    // The moment a '5' appears, we bet the NEXT one is also a '5'
                     fireInstantStrike(digit);
                 }
             });
@@ -85,69 +81,55 @@ const MakotiMagic = observer(() => {
     return (
         <div style={containerStyle}>
             <div style={headerStyle}>
-                <h1>MAKOTI ULTRA-SPEED HUNTER</h1>
+                <h1 style={{ color: '#0f0' }}>MAKOTI PREDICTION SYNC</h1>
                 <div style={statsStyle}>
-                    TOTAL P/L: <span style={{ color: total_pl >= 0 ? '#0f0' : '#f00' }}>{total_pl.toFixed(2)} {client.currency}</span>
+                    PROFIT: <span style={{ color: total_pl >= 0 ? '#0f0' : '#f00' }}>{total_pl.toFixed(2)}</span>
                 </div>
             </div>
 
             <div style={controlPanelStyle}>
-                <div style={inputGroupStyle}>
-                    <label>STAKE AMOUNT</label>
-                    <input 
-                        type="number" 
-                        value={stake} 
-                        onChange={(e) => setStake(e.target.value)} 
-                        style={inputStyle}
-                    />
+                <div style={{ marginBottom: '15px' }}>
+                    <label>STAKE: </label>
+                    <input type="number" value={stake} onChange={(e) => setStake(e.target.value)} style={inputStyle} />
                 </div>
-                <button 
-                    onClick={() => setIsHunting(true)} 
-                    disabled={is_hunting}
-                    style={is_hunting ? huntBtnActiveStyle : huntBtnStyle}
-                >
-                    {is_hunting ? "SCANNING PACKETS..." : "TRIGGER INSTANT HUNT"}
+                <button onClick={() => setIsHunting(true)} disabled={is_hunting} style={is_hunting ? huntBtnActiveStyle : huntBtnStyle}>
+                    {is_hunting ? "INTERCEPTING..." : "TRIGGER PREDICTION MATCH"}
                 </button>
             </div>
 
-            <div style={tableContainerStyle}>
-                <table style={tableStyle}>
-                    <thead>
-                        <tr>
-                            <th>STAKE</th>
-                            <th>ENTRY DIGIT</th>
-                            <th>EXIT DIGIT</th>
-                            <th>RESULT</th>
-                            <th>PROFIT</th>
+            <table style={tableStyle}>
+                <thead>
+                    <tr style={{ borderBottom: '2px solid #333' }}>
+                        <th>PREDICTION</th>
+                        <th>ENTRY DIGIT</th>
+                        <th>EXIT DIGIT</th>
+                        <th>RESULT</th>
+                        <th>P/L</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {results.map((res, i) => (
+                        <tr key={i}>
+                            <td style={{ color: '#ff0' }}>{res.prediction}</td>
+                            <td>{res.entry}</td>
+                            <td style={{ fontWeight: 'bold' }}>{res.exit}</td>
+                            <td style={{ color: res.status === 'WON' ? '#0f0' : '#f00' }}>{res.status}</td>
+                            <td style={{ color: res.profit >= 0 ? '#0f0' : '#f00' }}>{res.profit.toFixed(2)}</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        {results.map((res, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid #111' }}>
-                                <td>{res.stake}</td>
-                                <td style={{ color: '#0f0', fontWeight: 'bold' }}>{res.entry}</td>
-                                <td style={{ color: '#ff0' }}>{res.exit}</td>
-                                <td style={{ color: res.status === 'WON' ? '#0f0' : '#f00' }}>{res.status}</td>
-                                <td style={{ color: res.profit >= 0 ? '#0f0' : '#f00' }}>{res.profit.toFixed(2)}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 });
 
-// STYLES
 const containerStyle = { background: '#000', color: '#0f0', minHeight: '100vh', padding: '20px', fontFamily: 'monospace' };
-const headerStyle = { display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #0f0', paddingBottom: '10px', marginBottom: '20px' };
-const statsStyle = { fontSize: '20px', fontWeight: 'bold' };
-const controlPanelStyle = { background: '#050505', border: '1px solid #333', padding: '20px', borderRadius: '8px', textAlign: 'center', marginBottom: '20px' };
-const inputGroupStyle = { marginBottom: '15px' };
-const inputStyle = { background: '#000', color: '#0f0', border: '1px solid #0f0', padding: '10px', fontSize: '18px', textAlign: 'center', width: '120px' };
-const huntBtnStyle = { background: '#0f0', color: '#000', padding: '15px 40px', fontSize: '20px', fontWeight: 'bold', border: 'none', cursor: 'pointer', borderRadius: '4px' };
-const huntBtnActiveStyle = { ...huntBtnStyle, background: '#f00', animation: 'pulse 1s infinite' };
-const tableContainerStyle = { background: '#050505', padding: '10px', borderRadius: '8px' };
-const tableStyle = { width: '100%', borderCollapse: 'collapse', textAlign: 'left' };
+const headerStyle = { display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #0f0', marginBottom: '20px' };
+const statsStyle = { fontSize: '22px' };
+const controlPanelStyle = { background: '#080808', padding: '30px', borderRadius: '10px', textAlign: 'center', marginBottom: '20px', border: '1px solid #111' };
+const inputStyle = { background: '#000', color: '#0f0', border: '1px solid #0f0', padding: '10px', width: '100px', textAlign: 'center' };
+const huntBtnStyle = { background: '#0f0', color: '#000', padding: '15px 50px', fontSize: '20px', fontWeight: 'bold', border: 'none', cursor: 'pointer' };
+const huntBtnActiveStyle = { ...huntBtnStyle, background: '#333', color: '#666' };
+const tableStyle = { width: '100%', borderCollapse: 'collapse', marginTop: '20px' };
 
 export default MakotiMagic;
