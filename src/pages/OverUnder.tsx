@@ -10,9 +10,10 @@ const STATUS_AUTHORIZING = 'Authorizing...';
 const STATUS_CONNECTED = 'Connected';
 
 const OverUnder = observer(() => {
-    const { summary_card, journal, client } = useStore();
+    const { journal, client } = useStore();
     const ws = useRef<WebSocket | null>(null);
     const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+    const tickSubscriptionActive = useRef<string | null>(null);
 
     // State
     const [connectionStatus, setConnectionStatus] = useState(STATUS_DISCONNECTED);
@@ -40,64 +41,74 @@ const OverUnder = observer(() => {
     ];
 
     const subscribeToTicks = (symbol: string) => {
-        if (ws.current?.readyState !== 1) {
-            journal.pushMessage({ message: 'WebSocket not ready. Cannot subscribe to ticks.', type: 'error' });
+        if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+            console.log('WebSocket not ready for subscription');
             return;
         }
         
-        // Forget all previous tick subscriptions
+        // Avoid redundant subscriptions
+        if (tickSubscriptionActive.current === symbol) return;
+
+        console.log(`Subscribing to ticks for ${symbol}`);
+        
+        // Forget previous subscriptions
         ws.current.send(JSON.stringify({ forget_all: 'ticks' }));
         
-        // Reset stats
+        // Reset stats for new symbol
         setDigitStats(Array(10).fill(0));
         setLastDigit(null);
         
-        // Subscribe to new symbol
+        // Subscribe
         ws.current.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
-        journal.pushMessage({ message: `✅ Subscribed to ${symbol} for live ticks.`, type: 'success' });
+        tickSubscriptionActive.current = symbol;
+        
+        if (journal?.pushMessage) {
+            journal.pushMessage({ message: `📡 Subscribing to ${symbol}...`, type: 'info' });
+        }
     };
 
     const connectWebSocket = () => {
-        // Close any existing connection
+        // Cleanup existing connection
         if (ws.current) {
             ws.current.onclose = null;
             ws.current.onerror = null;
             ws.current.onmessage = null;
             ws.current.onopen = null;
             ws.current.close();
+            ws.current = null;
         }
 
-        // Clear any pending reconnect attempts
         if (reconnectTimeout.current) {
             clearTimeout(reconnectTimeout.current);
             reconnectTimeout.current = null;
         }
 
-        // Check if user is logged in
-        if (!client.loginid) {
-            setConnectionStatus(STATUS_DISCONNECTED);
-            journal.pushMessage({ message: '⚠️ Please log in to use the Over/Under tool.', type: 'warn' });
-            return;
-        }
-
+        tickSubscriptionActive.current = null;
         setConnectionStatus(STATUS_CONNECTING);
-        journal.pushMessage({ message: '🔌 Connecting to Deriv WebSocket...', type: 'info' });
-
-        // Create new WebSocket connection
-        ws.current = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=80058');
+        
+        console.log('Connecting to Deriv WebSocket...');
+        
+        // Using the same app_id as other functional tools in the repo
+        const app_id = localStorage.getItem('config.app_id') || '80058';
+        ws.current = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${app_id}`);
 
         ws.current.onopen = () => {
+            console.log('WebSocket opened, authorizing...');
             setConnectionStatus(STATUS_AUTHORIZING);
-            journal.pushMessage({ message: '🔐 Authorizing...', type: 'info' });
             
-            // Get the authentication token from localStorage
-            const token = localStorage.getItem('authToken');
+            // Try to get token from multiple possible locations
+            const token = localStorage.getItem('authToken') || 
+                          localStorage.getItem('token') || 
+                          JSON.parse(localStorage.getItem('accountsList') || '{}')[client.loginid];
             
-            if (token && ws.current?.readyState === 1) {
+            if (token && ws.current?.readyState === WebSocket.OPEN) {
                 ws.current.send(JSON.stringify({ authorize: token }));
             } else {
-                journal.pushMessage({ message: '❌ Authentication token not found. Please log in again.', type: 'error' });
+                console.error('No auth token found for Over/Under tool');
                 setConnectionStatus(STATUS_DISCONNECTED);
+                if (journal?.pushMessage) {
+                    journal.pushMessage({ message: '❌ Auth token not found. Please log in.', type: 'error' });
+                }
             }
         };
 
@@ -105,29 +116,23 @@ const OverUnder = observer(() => {
             try {
                 const data = JSON.parse(msg.data);
 
-                // Handle errors
                 if (data.error) {
-                    journal.pushMessage({ message: `❌ Error: ${data.error.message}`, type: 'error' });
-                    
+                    console.error('WebSocket error:', data.error);
                     if (data.msg_type === 'authorize') {
                         setConnectionStatus(STATUS_DISCONNECTED);
-                        journal.pushMessage({ message: '❌ Authorization failed. Please check your login.', type: 'error' });
                     }
                     return;
                 }
 
-                // Handle authorization success
                 if (data.msg_type === 'authorize') {
-                    if (data.authorize) {
-                        setConnectionStatus(STATUS_CONNECTED);
-                        journal.pushMessage({ message: '✅ Connected and authorized successfully!', type: 'success' });
-                        
-                        // Subscribe to ticks after successful authorization
-                        subscribeToTicks(selectedSymbol);
+                    console.log('Authorized successfully');
+                    setConnectionStatus(STATUS_CONNECTED);
+                    if (journal?.pushMessage) {
+                        journal.pushMessage({ message: '✅ Connected to Deriv', type: 'success' });
                     }
+                    subscribeToTicks(selectedSymbol);
                 }
 
-                // Handle tick data
                 if (data.msg_type === 'tick') {
                     const quote = data.tick.quote.toString();
                     const digit = parseInt(quote.charAt(quote.length - 1));
@@ -139,143 +144,112 @@ const OverUnder = observer(() => {
                         return newStats;
                     });
 
-                    // Auto-execute trade if conditions are met
                     if (isAutoRunning && digit === entryDigit) {
                         executeMultiTrade();
                     }
                 }
 
-                // Handle buy confirmation
                 if (data.msg_type === 'buy') {
-                    if (data.buy) {
+                    if (journal?.pushMessage) {
                         journal.pushMessage({ 
-                            message: `✅ Trade executed: ${data.buy.longcode} | Contract ID: ${data.buy.contract_id}`, 
+                            message: `💰 Trade executed: ${data.buy.contract_id}`, 
                             type: 'success' 
                         });
                     }
                 }
             } catch (error) {
-                console.error('Error parsing WebSocket message:', error);
-                journal.pushMessage({ message: '❌ Error processing WebSocket message.', type: 'error' });
+                console.error('Error processing message:', error);
             }
-        };
-
-        ws.current.onerror = (error) => {
-            console.error('WebSocket error:', error);
-            journal.pushMessage({ message: '❌ WebSocket connection error.', type: 'error' });
         };
 
         ws.current.onclose = () => {
+            console.log('WebSocket closed');
             setConnectionStatus(STATUS_DISCONNECTED);
-            journal.pushMessage({ message: '🔌 WebSocket connection closed.', type: 'warn' });
+            tickSubscriptionActive.current = null;
             
-            // Attempt to reconnect after 3 seconds if user is still logged in
-            if (client.loginid) {
-                reconnectTimeout.current = setTimeout(() => {
-                    journal.pushMessage({ message: '🔄 Attempting to reconnect...', type: 'info' });
+            // Reconnect logic
+            reconnectTimeout.current = setTimeout(() => {
+                if (document.visibilityState === 'visible') {
                     connectWebSocket();
-                }, 3000);
-            }
+                }
+            }, 5000);
+        };
+
+        ws.current.onerror = (err) => {
+            console.error('WebSocket connection error:', err);
         };
     };
 
-    // Initialize WebSocket connection when component mounts or loginid changes
+    // Main connection effect
     useEffect(() => {
         connectWebSocket();
 
-        // Cleanup on unmount
-        return () => {
-            if (reconnectTimeout.current) {
-                clearTimeout(reconnectTimeout.current);
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && (!ws.current || ws.current.readyState === WebSocket.CLOSED)) {
+                connectWebSocket();
             }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
             if (ws.current) {
                 ws.current.onclose = null;
-                ws.current.onerror = null;
-                ws.current.onmessage = null;
-                ws.current.onopen = null;
                 ws.current.close();
             }
         };
-    }, [client.loginid]);
+    }, [client.loginid]); // Reconnect if account changes
 
-    // Handle symbol change
+    // Symbol change effect
     useEffect(() => {
         if (connectionStatus === STATUS_CONNECTED) {
             subscribeToTicks(selectedSymbol);
         }
-    }, [selectedSymbol]);
+    }, [selectedSymbol, connectionStatus]);
 
     const executeMultiTrade = () => {
-        if (ws.current?.readyState !== 1) {
-            journal.pushMessage({ message: '❌ WebSocket not connected. Cannot execute trade.', type: 'error' });
-            return;
-        }
+        if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
 
-        if (!client.currency) {
-            journal.pushMessage({ message: '❌ Currency not available. Please check your account.', type: 'error' });
-            return;
-        }
-
-        journal.pushMessage({ message: `🎯 Entry Digit ${entryDigit} Hit! Executing Multi-Trade...`, type: 'info' });
+        const currency = client.currency || 'USD';
         
-        // Execute DIGITOVER (Over 5)
-        ws.current.send(JSON.stringify({
+        const baseParams = {
             buy: 1,
             price: stake,
             parameters: {
                 amount: stake,
                 basis: 'stake',
-                contract_type: 'DIGITOVER',
-                currency: client.currency,
+                currency: currency,
                 duration: 1,
                 duration_unit: 't',
                 symbol: selectedSymbol,
-                barrier: '5',
             }
+        };
+
+        // OVER 5
+        ws.current.send(JSON.stringify({
+            ...baseParams,
+            parameters: { ...baseParams.parameters, contract_type: 'DIGITOVER', barrier: '5' }
         }));
 
-        // Execute DIGITUNDER (Under 4)
+        // UNDER 4
         ws.current.send(JSON.stringify({
-            buy: 1,
-            price: stake,
-            parameters: {
-                amount: stake,
-                basis: 'stake',
-                contract_type: 'DIGITUNDER',
-                currency: client.currency,
-                duration: 1,
-                duration_unit: 't',
-                symbol: selectedSymbol,
-                barrier: '4',
-            }
+            ...baseParams,
+            parameters: { ...baseParams.parameters, contract_type: 'DIGITUNDER', barrier: '4' }
         }));
         
-        // Stop auto-running if turbo mode is off
-        if (!isTurbo) {
-            setIsAutoRunning(false);
-            journal.pushMessage({ message: '⏸️ Auto-trade stopped (Turbo mode OFF).', type: 'info' });
-        }
+        if (!isTurbo) setIsAutoRunning(false);
     };
 
-    const handleManualTrade = () => {
-        if (connectionStatus !== STATUS_CONNECTED) {
-            journal.pushMessage({ message: '❌ Not connected. Please wait for connection.', type: 'error' });
-            return;
-        }
-        executeMultiTrade();
-    };
-    
     const totalTicks = useMemo(() => digitStats.reduce((a, b) => a + b, 0) || 1, [digitStats]);
 
     const getStatusClassName = () => {
         switch(connectionStatus) {
-            case STATUS_CONNECTED:
-                return 'connected';
+            case STATUS_CONNECTED: return 'connected';
             case STATUS_AUTHORIZING:
-            case STATUS_CONNECTING:
-                return 'authorizing';
-            default:
-                return 'disconnected';
+            case STATUS_CONNECTING: return 'authorizing';
+            default: return 'disconnected';
         }
     };
 
@@ -298,83 +272,38 @@ const OverUnder = observer(() => {
 
             <div className="controls-panel">
                 <div className="input-group">
-                    <label>Connection Status</label>
+                    <label>Status</label>
                     <div className={`connection-status ${getStatusClassName()}`}>
                         {connectionStatus}
                     </div>
                 </div>
 
                 <div className="input-group">
-                    <label>Volatility Index</label>
-                    <select 
-                        className="ui-select" 
-                        value={selectedSymbol} 
-                        onChange={(e) => setSelectedSymbol(e.target.value)}
-                        disabled={connectionStatus !== STATUS_CONNECTED}
-                    >
-                        {volatilityIndices.map(index => (
-                            <option key={index.value} value={index.value}>{index.text}</option>
-                        ))}
+                    <label>Index</label>
+                    <select className="ui-select" value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)}>
+                        {volatilityIndices.map(idx => <option key={idx.value} value={idx.value}>{idx.text}</option>)}
                     </select>
                 </div>
 
                 <div className="input-group">
-                    <label>Stake ({client.currency || 'USD'})</label>
-                    <input 
-                        className="ui-input" 
-                        type="number" 
-                        min="0.35"
-                        step="0.01"
-                        value={stake} 
-                        onChange={(e) => setStake(Number(e.target.value))} 
-                    />
+                    <label>Stake</label>
+                    <input className="ui-input" type="number" value={stake} onChange={(e) => setStake(Number(e.target.value))} />
                 </div>
 
                 <div className="input-group">
-                    <label>Entry Digit (Trigger)</label>
+                    <label>Trigger</label>
                     <div className="entry-config">
-                        <input 
-                            className="ui-input digit-entry" 
-                            type="number" 
-                            min="0" 
-                            max="9" 
-                            value={entryDigit} 
-                            onChange={(e) => setEntryDigit(Number(e.target.value))} 
-                        />
+                        <input className="ui-input digit-entry" type="number" min="0" max="9" value={entryDigit} onChange={(e) => setEntryDigit(Number(e.target.value))} />
                         <div className={`status-led ${lastDigit === entryDigit ? 'glow' : ''}`}></div>
                     </div>
                 </div>
 
                 <div className="button-group">
-                    <button 
-                        className={`btn-secondary ${isTurbo ? 'active' : ''}`} 
-                        onClick={() => setIsTurbo(!isTurbo)}
-                    >
-                        {isTurbo ? '⚡ TURBO ON' : '🐢 TURBO OFF'}
+                    <button className={`btn-secondary ${isTurbo ? 'active' : ''}`} onClick={() => setIsTurbo(!isTurbo)}>
+                        {isTurbo ? 'TURBO ON' : 'TURBO OFF'}
                     </button>
-                    <button 
-                        className={`btn-primary ${isAutoRunning ? 'running' : ''}`} 
-                        onClick={() => setIsAutoRunning(!isAutoRunning)}
-                        disabled={connectionStatus !== STATUS_CONNECTED}
-                    >
-                        {isAutoRunning ? '⏹️ STOP AUTO-TRADE' : '▶️ START AUTO-TRADE'}
-                    </button>
-                </div>
-
-                <div className="button-group">
-                    <button 
-                        className="btn-manual" 
-                        onClick={handleManualTrade}
-                        disabled={connectionStatus !== STATUS_CONNECTED}
-                    >
-                        🎯 EXECUTE MANUAL TRADE
-                    </button>
-                    <button 
-                        className="btn-reconnect" 
-                        onClick={connectWebSocket}
-                        disabled={connectionStatus === STATUS_CONNECTING || connectionStatus === STATUS_AUTHORIZING}
-                    >
-                        🔄 RECONNECT
+                    <button className={`btn-primary ${isAutoRunning ? 'running' : ''}`} onClick={() => setIsAutoRunning(!isAutoRunning)}>
+                        {isAutoRunning ? 'STOP' : 'START'}
                     </button>
                 </div>
             </div>
