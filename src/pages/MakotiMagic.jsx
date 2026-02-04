@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { observer } from 'mobx-react-lite';
-import { useStore } from '@/hooks/useStore';
 
 const MakotiMagic = observer(() => {
-    const { client } = useStore();
-    const [is_hunting, setIsHunting] = useState(false);
+    // State for user inputs
+    const [token, setToken] = useState('');
     const [stake, setStake] = useState(0.35);
+    const [currency, setCurrency] = useState('VRTC'); // Default to Demo
+    const [is_hunting, setIsHunting] = useState(false);
+    
+    // State for display
     const [results, setResults] = useState([]);
     const [total_pl, setTotalPL] = useState(0);
     const [status, setStatus] = useState('OFFLINE');
@@ -13,7 +16,6 @@ const MakotiMagic = observer(() => {
     const workerRef = useRef(null);
 
     useEffect(() => {
-        // --- THE ENGINE (WEB WORKER) ---
         const workerBlob = new Blob([`
             let ws;
             let active = false;
@@ -30,7 +32,6 @@ const MakotiMagic = observer(() => {
                     ws.onmessage = (msg) => {
                         const res = JSON.parse(msg.data);
                         
-                        // Handle Errors (Insufficient balance, invalid token, etc)
                         if (res.error) {
                             self.postMessage({ type: 'ERROR', data: res.error.message });
                             return;
@@ -44,7 +45,6 @@ const MakotiMagic = observer(() => {
                         if (active && res.msg_type === 'tick') {
                             const digit = res.tick.quote.toString().slice(-1);
                             
-                            // THE STRIKE
                             ws.send(JSON.stringify({
                                 buy: 1, 
                                 price: payload.stake,
@@ -52,7 +52,7 @@ const MakotiMagic = observer(() => {
                                     amount: payload.stake,
                                     basis: 'stake',
                                     contract_type: 'DIGITMATCH',
-                                    currency: payload.currency || 'USD',
+                                    currency: payload.currency,
                                     duration: 1,
                                     duration_unit: 't',
                                     symbol: '1HZ100V',
@@ -76,13 +76,13 @@ const MakotiMagic = observer(() => {
 
         workerRef.current = new Worker(URL.createObjectURL(workerBlob));
 
-        // UI Updates from Worker
         workerRef.current.onmessage = (e) => {
             const { type, data } = e.data;
             if (type === 'STATUS') setStatus(data);
             if (type === 'ERROR') {
                 alert("STRIKE ERROR: " + data);
                 setIsHunting(false);
+                setStatus('ERROR');
             }
             if (type === 'RESULT') {
                 setResults(prev => [{
@@ -91,7 +91,7 @@ const MakotiMagic = observer(() => {
                     entry: data.entry_tick_display_value.slice(-1),
                     status: data.status.toUpperCase(),
                     profit: data.profit
-                }, ...prev].slice(0, 8));
+                }, ...prev].slice(0, 5));
                 setTotalPL(v => v + data.profit);
             }
         };
@@ -101,15 +101,11 @@ const MakotiMagic = observer(() => {
 
     const handleToggle = () => {
         if (!is_hunting) {
+            if (!token) return alert("Please enter your API Token first!");
             setStatus('CONNECTING...');
-            // We pass the token, stake, and currency (USD or VRTC)
             workerRef.current.postMessage({ 
                 type: 'START', 
-                payload: { 
-                    token: client.token, 
-                    stake: Number(stake),
-                    currency: client.currency // Automatically gets USD or VRTC
-                } 
+                payload: { token, stake: Number(stake), currency } 
             });
         } else {
             workerRef.current.postMessage({ type: 'STOP' });
@@ -122,36 +118,63 @@ const MakotiMagic = observer(() => {
         <div style={ui.container}>
             <div style={ui.card}>
                 <div style={ui.statusBadge}>{status}</div>
-                <h1 style={ui.title}>MAKOTI V8 LONDON</h1>
+                <h2 style={ui.title}>LONDON SURGICAL TERMINAL</h2>
                 
-                <div style={ui.inputBox}>
-                    <label style={ui.label}>STAKE AMOUNT</label>
-                    <input 
-                        type="number" 
-                        value={stake} 
-                        onChange={(e) => setStake(e.target.value)} 
-                        style={ui.input} 
-                    />
+                {/* CONFIGURATION FIELDS */}
+                <div style={ui.grid}>
+                    <div style={ui.field}>
+                        <label style={ui.label}>API TOKEN</label>
+                        <input 
+                            type="password" 
+                            placeholder="Paste Token Here"
+                            value={token} 
+                            onChange={(e) => setToken(e.target.value)} 
+                            style={ui.inputFull} 
+                        />
+                    </div>
+                    
+                    <div style={ui.row}>
+                        <div style={ui.field}>
+                            <label style={ui.label}>STAKE</label>
+                            <input 
+                                type="number" 
+                                value={stake} 
+                                onChange={(e) => setStake(e.target.value)} 
+                                style={ui.input} 
+                            />
+                        </div>
+                        <div style={ui.field}>
+                            <label style={ui.label}>CURRENCY</label>
+                            <select 
+                                value={currency} 
+                                onChange={(e) => setCurrency(e.target.value)} 
+                                style={ui.select}
+                            >
+                                <option value="VRTC">DEMO (VRTC)</option>
+                                <option value="USD">REAL (USD)</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
-                <button onClick={handleToggle} style={{ ...ui.btn, background: is_hunting ? '#330000' : '#003300', color: is_hunting ? '#ff4444' : '#44ff44' }}>
-                    {is_hunting ? 'STOP SCANNER' : 'ACTIVATE SURGICAL STRIKE'}
+                <button onClick={handleToggle} style={{ ...ui.btn, background: is_hunting ? '#300' : '#040', color: is_hunting ? '#f44' : '#4f4' }}>
+                    {is_hunting ? 'STOP SCANNER' : 'ACTIVATE LONDON ENGINE'}
                 </button>
 
                 <div style={ui.profitArea}>
-                    <div style={ui.label}>TOTAL PROFIT</div>
-                    <div style={{ ...ui.money, color: total_pl >= 0 ? '#00ff00' : '#ff0000' }}>
+                    <div style={ui.label}>NET PROFIT</div>
+                    <div style={{ ...ui.money, color: total_pl >= 0 ? '#0f0' : '#f00' }}>
                         ${total_pl.toFixed(2)}
                     </div>
                 </div>
             </div>
 
-            <div style={ui.tableArea}>
+            <div style={ui.resultsContainer}>
                 {results.map((res) => (
-                    <div key={res.id} style={ui.row}>
-                        <span>TARGET: <b>{res.target}</b></span>
-                        <span>ENTRY: <b style={{ color: res.target === res.entry ? '#0f0' : '#f00' }}>{res.entry}</b></span>
-                        <span style={{ fontWeight: 'bold' }}>{res.status}</span>
+                    <div key={res.id} style={ui.resultRow}>
+                        <span>TGT: {res.target}</span>
+                        <span>ENT: <b style={{ color: res.target === res.entry ? '#0f0' : '#f00' }}>{res.entry}</b></span>
+                        <span style={{ color: res.status === 'WON' ? '#0f0' : '#f44' }}>{res.status}</span>
                     </div>
                 ))}
             </div>
@@ -159,20 +182,23 @@ const MakotiMagic = observer(() => {
     );
 });
 
-// STYLES (Clean, Dark Mode)
 const ui = {
-    container: { background: '#000', color: '#fff', minHeight: '100vh', padding: '20px', fontFamily: 'monospace' },
-    card: { border: '1px solid #222', padding: '30px', borderRadius: '10px', textAlign: 'center', background: '#050505' },
-    statusBadge: { fontSize: '10px', color: '#888', marginBottom: '10px' },
-    title: { fontSize: '18px', letterSpacing: '2px', marginBottom: '30px', color: '#00ff00' },
-    inputBox: { marginBottom: '25px' },
-    label: { fontSize: '12px', color: '#666' },
-    input: { background: 'transparent', border: 'none', borderBottom: '2px solid #00ff00', color: '#fff', fontSize: '24px', width: '80px', textAlign: 'center', outline: 'none' },
-    btn: { width: '100%', padding: '20px', border: '1px solid currentColor', cursor: 'pointer', fontWeight: 'bold' },
-    profitArea: { marginTop: '30px' },
-    money: { fontSize: '32px', fontWeight: 'bold' },
-    tableArea: { marginTop: '20px' },
-    row: { display: 'flex', justifyContent: 'space-between', padding: '15px', borderBottom: '1px solid #111', fontSize: '14px' }
+    container: { background: '#000', color: '#fff', minHeight: '100vh', padding: '15px', fontFamily: 'monospace' },
+    card: { background: '#080808', border: '1px solid #222', padding: '20px', borderRadius: '4px' },
+    statusBadge: { fontSize: '10px', color: '#666', textAlign: 'right' },
+    title: { color: '#0f0', textAlign: 'center', marginBottom: '20px', fontSize: '16px' },
+    grid: { display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' },
+    field: { display: 'flex', flexDirection: 'column', gap: '5px' },
+    row: { display: 'flex', gap: '10px' },
+    label: { fontSize: '10px', color: '#444' },
+    inputFull: { background: '#111', border: '1px solid #333', color: '#fff', padding: '8px', borderRadius: '4px' },
+    input: { background: '#111', border: '1px solid #333', color: '#fff', padding: '8px', width: '60px', borderRadius: '4px' },
+    select: { background: '#111', border: '1px solid #333', color: '#fff', padding: '8px', flex: 1, borderRadius: '4px' },
+    btn: { width: '100%', padding: '15px', border: '1px solid currentColor', cursor: 'pointer', fontWeight: 'bold' },
+    profitArea: { marginTop: '20px', textAlign: 'center' },
+    money: { fontSize: '24px' },
+    resultsContainer: { marginTop: '20px' },
+    resultRow: { display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #111', fontSize: '12px' }
 };
 
 export default MakotiMagic;
