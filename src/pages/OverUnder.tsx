@@ -57,7 +57,6 @@ const OverUnder = observer(() => {
         addLog(`Fetching history & subscribing: ${symbol}`);
         ws.current.send(JSON.stringify({ forget_all: 'ticks' }));
         
-        // Fetch last 1000 ticks history + subscribe to live ticks
         ws.current.send(JSON.stringify({ 
             ticks_history: symbol, 
             count: MAX_TICKS,
@@ -66,8 +65,6 @@ const OverUnder = observer(() => {
             subscribe: 1 
         }));
         
-        // Don't clear history immediately to avoid 0% flash if possible, 
-        // but for a new symbol we must clear it.
         setTickHistory([]);
         setLastDigit(null);
     };
@@ -118,13 +115,13 @@ const OverUnder = observer(() => {
                         }
                     }
 
-                    // Handle Tick History (Initial Load)
                     if (data.msg_type === 'history') {
                         const prices = data.history.prices;
-                        // FIX: Use slice(-1) to get the last character and parseInt to ensure digit 0 is handled
+                        // Improved parsing: Take the absolute last character of the stringified price
                         const digits = prices.map((p: string | number) => {
                             const str = p.toString();
-                            return parseInt(str.charAt(str.length - 1));
+                            const lastChar = str.charAt(str.length - 1);
+                            return parseInt(lastChar, 10);
                         });
                         
                         setTickHistory(digits);
@@ -134,11 +131,11 @@ const OverUnder = observer(() => {
                         addLog(`Loaded ${digits.length} historical ticks`);
                     }
 
-                    // Handle Live Ticks
                     if (data.msg_type === 'tick') {
                         const quote = data.tick.quote.toString();
-                        // FIX: Ensure digit 0 is correctly parsed
-                        const digit = parseInt(quote.charAt(quote.length - 1));
+                        // Improved parsing: Take the absolute last character of the quote string
+                        const lastChar = quote.charAt(quote.length - 1);
+                        const digit = parseInt(lastChar, 10);
                         
                         setLastDigit(digit);
                         setTickHistory(prev => {
@@ -196,10 +193,6 @@ const OverUnder = observer(() => {
         }
 
         const currency = client.currency || 'USD';
-        
-        // THE MULTI-TRADE EXECUTION (AS INTENDED)
-        // This executes two trades simultaneously when the trigger digit is hit
-        
         const commonParams = {
             buy: 1,
             price: stake,
@@ -213,13 +206,11 @@ const OverUnder = observer(() => {
             }
         };
 
-        // Trade 1: DIGITOVER 5
         ws.current.send(JSON.stringify({
             ...commonParams,
             parameters: { ...commonParams.parameters, contract_type: 'DIGITOVER', barrier: '5' }
         }));
 
-        // Trade 2: DIGITUNDER 4
         ws.current.send(JSON.stringify({
             ...commonParams,
             parameters: { ...commonParams.parameters, contract_type: 'DIGITUNDER', barrier: '4' }
@@ -230,7 +221,6 @@ const OverUnder = observer(() => {
         if (!isTurbo) setIsAutoRunning(false);
     };
 
-    // Calculate percentages based on the current tick history
     const digitStats = useMemo(() => {
         const stats = Array(10).fill(0);
         tickHistory.forEach(digit => {
@@ -240,6 +230,26 @@ const OverUnder = observer(() => {
         });
         return stats;
     }, [tickHistory]);
+
+    // UI Logic for bar colors
+    const { maxIdx, minIdx } = useMemo(() => {
+        let maxVal = -1;
+        let minVal = Infinity;
+        let maxIdx = -1;
+        let minIdx = -1;
+
+        digitStats.forEach((val, idx) => {
+            if (val > maxVal) {
+                maxVal = val;
+                maxIdx = idx;
+            }
+            if (val < minVal) {
+                minVal = val;
+                minIdx = idx;
+            }
+        });
+        return { maxIdx, minIdx };
+    }, [digitStats]);
 
     const totalTicksCount = tickHistory.length || 1;
 
@@ -256,12 +266,24 @@ const OverUnder = observer(() => {
             <div className="stats-grid">
                 {digitStats.map((count, i) => {
                     const percentage = ((count / totalTicksCount) * 100).toFixed(1);
+                    
+                    // Determine bar color
+                    let barColor = 'red'; // Default
+                    if (i === maxIdx) barColor = '#00ff00'; // Highest (Green)
+                    if (i === minIdx) barColor = '#000000'; // Lowest (Black)
+
                     return (
                         <div key={i} className={`digit-card ${lastDigit === i ? 'active' : ''}`}>
                             <span className="digit-num">{i}</span>
                             <span className="digit-percent">{percentage}%</span>
                             <div className="digit-bar-wrapper">
-                                <div className="digit-bar-fill" style={{ height: `${percentage}%` }}></div>
+                                <div 
+                                    className="digit-bar-fill" 
+                                    style={{ 
+                                        height: `${percentage}%`,
+                                        backgroundColor: barColor 
+                                    }}
+                                ></div>
                             </div>
                         </div>
                     );
