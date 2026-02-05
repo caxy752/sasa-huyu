@@ -19,6 +19,7 @@ import ToolbarStore from './toolbar-store';
 import ToolboxStore from './toolbox-store';
 import TransactionsStore from './transactions-store';
 import UiStore from './ui-store';
+import OverUnderStore from './over-under-store';
 
 // TODO: need to write types for the individual classes and convert them to ts
 export default class RootStore {
@@ -38,6 +39,7 @@ export default class RootStore {
     public quick_strategy: QuickStrategyStore;
     public self_exclusion: SelfExclusionStore;
     public dashboard: DashboardStore;
+    public over_under: OverUnderStore;
 
     public chart_store: ChartStore;
     public blockly_store: BlocklyStore;
@@ -79,6 +81,7 @@ export default class RootStore {
         this.quick_strategy = new QuickStrategyStore(this);
         this.self_exclusion = new SelfExclusionStore(this, this.core);
         this.dashboard = new DashboardStore(this, this.core);
+        this.over_under = new OverUnderStore(this);
 
         // need to be at last for dependency
         this.chart_store = new ChartStore(this);
