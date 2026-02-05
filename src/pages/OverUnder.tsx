@@ -12,7 +12,7 @@ const STATUS_AUTHORIZED = 'Account Connected';
 const MAX_TICKS = 1000;
 
 const OverUnder = observer(() => {
-    const { journal, client, summary_card } = useStore();
+    const { journal, client, summary_card, transactions } = useStore();
     const ws = useRef<WebSocket | null>(null);
     const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
     const isAuthorized = useRef(false);
@@ -45,7 +45,8 @@ const OverUnder = observer(() => {
 
     const addLog = (msg: string) => {
         console.log(`[OverUnder] ${msg}`);
-        setDebugInfo(prev => [msg, ...prev].slice(0, 15));
+        const timestamp = new Date().toLocaleTimeString();
+        setDebugInfo(prev => [`[${timestamp}] ${msg}`, ...prev].slice(0, 30));
     };
 
     const subscribeToTicks = (symbol: string) => {
@@ -90,7 +91,7 @@ const OverUnder = observer(() => {
             ws.current = new WebSocket(`wss://${server_url}/websockets/v3?app_id=${app_id}`);
 
             ws.current.onopen = () => {
-                addLog('WS Opened');
+                addLog('WS Opened. Subscribing to ticks...');
                 setConnectionStatus(STATUS_LIVE);
                 subscribeToTicks(selectedSymbol);
 
@@ -99,8 +100,10 @@ const OverUnder = observer(() => {
                               JSON.parse(localStorage.getItem('accountsList') || '{}')[client.loginid];
                 
                 if (token) {
-                    addLog('Sending Authorize...');
+                    addLog('Authorizing with token...');
                     ws.current?.send(JSON.stringify({ authorize: token }));
+                } else {
+                    addLog('No auth token found. Trading will be disabled.');
                 }
             };
 
@@ -108,37 +111,40 @@ const OverUnder = observer(() => {
                 try {
                     const data = JSON.parse(msg.data);
 
+                    if (data.error) {
+                         if (data.error.code === 'SelfExclusion') {
+                            setIsAutoRunning(false);
+                         }
+                         addLog(`Error Received: ${data.error.message} (Code: ${data.error.code})`);
+                         return;
+                    }
+                    
                     if (data.msg_type === 'authorize') {
-                        if (!data.error) {
-                            addLog('Authorized!');
-                            isAuthorized.current = true;
-                            setConnectionStatus(STATUS_AUTHORIZED);
-                        } else {
-                            addLog(`Auth Error: ${data.error.message}`);
-                        }
+                        addLog('Authorization Successful!');
+                        isAuthorized.current = true;
+                        setConnectionStatus(STATUS_AUTHORIZED);
                     }
 
                     if (data.msg_type === 'buy') {
-                        if (data.error) {
-                            addLog(`Buy Error: ${data.error.message}`);
-                            journal.pushMessage(data.error.message, 'error');
-                        } else {
-                            const contract_id = data.buy.contract_id;
-                            addLog(`Purchase Successful: ${contract_id}`);
-                            journal.pushMessage(`Purchase Successful: ${contract_id}`, 'success');
-                            
-                            // Subscribe to contract updates to push to summary
-                            ws.current?.send(JSON.stringify({
-                                proposal_open_contract: 1,
-                                contract_id: contract_id,
-                                subscribe: 1
-                            }));
-                        }
+                        const buy_data = data.buy;
+                        const contract_id = buy_data.contract_id;
+                        addLog(`Purchase Successful: ${contract_id}`);
+                        journal.pushMessage(`Purchase Successful: ${contract_id}`, 'success');
+                        
+                        transactions.pushTransaction(buy_data);
+
+                        ws.current?.send(JSON.stringify({
+                            proposal_open_contract: 1,
+                            contract_id: contract_id,
+                            subscribe: 1
+                        }));
                     }
 
                     if (data.msg_type === 'proposal_open_contract') {
                         const contract = data.proposal_open_contract;
-                        // Push contract info to the global summary store
+                        
+                        transactions.pushTransaction(contract);
+
                         if (summary_card?.onBotContractEvent) {
                             summary_card.onBotContractEvent(contract);
                         }
@@ -146,61 +152,46 @@ const OverUnder = observer(() => {
                         if (contract.is_sold) {
                             const profit = contract.profit;
                             const result = profit >= 0 ? 'WON' : 'LOST';
-                            addLog(`Trade Result: ${result} (${profit})`);
-                            journal.pushMessage(`Trade Finished: ${result} (${profit})`, profit >= 0 ? 'success' : 'error');
+                            addLog(`Trade Result: ${result} ($${profit})`);
+                            journal.pushMessage(`Trade Finished: ${result} ($${profit})`, profit >= 0 ? 'success' : 'error');
                         }
                     }
 
                     if (data.msg_type === 'history') {
                         const prices = data.history.prices;
-                        const digits = prices.map((p: string | number) => {
-                            const str = p.toString();
-                            const match = str.match(/(\d)$/);
-                            return match ? parseInt(match[1], 10) : 0;
-                        });
-                        
+                        const digits = prices.map((p: string | number) => parseInt(p.toString().slice(-1), 10));
                         setTickHistory(digits);
                         if (digits.length > 0) {
                             setLastDigit(digits[digits.length - 1]);
                         }
-                        addLog(`Loaded ${digits.length} historical ticks`);
+                        addLog(`Loaded ${digits.length} historical ticks.`);
                     }
 
                     if (data.msg_type === 'tick') {
-                        const quote = data.tick.quote.toString();
-                        const match = quote.match(/(\d)$/);
-                        const digit = match ? parseInt(match[1], 10) : 0;
+                        const quote = data.tick.quote;
+                        const digit = parseInt(quote.toString().slice(-1), 10);
                         
                         setLastDigit(digit);
-                        setTickHistory(prev => {
-                            const newHistory = [...prev, digit];
-                            if (newHistory.length > MAX_TICKS) {
-                                return newHistory.slice(-MAX_TICKS);
-                            }
-                            return newHistory;
-                        });
+                        setTickHistory(prev => [...prev.slice(-MAX_TICKS + 1), digit]);
 
-                        if (isAutoRunning) {
-                            if (digit === Number(entryDigit)) {
-                                addLog(`Trigger Hit: ${digit}`);
-                                executeMultiTrade();
-                            }
+                        if (isAutoRunning && digit === Number(entryDigit)) {
+                            addLog(`Trigger Hit: Last digit is ${digit}`);
+                            executeMultiTrade();
                         }
                     }
-
-                    if (data.error && !['authorize', 'buy'].includes(data.msg_type)) {
-                        addLog(`Error: ${data.error.message}`);
-                    }
                 } catch (error) {
-                    console.error('Error parsing WS message', error);
+                    addLog(`Error parsing message: ${error.message}`);
                 }
             };
 
             ws.current.onclose = (e) => {
-                addLog(`WS Closed: ${e.code}`);
+                addLog(`WS Closed: Code ${e.code}. Reconnecting in 5s...`);
                 setConnectionStatus(STATUS_OFFLINE);
                 reconnectTimeout.current = setTimeout(connectWebSocket, 5000);
             };
+            ws.current.onerror = (e) => {
+                 addLog(`WS Error: ${e.message}`);
+            }
         } catch (e) {
             addLog(`WS Init Fail: ${e.message}`);
         }
@@ -211,6 +202,7 @@ const OverUnder = observer(() => {
         return () => {
             if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
             if (ws.current) ws.current.close();
+            addLog("Component unmounted. Connection closed.");
         };
     }, []);
 
@@ -222,50 +214,57 @@ const OverUnder = observer(() => {
 
     const executeMultiTrade = () => {
         if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-            addLog('Cannot trade: WS not open');
+            addLog('Cannot trade: WS not open.');
             return;
         }
         
         if (!isAuthorized.current) {
-            addLog('Cannot trade: Not authorized');
+            addLog('Cannot trade: Not authorized. Please log in.');
             journal.pushMessage('⚠️ Login required to trade.', 'error');
             setIsAutoRunning(false);
             return;
         }
 
+        if (Number(stake) <= 0) {
+            addLog(`Cannot trade: Invalid stake of ${stake}.`);
+            journal.pushMessage('⚠️ Stake must be a positive number.', 'error');
+            setIsAutoRunning(false);
+            return;
+        }
+
         const currency = client.currency || 'USD';
-        const commonParams = {
-            buy: 1,
-            price: Number(stake),
-            parameters: {
-                amount: Number(stake),
-                basis: 'stake',
-                currency: currency,
-                duration: 1,
-                duration_unit: 't',
-                symbol: selectedSymbol,
-            }
+        const tradeAmount = Number(stake);
+        
+        const baseParameters = {
+            amount: tradeAmount,
+            basis: 'stake',
+            currency: currency,
+            duration: 1,
+            duration_unit: 't',
+            symbol: selectedSymbol,
         };
 
-        addLog(`Executing multi-trade (Over 5 & Under 4) with stake: ${stake}`);
+        const trade1_params = {
+            buy: 1,
+            parameters: { ...baseParameters, contract_type: 'DIGITOVER', barrier: '5' }
+        };
 
-        // Trade 1: DIGITOVER 5
-        ws.current.send(JSON.stringify({
-            ...commonParams,
-            parameters: { ...commonParams.parameters, contract_type: 'DIGITOVER', barrier: '5' }
-        }));
+        const trade2_params = {
+            buy: 1,
+            parameters: { ...baseParameters, contract_type: 'DIGITUNDER', barrier: '4' }
+        };
 
-        // Trade 2: DIGITUNDER 4
-        ws.current.send(JSON.stringify({
-            ...commonParams,
-            parameters: { ...commonParams.parameters, contract_type: 'DIGITUNDER', barrier: '4' }
-        }));
+        addLog(`Executing trades: Over 5, Under 4. Stake: ${tradeAmount} ${currency}`);
         
-        addLog('Multi-Trade Requests Sent');
+        addLog(`Sending Trade 1: ${JSON.stringify(trade1_params)}`);
+        ws.current.send(JSON.stringify(trade1_params));
+
+        addLog(`Sending Trade 2: ${JSON.stringify(trade2_params)}`);
+        ws.current.send(JSON.stringify(trade2_params));
         
         if (!isTurbo) {
             setIsAutoRunning(false);
-            addLog('Auto-run stopped (Turbo OFF)');
+            addLog('Auto-run stopped (Turbo OFF).');
         }
     };
 
@@ -280,20 +279,11 @@ const OverUnder = observer(() => {
     }, [tickHistory]);
 
     const { maxIdx, minIdx } = useMemo(() => {
-        let maxVal = -1;
-        let minVal = Infinity;
-        let maxIdx = -1;
-        let minIdx = -1;
-
+        if (tickHistory.length === 0) return { maxIdx: -1, minIdx: -1 };
+        let maxVal = -1, minVal = Infinity, maxIdx = -1, minIdx = -1;
         digitStats.forEach((val, idx) => {
-            if (val > maxVal) {
-                maxVal = val;
-                maxIdx = idx;
-            }
-            if (val < minVal) {
-                minVal = val;
-                minIdx = idx;
-            }
+            if (val > maxVal) { maxVal = val; maxIdx = idx; }
+            if (val < minVal) { minVal = val; minIdx = idx; }
         });
         return { maxIdx, minIdx };
     }, [digitStats]);
@@ -307,29 +297,38 @@ const OverUnder = observer(() => {
             default: return 'disconnected';
         }
     };
+    
+    const handleStartStop = () => {
+        if (!isAutoRunning && !isAuthorized.current) {
+            addLog("Please log in to start the tool.");
+            journal.pushMessage('⚠️ Login required to trade.', 'error');
+            return;
+        }
+        setIsAutoRunning(!isAutoRunning);
+        if (isAutoRunning) {
+           addLog("Tool stopped by user.");
+        } else {
+           addLog("Tool started. Waiting for trigger...");
+        }
+    }
 
     return (
         <div className="over-under-container">
             <div className="stats-grid">
                 {digitStats.map((count, i) => {
                     const percentage = ((count / totalTicksCount) * 100).toFixed(1);
-                    
+                    const isHot = i === maxIdx && count > 0;
+                    const isCold = i === minIdx && count > 0;
                     let barColor = 'red';
-                    if (i === maxIdx) barColor = '#00ff00';
-                    if (i === minIdx) barColor = '#000000';
+                    if (isHot) barColor = '#00ff00';
+                    if (isCold) barColor = '#000000';
 
                     return (
                         <div key={i} className={`digit-card ${lastDigit === i ? 'active' : ''}`}>
                             <span className="digit-num">{i}</span>
                             <span className="digit-percent">{percentage}%</span>
                             <div className="digit-bar-wrapper">
-                                <div 
-                                    className="digit-bar-fill" 
-                                    style={{ 
-                                        height: `${percentage}%`,
-                                        backgroundColor: barColor 
-                                    }}
-                                ></div>
+                                <div className="digit-bar-fill" style={{ height: `${percentage}%`, backgroundColor: barColor }}/>
                             </div>
                         </div>
                     );
@@ -338,45 +337,44 @@ const OverUnder = observer(() => {
 
             <div className="controls-panel">
                 <div className="input-group">
-                    <label>Status ({totalTicksCount} ticks)</label>
-                    <div className={`connection-status ${getStatusClassName()}`}>
-                        {connectionStatus}
-                    </div>
+                    <label>Status ({tickHistory.length} ticks)</label>
+                    <div className={`connection-status ${getStatusClassName()}`}>{connectionStatus}</div>
                 </div>
-
                 <div className="input-group">
                     <label>Index</label>
-                    <select className="ui-select" value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)}>
+                    <select className="ui-select" value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} disabled={isAutoRunning}>
                         {volatilityIndices.map(idx => <option key={idx.value} value={idx.value}>{idx.text}</option>)}
                     </select>
                 </div>
-
                 <div className="input-group">
                     <label>Stake</label>
-                    <input className="ui-input" type="number" value={stake} onChange={(e) => setStake(Number(e.target.value))} />
+                    <input className="ui-input" type="number" value={stake} onChange={(e) => setStake(Number(e.target.value))} disabled={isAutoRunning} />
                 </div>
-
                 <div className="input-group">
-                    <label>Trigger</label>
+                    <label>Trigger Digit</label>
                     <div className="entry-config">
-                        <input className="ui-input digit-entry" type="number" min="0" max="9" value={entryDigit} onChange={(e) => setEntryDigit(Number(e.target.value))} />
+                        <input className="ui-input digit-entry" type="number" min="0" max="9" value={entryDigit} onChange={(e) => setEntryDigit(Number(e.target.value))} disabled={isAutoRunning} />
                         <div className={`status-led ${lastDigit === Number(entryDigit) ? 'glow' : ''}`}></div>
                     </div>
                 </div>
-
                 <div className="button-group">
-                    <button className={`btn-secondary ${isTurbo ? 'active' : ''}`} onClick={() => setIsTurbo(!isTurbo)}>
+                    <button className={`btn-secondary ${isTurbo ? 'active' : ''}`} onClick={() => setIsTurbo(!isTurbo)} disabled={isAutoRunning}>
                         {isTurbo ? 'TURBO ON' : 'TURBO OFF'}
                     </button>
-                    <button className={`btn-primary ${isAutoRunning ? 'running' : ''}`} onClick={() => setIsAutoRunning(!isAutoRunning)}>
+                    <button className={`btn-primary ${isAutoRunning ? 'running' : ''}`} onClick={handleStartStop}>
                         {isAutoRunning ? 'STOP' : 'START'}
                     </button>
                 </div>
             </div>
             
-            <div style={{marginTop: '20px', padding: '10px', background: '#111', borderRadius: '8px', fontSize: '10px', color: '#ccc', maxHeight: '150px', overflowY: 'auto'}}>
-                <div style={{fontWeight: 'bold', marginBottom: '5px', color: '#fff'}}>REAL-TIME MONITOR:</div>
-                {debugInfo.map((log, i) => <div key={i} style={{borderBottom: '1px solid #222', padding: '2px 0'}}>• {log}</div>)}
+            <div className="debug-monitor">
+                <div className="debug-header">
+                    <span>REAL-TIME MONITOR</span>
+                    <button onClick={() => setDebugInfo([])} className="clear-btn">Clear</button>
+                </div>
+                <div className="debug-content">
+                    {debugInfo.map((log, i) => <div key={i} className="log-item">{log}</div>)}
+                </div>
             </div>
         </div>
     );
