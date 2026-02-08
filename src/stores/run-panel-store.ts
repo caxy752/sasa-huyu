@@ -59,7 +59,6 @@ export default class RunPanelStore {
             OpenPositionLimitExceededEvent: action,
             onStopButtonClick: action,
             onClearStatClick: action,
-            clearStat: action,
             toggleStatisticsInfoModal: action,
             setActiveTabIndex: action,
             onCloseDialog: action,
@@ -68,7 +67,6 @@ export default class RunPanelStore {
             showStopMultiplierContractDialog: action,
             showLoginDialog: action,
             showRealAccountDialog: action,
-            showClearStatDialog: action,
             showIncompatibleStrategyDialog: action,
             showContractUpdateErrorDialog: action,
             registerBotListeners: action,
@@ -482,9 +480,20 @@ export default class RunPanelStore {
     };
 
     onClearStatClick = () => {
-        const { journal, transactions } = this.root_store;
+        this.showClearStatDialog();
+    };
+
+    clearStat = () => {
+        const { summary_card, journal, transactions } = this.root_store;
+
+        this.setIsRunning(false);
+        this.setHasOpenContract(false);
+        this.clear();
         journal.clear();
+        summary_card.clear();
         transactions.clear();
+        this.setContractStage(contract_stages.NOT_RUNNING);
+        this.restoreOriginalAccount();
     };
 
     toggleStatisticsInfoModal = () => {
@@ -1007,6 +1016,10 @@ export default class RunPanelStore {
         }
 
         this.dbot.interpreter.bot.getInterface().sellAtMarket();
+    };
+
+    clear = () => {
+        observer.emit('statistics.clear');
     };
 
     onBotContractEvent = (data: { is_sold?: boolean }) => {
