@@ -14,10 +14,22 @@ const Makotimagic = () => {
 
     useEffect(() => {
         // Initialize high-speed socket
-        ws.current = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${app_id}`);
+        const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+        const server_url = localStorage.getItem('config.server_url') || 'ws.binaryws.com';
+        ws.current = new WebSocket(`wss://${server_url}/websockets/v3?app_id=${app_id}`);
+
+        ws.current.onopen = () => {
+            if (token) {
+                ws.current.send(JSON.stringify({ authorize: token }));
+            }
+        };
 
         ws.current.onmessage = (msg) => {
             const data = JSON.parse(msg.data);
+
+            if (data.msg_type === 'authorize') {
+                addLog('Authorized successfully');
+            }
 
             if (data.msg_type === 'tick') {
                 const digit = parseInt(data.tick.quote.toString().slice(-1));
@@ -68,6 +80,11 @@ const Makotimagic = () => {
 
     const toggleHack = () => {
         if (!isRunning) {
+            const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+            if (!token) {
+                addLog('ERROR: Please login first');
+                return;
+            }
             // Subscribe to ticks first
             ws.current.send(JSON.stringify({ ticks: volatility, subscribe: 1 }));
             setIsRunning(true);

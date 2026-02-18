@@ -22,6 +22,30 @@
     fill: $color-white;
 }
 
+.blocklyTreeLabel {
+    color: var(--text-prominent);
+}
+
+.blocklyTreeRow {
+    &.blocklyTreeSelected {
+        background-color: #6c5ce7 !important; // Purple color to match header
+    }
+}
+
+.blocklyFlyoutBackground {
+    fill: var(--general-section-1);
+    fill-opacity: 0.9;
+}
+
+// Override Blockly block colors to purple
+.blocklyPath {
+    stroke: #6c5ce7 !important;
+}
+
+.blocklyEditableText > rect {
+    fill: #6c5ce7 !important;
+}
+
 .blocklyMainWorkspaceScrollbar {
     display: none;
 }
