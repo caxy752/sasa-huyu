@@ -1,5 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+const DigitStatsDisplay = ({ stats }) => {
+    return (
+        <div style={styles.statsContainer}>
+            <h3 style={styles.statsTitle}>Last 100 Digits Analysis</h3>
+            <div style={styles.statsGrid}>
+                {Array.from({ length: 10 }, (_, i) => i).map(digit => {
+                    const percentage = stats[digit] ? stats[digit].toFixed(1) : '0.0';
+                    return (
+                        <div key={digit} style={styles.statItem}>
+                            <div style={styles.statDigit}>{digit}</div>
+                            <div style={styles.statBar}>
+                                <div style={{...styles.statBarFill, height: `${percentage}%`}}></div>
+                            </div>
+                            <div style={styles.statPercentage}>{percentage}%</div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    );
+};
+
 const Makotimagic = () => {
     const [isRunning, setIsRunning] = useState(false);
     const [status, setStatus] = useState('SYSTEM READY');
@@ -7,21 +29,26 @@ const Makotimagic = () => {
     const [volatility, setVolatility] = useState('R_100');
     const [stake, setStake] = useState(10);
     const [lastDigit, setLastDigit] = useState(null);
-    const [entryDigit, setEntryDigit] = useState(5); // New state for the entry point digit
+    const [strikeDigit, setStrikeDigit] = useState(5);
+    const [recentDigits, setRecentDigits] = useState([]);
+    const [digitStats, setDigitStats] = useState({});
 
     const ws = useRef(null);
     const isRunningRef = useRef(isRunning);
-    const entryPointMet = useRef(false); // Ref to track if the entry point is met
+    const strikeDigitRef = useRef(strikeDigit);
 
     useEffect(() => {
         isRunningRef.current = isRunning;
-    }, [isRunning]);
+        strikeDigitRef.current = strikeDigit;
+    }, [isRunning, strikeDigit]);
 
     const addLog = (msg) => {
-        setLogs(prev => [`> ${msg}`, ...prev.slice(0, 10)]);
+        setLogs(prev => [`> ${msg}`, ...prev.slice(0, 15)]);
     };
 
-    const executeTrade = (digit) => {
+    const executePreemptiveStrike = (digitToMatch) => {
+        if (!isRunningRef.current) return;
+
         const payload = {
             buy: 1,
             price: parseFloat(stake),
@@ -33,21 +60,23 @@ const Makotimagic = () => {
                 duration: 1,
                 duration_unit: 't',
                 symbol: volatility,
-                barrier: digit.toString()
+                barrier: digitToMatch.toString()
             }
         };
         ws.current.send(JSON.stringify(payload));
-        setStatus('EXECUTING TRADE...');
-        addLog(`Entry point met. Executing trade on digit ${digit}.`);
-        setIsRunning(false); // Stop after executing the trade
+
+        setIsRunning(false);
         ws.current.send(JSON.stringify({ forget_all: 'ticks' }));
+
+        setStatus(`STRIKE ON ${digitToMatch}!`);
+        addLog(`Pre-emptive strike sent for digit ${digitToMatch}.`);
     };
 
     useEffect(() => {
         const app_id = 101585;
         const token = localStorage.getItem('authToken') || localStorage.getItem('token');
         const server_url = localStorage.getItem('config.server_url') || 'ws.binaryws.com';
-        
+
         ws.current = new WebSocket(`wss://${server_url}/websockets/v3?app_id=${app_id}`);
 
         ws.current.onopen = () => {
@@ -74,38 +103,50 @@ const Makotimagic = () => {
                 return;
             }
 
-            if (data.msg_type === 'authorize') {
-                addLog('Authorized successfully.');
-            }
-
-            if (data.msg_type === 'buy') {
-                addLog(`SUCCESS: Contract ${data.buy.contract_id} purchased.`);
-                setStatus('SYSTEM READY');
-            }
-
-            if (data.msg_type === 'tick') {
-                const digit = parseInt(data.tick.quote.toString().slice(-1));
-                setLastDigit(digit);
-
-                if (isRunningRef.current) {
-                    if (entryPointMet.current) {
-                        // Entry point was met on the previous tick, execute on this one
-                        executeTrade(digit);
-                        entryPointMet.current = false; // Reset for the next run
-                    } else {
-                        // We are waiting for the entry point digit
-                        if (digit === entryDigit) {
-                            entryPointMet.current = true;
-                            setStatus(`ENTRY POINT (${entryDigit}) DETECTED!`);
-                            addLog(`Entry digit ${entryDigit} detected. Armed for next tick.`);
+            switch (data.msg_type) {
+                case 'authorize':
+                    addLog('Authorized successfully.');
+                    break;
+                case 'buy':
+                    addLog(`SUCCESS: Contract ${data.buy.contract_id} purchased.`);
+                    setStatus('SYSTEM READY');
+                    break;
+                case 'proposal_open_contract':
+                    if (data.proposal_open_contract.is_sold) {
+                        if (data.proposal_open_contract.is_win) {
+                            addLog(`$$$ WIN: Contract won. Profit: ${data.proposal_open_contract.profit} $$$`);
+                        } else {
+                            addLog(`LOSS: Contract lost. Loss: ${data.proposal_open_contract.loss}`);
                         }
                     }
-                }
+                    break;
+                case 'tick':
+                    const digit = parseInt(data.tick.quote.toString().slice(-1));
+                    setLastDigit(digit);
+
+                    const newRecentDigits = [digit, ...recentDigits].slice(0, 100);
+                    setRecentDigits(newRecentDigits);
+
+                    const stats = newRecentDigits.reduce((acc, d) => {
+                        acc[d] = (acc[d] || 0) + 1;
+                        return acc;
+                    }, {});
+                    for (const key in stats) {
+                        stats[key] = (stats[key] / newRecentDigits.length) * 100;
+                    }
+                    setDigitStats(stats);
+
+                    if (isRunningRef.current && digit === strikeDigitRef.current) {
+                        executePreemptiveStrike(strikeDigitRef.current);
+                    }
+                    break;
+                default:
+                    break;
             }
         };
 
         return () => ws.current?.close();
-    }, []); // This effect runs only once
+    }, [recentDigits]); // Dependency on recentDigits to keep it in scope
 
     const toggleHack = () => {
         if (!isRunning) {
@@ -114,13 +155,16 @@ const Makotimagic = () => {
                 addLog('ERROR: Please login first');
                 return;
             }
-            entryPointMet.current = false; // Reset on start
+
             ws.current.send(JSON.stringify({ ticks: volatility, subscribe: 1 }));
+            ws.current.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
+
             setIsRunning(true);
-            setStatus(`WAITING FOR ENTRY POINT (${entryDigit})...`);
-            addLog(`Makotimagic Active: Waiting for digit ${entryDigit}...`);
+            setStatus(`ARMED: WAITING FOR ${strikeDigit}`);
+            addLog(`Makotimagic Armed: Hunting for digit ${strikeDigit}...`);
         } else {
             ws.current.send(JSON.stringify({ forget_all: 'ticks' }));
+            ws.current.send(JSON.stringify({ forget_all: 'proposal_open_contract' }));
             setIsRunning(false);
             setStatus('SYSTEM STOPPED');
             addLog('Makotimagic Deactivated.');
@@ -130,9 +174,11 @@ const Makotimagic = () => {
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <h2 style={styles.title}>MAKOTIMAGIC v2.0</h2>
+                <h2 style={styles.title}>MAKOTIMAGIC v4.0</h2>
                 <div style={{...styles.status, color: isRunning ? '#00ff00' : '#ff0000'}}>{status}</div>
             </div>
+
+            <DigitStatsDisplay stats={digitStats} />
 
             <div style={styles.grid}>
                 <div style={styles.card}>
@@ -143,8 +189,8 @@ const Makotimagic = () => {
                         <option value="R_10">Volatility 10 (1s)</option>
                     </select>
                     
-                    <label style={styles.label}>Entry Point Digit</label>
-                    <input style={styles.input} type="number" min="0" max="9" value={entryDigit} onChange={(e) => setEntryDigit(parseInt(e.target.value))} disabled={isRunning} />
+                    <label style={styles.label}>Strike Digit</label>
+                    <input style={styles.input} type="number" min="0" max="9" value={strikeDigit} onChange={(e) => setStrikeDigit(parseInt(e.target.value))} disabled={isRunning} />
 
                     <label style={styles.label}>Stake (USD)</label>
                     <input style={styles.input} type="number" value={stake} onChange={(e) => setStake(e.target.value)} disabled={isRunning} />
@@ -157,7 +203,7 @@ const Makotimagic = () => {
             </div>
 
             <button style={{...styles.button, backgroundColor: isRunning ? '#ff0000' : '#00ff00'}} onClick={toggleHack}>
-                {isRunning ? 'STOP SCAN' : 'RUN MAKOTIMAGIC'}
+                {isRunning ? 'DISARM' : 'ARM MAKOTIMAGIC'}
             </button>
 
             <div style={styles.console}>
@@ -178,8 +224,16 @@ const styles = {
     input: { width: '100%', boxSizing: 'border-box', background: '#000', border: '1px solid #333', color: '#00ff00', padding: '8px', marginBottom: '10px', outline: 'none' },
     bigDigit: { fontSize: '3rem', textAlign: 'center', fontWeight: 'bold', color: '#00ff00' },
     button: { width: '100%', padding: '15px', color: '#000', border: 'none', fontWeight: 'bold', cursor: 'pointer', borderRadius: '5px', fontSize: '1rem' },
-    console: { marginTop: '20px', background: '#000', padding: '10px', height: '120px', fontSize: '0.7rem', overflowY: 'auto', border: '1px solid #111', borderRadius: '5px' },
-    logLine: { color: '#00ff00', marginBottom: '3px' }
+    console: { marginTop: '20px', background: '#000', padding: '10px', height: '150px', fontSize: '0.7rem', overflowY: 'auto', border: '1px solid #111', borderRadius: '5px' },
+    logLine: { color: '#00ff00', marginBottom: '3px' },
+    statsContainer: { marginBottom: '20px', background: '#111', padding: '15px', borderRadius: '5px', border: '1px solid #222' },
+    statsTitle: { margin: '0 0 15px 0', color: '#00ff00', fontSize: '1rem', textAlign: 'center' },
+    statsGrid: { display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end', height: '100px' },
+    statItem: { flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' },
+    statDigit: { fontSize: '0.8rem', color: '#999' },
+    statBar: { width: '20px', height: '100%', background: '#222', display: 'flex', flexDirection: 'column-reverse', borderRadius: '3px', overflow: 'hidden', margin: '5px 0' },
+    statBarFill: { background: '#00ff00', width: '100%' },
+    statPercentage: { fontSize: '0.7rem', color: '#fff' }
 };
 
 export default Makotimagic;
