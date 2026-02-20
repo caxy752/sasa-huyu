@@ -752,6 +752,15 @@ const AnalysisTools: React.FC = () => {
                 <button type='button' className='analysis-tools__trade-button' onClick={() => setShowTradeConfig(true)}>
                     Trading Configuration
                 </button>
+                {active_tool === 'tick-analyser' && (
+                    <button
+                        type='button'
+                        className='analysis-tools__results-button'
+                        onClick={() => run_panel.setActiveTab('journal')}
+                    >
+                        Trade Results
+                    </button>
+                )}
             </div>
             {active_tool && <div className='analysis-tools__content'>{renderContent()}</div>}
             {show_trade_config && (
