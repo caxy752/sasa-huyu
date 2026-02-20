@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
+import AiScanner from './ai-scanner';
 import './over-under.scss';
 
 const OverUnder = observer(() => {
@@ -44,6 +45,7 @@ const OverUnder = observer(() => {
         connectWebSocket,
         handleStartStop,
         clearDebug,
+        toggleAiScanner,
     } = over_under;
 
     useEffect(() => {
@@ -100,6 +102,8 @@ const OverUnder = observer(() => {
 
     return (
         <div className="over-under-container" style={{ height: 'calc(100vh - 15rem)', overflowY: 'auto' }}>
+            <AiScanner />
+            <button className="floating-ai-btn" onClick={toggleAiScanner}>AI</button>
             <div className="stats-grid">
                 {digitStats.map((count, i) => {
                     const percentage = ((count / totalTicksCount) * 100).toFixed(1);

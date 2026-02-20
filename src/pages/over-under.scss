@@ -5,6 +5,26 @@
     background-color: #f0f2f5;
     font-family: Arial, sans-serif;
 
+    .floating-ai-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        font-size: 1.5rem;
+        font-weight: bold;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        cursor: pointer;
+        z-index: 999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
     .stats-grid {
         display: grid;
         grid-template-columns: repeat(5, 1fr);

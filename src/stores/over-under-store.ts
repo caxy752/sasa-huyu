@@ -55,6 +55,13 @@ export default class OverUnderStore {
     active_contracts: Set<string> = new Set();
     contract_results: Map<string, number> = new Map();
 
+    // AI Scanner State
+    is_ai_scanner_open = false;
+    ai_contract_type = 'DIGITOVER';
+    ai_barrier = '3';
+    ai_scan_results: string[] = [];
+    is_ai_scanning = false;
+
     constructor(root_store: RootStore) {
         makeObservable(this, {
             connection_status: observable,
@@ -79,6 +86,11 @@ export default class OverUnderStore {
             is_turbo: observable,
             selected_symbol: observable,
             debug_info: observable,
+            is_ai_scanner_open: observable,
+            ai_contract_type: observable,
+            ai_barrier: observable,
+            ai_scan_results: observable,
+            is_ai_scanning: observable,
             setStake: action.bound,
             setMartingale: action.bound,
             setIsVolatilityChanger: action.bound,
@@ -100,9 +112,44 @@ export default class OverUnderStore {
             handleStartStop: action.bound,
             addLog: action.bound,
             clearDebug: action.bound,
+            toggleAiScanner: action.bound,
+            setAiContractType: action.bound,
+            setAiBarrier: action.bound,
+            startAiScan: action.bound,
         });
         this.root_store = root_store;
     }
+    
+    toggleAiScanner() {
+        this.is_ai_scanner_open = !this.is_ai_scanner_open;
+    }
+
+    setAiContractType(type: string) {
+        this.ai_contract_type = type;
+    }
+
+    setAiBarrier(barrier: string) {
+        this.ai_barrier = barrier;
+    }
+
+    startAiScan() {
+        this.is_ai_scanning = true;
+        this.ai_scan_results = [];
+        this.addLog("AI Scan Started: Checking volatilities...");
+
+        // Simulate scanning process
+        setTimeout(() => {
+            const results = [
+                'Volatility 100 Index: Good match',
+                'Volatility 75 Index: Potential match',
+                'Volatility 50 Index: Not recommended'
+            ];
+            this.ai_scan_results = results;
+            this.is_ai_scanning = false;
+            this.addLog("AI Scan Finished. Results are available.");
+        }, 3000);
+    }
+
 
     addLog(msg: string) {
         // Optimized logging
