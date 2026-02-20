@@ -15,12 +15,29 @@ const AiScanner = observer(() => {
         toggleAiScanner,
         setAiContractType,
         setAiBarrier,
-        startAiScan 
+        startAiScan,
+        setSelectedSymbol
     } = over_under;
 
     if (!is_ai_scanner_open) {
         return null;
     }
+
+    const handleSelectVolatility = (symbol: string) => {
+        setSelectedSymbol(symbol);
+        toggleAiScanner();
+    };
+
+    const getSignalClassName = (signal: string) => {
+        switch (signal) {
+            case 'Strong':
+                return 'signal-strong';
+            case 'Potential':
+                return 'signal-potential';
+            default:
+                return 'signal-none';
+        }
+    };
 
     return (
         <div className="ai-scanner-window">
@@ -48,12 +65,23 @@ const AiScanner = observer(() => {
                 <div className="scanner-results">
                     <h4>Scan Results</h4>
                     {is_ai_scanning ? (
-                        <p>Scanning in progress...</p>
+                        <div className="loading-spinner"></div>
                     ) : (
                         <ul>
-                            {ai_scan_results.map((result, index) => (
-                                <li key={index}>{result}</li>
-                            ))}
+                            {ai_scan_results
+                                .filter(result => result.signal === 'Strong' || result.signal === 'Potential')
+                                .sort((a, b) => (a.signal === 'Strong' ? -1 : 1))
+                                .map(result => (
+                                    <li key={result.symbol} className="result-item">
+                                        <div className="result-info">
+                                            <span className="symbol-name">{result.symbol}</span>
+                                            <span className={`signal-badge ${getSignalClassName(result.signal)}`}>{result.signal}</span>
+                                        </div>
+                                        <button className="select-btn" onClick={() => handleSelectVolatility(result.symbol)}>
+                                            Select
+                                        </button>
+                                    </li>
+                                ))}
                         </ul>
                     )}
                 </div>

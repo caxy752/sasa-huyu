@@ -24,6 +24,11 @@ const pip_sizes = {
     '1HZ10V': 2,
 };
 
+interface AiScanResult {
+    symbol: string;
+    signal: 'Strong' | 'Potential' | 'Not Recommended' | 'Insufficient data';
+}
+
 export default class OverUnderStore {
     root_store: RootStore;
     ws: WebSocket | null = null;
@@ -59,7 +64,7 @@ export default class OverUnderStore {
     is_ai_scanner_open = false;
     ai_contract_type = 'DIGITOVER';
     ai_barrier = '3';
-    ai_scan_results: string[] = [];
+    ai_scan_results: AiScanResult[] = [];
     is_ai_scanning = false;
     ai_volatility_data: Map<string, number[]> = new Map();
 
@@ -151,13 +156,13 @@ export default class OverUnderStore {
         });
     }
 
-    analyzeVolatility(symbol: string, ticks: number[]) {
+    analyzeVolatility(symbol: string, ticks: number[]): AiScanResult {
         const barrier = parseInt(this.ai_barrier, 10);
         const contract_type = this.ai_contract_type;
         const total_ticks = ticks.length;
 
         if (total_ticks < 50) {
-            return `${symbol}: Insufficient data`;
+            return { symbol, signal: 'Insufficient data' };
         }
 
         const digit_stats = Array(10).fill(0);
@@ -190,11 +195,11 @@ export default class OverUnderStore {
         const has_hot_cold_conflict = target_digits.some(digit => digit === hot_digit || digit === cold_digit);
 
         if (total_percentage < 10 && !is_increasing && !has_hot_cold_conflict) {
-            return `${symbol}: Strong Signal`;
+            return { symbol, signal: 'Strong' };
         } else if (total_percentage < 15 && !is_increasing) {
-            return `${symbol}: Potential Signal`;
+            return { symbol, signal: 'Potential' };
         } else {
-            return `${symbol}: Not Recommended`;
+            return { symbol, signal: 'Not Recommended' };
         }
     }
 
@@ -394,7 +399,7 @@ export default class OverUnderStore {
                             // When all data is received, start analysis
                             if (this.ai_volatility_data.size === Object.keys(pip_sizes).length) {
                                 this.addLog('All volatility data received. Analyzing...');
-                                const results: string[] = [];
+                                const results: AiScanResult[] = [];
                                 this.ai_volatility_data.forEach((ticks, sym) => {
                                     results.push(this.analyzeVolatility(sym, ticks));
                                 });
