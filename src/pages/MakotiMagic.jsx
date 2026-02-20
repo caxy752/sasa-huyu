@@ -124,17 +124,20 @@ const Makotimagic = () => {
                     const digit = parseInt(data.tick.quote.toString().slice(-1));
                     setLastDigit(digit);
 
-                    const newRecentDigits = [digit, ...recentDigits].slice(0, 100);
-                    setRecentDigits(newRecentDigits);
+                    setRecentDigits(prevRecentDigits => {
+                        const newRecentDigits = [digit, ...prevRecentDigits].slice(0, 100);
 
-                    const stats = newRecentDigits.reduce((acc, d) => {
-                        acc[d] = (acc[d] || 0) + 1;
-                        return acc;
-                    }, {});
-                    for (const key in stats) {
-                        stats[key] = (stats[key] / newRecentDigits.length) * 100;
-                    }
-                    setDigitStats(stats);
+                        const stats = newRecentDigits.reduce((acc, d) => {
+                            acc[d] = (acc[d] || 0) + 1;
+                            return acc;
+                        }, {});
+                        for (const key in stats) {
+                            stats[key] = (stats[key] / newRecentDigits.length) * 100;
+                        }
+                        setDigitStats(stats);
+
+                        return newRecentDigits;
+                    });
 
                     if (isRunningRef.current && digit === strikeDigitRef.current) {
                         executePreemptiveStrike(strikeDigitRef.current);
@@ -146,7 +149,7 @@ const Makotimagic = () => {
         };
 
         return () => ws.current?.close();
-    }, [recentDigits]); // Dependency on recentDigits to keep it in scope
+    }, []); // Empty dependency array to prevent reconnects
 
     const toggleHack = () => {
         if (!isRunning) {
