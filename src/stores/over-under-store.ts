@@ -2,6 +2,7 @@
 import { action, makeObservable, observable } from 'mobx';
 import { LogTypes } from '@/external/bot-skeleton';
 import { TStores } from '@/types/stores.types';
+import { spawn, Worker } from 'threads';
 import RootStore from './root-store';
 
 const STATUS_OFFLINE = 'Offline';
@@ -35,6 +36,7 @@ export default class OverUnderStore {
     reconnectTimeout: NodeJS.Timeout | null = null;
     is_authorized = false;
     debug_info: string[] = [];
+    volatilityAnalyzer: any;
 
     connection_status = STATUS_OFFLINE;
     tick_history: number[] = [];
@@ -44,6 +46,7 @@ export default class OverUnderStore {
     initial_stake = 1;
     martingale = 2;
     is_volatility_changer = false;
+    is_automate = false;
     use_second_trigger = true;
     is_manual_mode = false;
     manual_contract_type = 'DIGITOVER';
@@ -79,6 +82,7 @@ export default class OverUnderStore {
             initial_stake: observable,
             martingale: observable,
             is_volatility_changer: observable,
+            is_automate: observable,
             use_second_trigger: observable,
             is_manual_mode: observable,
             manual_contract_type: observable,
@@ -101,6 +105,7 @@ export default class OverUnderStore {
             setStake: action.bound,
             setMartingale: action.bound,
             setIsVolatilityChanger: action.bound,
+            setIsAutomate: action.bound,
             setUseSecondTrigger: action.bound,
             setIsManualMode: action.bound,
             setManualContractType: action.bound,
@@ -125,6 +130,11 @@ export default class OverUnderStore {
             startAiScan: action.bound,
         });
         this.root_store = root_store;
+        this.initializeWorker();
+    }
+
+    async initializeWorker() {
+        this.volatilityAnalyzer = await spawn(new Worker('../workers/volatility-analyzer'));
     }
     
     toggleAiScanner() {
@@ -231,6 +241,10 @@ export default class OverUnderStore {
         this.is_volatility_changer = value;
     }
 
+    setIsAutomate(value: boolean) {
+        this.is_automate = value;
+    }
+
     setUseSecondTrigger(value: boolean) {
         this.use_second_trigger = value;
     }
@@ -334,6 +348,19 @@ export default class OverUnderStore {
         this.tick_history = [];
         this.last_digit = null;
     }
+
+    fetchAllVolatilityTicks() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            this.addLog('Cannot fetch all ticks: WebSocket not connected.');
+            return;
+        }
+        this.addLog('Fetching recent ticks for all volatilities...');
+        const symbols = Object.keys(pip_sizes);
+        this.ai_volatility_data.clear();
+        symbols.forEach(symbol => {
+            this.ws.send(JSON.stringify({ ticks_history: symbol, count: 50, end: 'latest', style: 'ticks' }));
+        });
+    }
     
     connectWebSocket() {
         if (this.ws) {
@@ -373,7 +400,7 @@ export default class OverUnderStore {
                 }
             };
 
-            this.ws.onmessage = msg => {
+            this.ws.onmessage = async msg => {
                 try {
                     const data = JSON.parse(msg.data);
 
@@ -382,6 +409,41 @@ export default class OverUnderStore {
                             this.setIsAutoRunning(false);
                         }
                         this.addLog(`Error Received: ${data.error.message} (Code: ${data.error.code})`);
+                        return;
+                    }
+
+                    if (this.is_automate && data.msg_type === 'history') {
+                        const symbol = data.echo_req.ticks_history;
+                        const pip_size = pip_sizes[symbol] || 2;
+                        const prices = data.history.prices;
+                        const digits = prices.map((p: string | number) => {
+                            const price_str = Number(p).toFixed(pip_size);
+                            return parseInt(price_str.slice(-1), 10);
+                        });
+                        this.ai_volatility_data.set(symbol, digits);
+
+                        // When all data is received, start analysis
+                        if (this.ai_volatility_data.size === Object.keys(pip_sizes).length) {
+                            this.addLog('All volatility data received. Analyzing for automation...');
+                            const contract_type = this.is_recovery_active ? this.recovery_contract_type : this.manual_contract_type;
+                            const barrier = this.is_recovery_active ? this.recovery_barrier : this.manual_barrier;
+
+                            const bestVolatility = await this.volatilityAnalyzer.analyzeVolatility({
+                                tick_data: Object.fromEntries(this.ai_volatility_data.entries()),
+                                contract_type,
+                                barrier
+                            });
+
+                            if(bestVolatility){
+                                this.addLog(`Automate: Best volatility found: ${bestVolatility}`);
+                                this.setSelectedSymbol(bestVolatility);
+                            } else {
+                                this.addLog('Automate: Could not determine best volatility, using random.');
+                                const symbols = Object.keys(pip_sizes);
+                                const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+                                this.setSelectedSymbol(randomSymbol);
+                            }
+                        }
                         return;
                     }
 
@@ -531,7 +593,7 @@ export default class OverUnderStore {
         }
     }
 
-    processRoundResults() {
+    async processRoundResults() {
         const profits = Array.from(this.contract_results.values());
         const all_loss = profits.every(p => p < 0);
 
@@ -552,10 +614,15 @@ export default class OverUnderStore {
             this.setIsRecoveryActive(false);
             
             if (this.is_volatility_changer) {
-                const symbols = Object.keys(pip_sizes);
-                const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
-                this.addLog(`Volatility Changer: Switching to ${randomSymbol}`);
-                this.setSelectedSymbol(randomSymbol);
+                if (this.is_automate) {
+                    this.addLog('Automate: Analyzing volatilities...');
+                    this.fetchAllVolatilityTicks();
+                } else {
+                    const symbols = Object.keys(pip_sizes);
+                    const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+                    this.addLog(`Volatility Changer: Switching to ${randomSymbol}`);
+                    this.setSelectedSymbol(randomSymbol);
+                }
             }
         }
 

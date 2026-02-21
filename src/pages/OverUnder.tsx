@@ -14,6 +14,7 @@ const OverUnder = observer(() => {
         stake,
         martingale,
         is_volatility_changer,
+        is_automate,
         use_second_trigger,
         is_manual_mode,
         manual_contract_type,
@@ -30,6 +31,7 @@ const OverUnder = observer(() => {
         setStake,
         setMartingale,
         setIsVolatilityChanger,
+        setIsAutomate,
         setUseSecondTrigger,
         setIsManualMode,
         setManualContractType,
@@ -182,6 +184,18 @@ const OverUnder = observer(() => {
                             {is_volatility_changer ? 'ON' : 'OFF'}
                         </button>
                     </div>
+                    {is_volatility_changer && (
+                        <div className="input-group switch-group">
+                            <label>Automate</label>
+                            <button
+                                className={`ui-switch ${is_automate ? 'active' : ''}`}
+                                onClick={() => setIsAutomate(!is_automate)}
+                                disabled={is_auto_running}
+                            >
+                                {is_automate ? 'ON' : 'OFF'}
+                            </button>
+                        </div>
+                    )}
                     <div className="input-group switch-group">
                         <label>Manual Mode</label>
                         <button 
