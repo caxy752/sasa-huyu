@@ -448,10 +448,7 @@ export default class OverUnderStore {
                                 const contract_type = this.is_recovery_active ? this.recovery_contract_type : this.manual_contract_type;
                                 const barrier = this.is_recovery_active ? this.recovery_barrier : this.manual_barrier;
 
-                                const plain_tick_data = {};
-                                for (const [key, value] of this.ai_volatility_data.entries()) {
-                                    plain_tick_data[key] = [...value];
-                                }
+                                const plain_tick_data = JSON.parse(JSON.stringify(Object.fromEntries(this.ai_volatility_data)));
 
                                 this.volatilityAnalyzer.postMessage({
                                     tick_data: plain_tick_data,
@@ -642,7 +639,7 @@ export default class OverUnderStore {
                 currency: currency,
                 duration: 1,
                 duration_unit: 't',
-                symbol: this.selected_school,
+                symbol: this.selected_symbol,
                 contract_type,
                 barrier,
             },
