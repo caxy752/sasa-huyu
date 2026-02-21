@@ -1,7 +1,6 @@
 
 self.onmessage = (event) => {
-    const { tick_data_entries, contract_type, barrier } = event.data;
-    const tick_data = Object.fromEntries(tick_data_entries);
+    const { tick_data, contract_type, barrier } = event.data;
 
     let bestVolatility = null;
     let minInstability = Infinity;
