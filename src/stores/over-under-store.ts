@@ -24,11 +24,6 @@ const pip_sizes = {
     '1HZ10V': 2,
 };
 
-interface AiScanResult {
-    symbol: string;
-    signal: 'Strong' | 'Potential' | 'Not Recommended' | 'Insufficient data';
-}
-
 export default class OverUnderStore {
     root_store: RootStore;
     ws: WebSocket | null = null;
@@ -62,13 +57,12 @@ export default class OverUnderStore {
     active_contracts: Set<string> = new Set();
     contract_results: Map<string, number> = new Map();
 
-    // AI Scanner State
-    is_ai_scanner_open = false;
-    ai_contract_type = 'DIGITOVER';
-    ai_barrier = '3';
-    ai_scan_results: AiScanResult[] = [];
-    is_ai_scanning = false;
-    ai_volatility_data: Map<string, number[]> = new Map();
+    // Volatility Analysis State
+    is_analyzing_volatility = false;
+    analysis_queue: string[] = [];
+    best_score = Infinity;
+    best_symbol: string | null = null;
+    current_analyzing_symbol: string | null = null;
 
     constructor(root_store: RootStore) {
         makeObservable(this, {
@@ -95,12 +89,7 @@ export default class OverUnderStore {
             is_turbo: observable,
             selected_symbol: observable,
             debug_info: observable,
-            is_ai_scanner_open: observable,
-            ai_contract_type: observable,
-            ai_barrier: observable,
-            ai_scan_results: observable,
-            is_ai_scanning: observable,
-            ai_volatility_data: observable,
+            is_analyzing_volatility: observable,
             setStake: action.bound,
             setMartingale: action.bound,
             setIsVolatilityChanger: action.bound,
@@ -123,10 +112,6 @@ export default class OverUnderStore {
             handleStartStop: action.bound,
             addLog: action.bound,
             clearDebug: action.bound,
-            toggleAiScanner: action.bound,
-            setAiContractType: action.bound,
-            setAiBarrier: action.bound,
-            startAiScan: action.bound,
         });
         this.root_store = root_store;
         this.initializeWorker();
@@ -136,97 +121,55 @@ export default class OverUnderStore {
         this.volatilityAnalyzer = new Worker(new URL('../workers/volatility-analyzer.ts', import.meta.url));
 
         this.volatilityAnalyzer.onmessage = (event) => {
-            const bestVolatility = event.data;
-            if (bestVolatility) {
-                this.addLog(`Automate: Best volatility found: ${bestVolatility}`);
-                this.setSelectedSymbol(bestVolatility);
+            const { score } = event.data;
+            this.addLog(`Analysis for ${this.current_analyzing_symbol}: Score ${score.toFixed(2)}`);
+
+            if (score < this.best_score) {
+                this.best_score = score;
+                this.best_symbol = this.current_analyzing_symbol;
+                this.addLog(`New best volatility: ${this.best_symbol} (Score: ${score.toFixed(2)})`);
+            }
+            
+            this.processAnalysisQueue();
+        };
+    }
+    
+    startVolatilityAnalysis() {
+        if (!this.is_automate || this.is_analyzing_volatility) return;
+        
+        this.is_analyzing_volatility = true;
+        this.analysis_queue = Object.keys(pip_sizes);
+        this.best_score = Infinity;
+        this.best_symbol = null;
+        this.addLog('Volatility analysis started...');
+        this.processAnalysisQueue();
+    }
+
+    processAnalysisQueue() {
+        if (this.analysis_queue.length > 0) {
+            this.current_analyzing_symbol = this.analysis_queue.shift();
+            this.addLog(`Analyzing: ${this.current_analyzing_symbol}`);
+            this.ws.send(JSON.stringify({ 
+                ticks_history: this.current_analyzing_symbol, 
+                count: 50, 
+                end: 'latest', 
+                style: 'ticks' 
+            }));
+        } else {
+            this.is_analyzing_volatility = false;
+            if (this.best_symbol) {
+                this.addLog(`Analysis complete. Best volatility: ${this.best_symbol}`);
+                this.setSelectedSymbol(this.best_symbol);
             } else {
-                this.addLog('Automate: Could not determine best volatility, using random.');
+                this.addLog('Analysis complete. No suitable volatility found. Switching to a random volatility.');
                 const symbols = Object.keys(pip_sizes);
                 const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
                 this.setSelectedSymbol(randomSymbol);
             }
-        };
-    }
-    
-    toggleAiScanner() {
-        this.is_ai_scanner_open = !this.is_ai_scanner_open;
-    }
-
-    setAiContractType(type: string) {
-        this.ai_contract_type = type;
-    }
-
-    setAiBarrier(barrier: string) {
-        this.ai_barrier = barrier;
-    }
-
-    startAiScan() {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-            this.addLog('Cannot start AI scan: WebSocket not connected.');
-            return;
-        }
-
-        this.is_ai_scanning = true;
-        this.ai_scan_results = [];
-        this.ai_volatility_data.clear();
-        this.addLog('AI Scan Started: Fetching data for all volatilities...');
-
-        const symbols = Object.keys(pip_sizes);
-        symbols.forEach(symbol => {
-            this.ws.send(JSON.stringify({ ticks_history: symbol, count: 100, end: 'latest', style: 'ticks' }));
-        });
-    }
-
-    analyzeVolatility(symbol: string, ticks: number[]): AiScanResult {
-        const barrier = parseInt(this.ai_barrier, 10);
-        const contract_type = this.ai_contract_type;
-        const total_ticks = ticks.length;
-
-        if (total_ticks < 50) {
-            return { symbol, signal: 'Insufficient data' };
-        }
-
-        const digit_stats = Array(10).fill(0);
-        ticks.forEach(digit => digit_stats[digit]++);
-
-        const first_half_stats = Array(10).fill(0);
-        ticks.slice(0, Math.floor(total_ticks / 2)).forEach(digit => first_half_stats[digit]++);
-
-        const second_half_stats = Array(10).fill(0);
-        ticks.slice(Math.floor(total_ticks / 2)).forEach(digit => second_half_stats[digit]++);
-
-        const percentages = digit_stats.map(count => (count / total_ticks) * 100);
-        const first_half_percentages = first_half_stats.map(count => (count / (total_ticks/2)) * 100);
-        const second_half_percentages = second_half_stats.map(count => (count / (total_ticks/2)) * 100);
-
-        const max_val = Math.max(...percentages);
-        const min_val = Math.min(...percentages);
-        const hot_digit = percentages.indexOf(max_val);
-        const cold_digit = percentages.indexOf(min_val);
-
-        let target_digits: number[] = [];
-        if (contract_type === 'DIGITOVER') {
-            for (let i = 0; i < barrier; i++) target_digits.push(i);
-        } else { // DIGITUNDER
-            for (let i = barrier + 1; i < 10; i++) target_digits.push(i);
-        }
-
-        const total_percentage = target_digits.reduce((sum, digit) => sum + percentages[digit], 0);
-        const is_increasing = target_digits.some(digit => second_half_percentages[digit] > first_half_percentages[digit]);
-        const has_hot_cold_conflict = target_digits.some(digit => digit === hot_digit || digit === cold_digit);
-
-        if (total_percentage < 10 && !is_increasing && !has_hot_cold_conflict) {
-            return { symbol, signal: 'Strong' };
-        } else if (total_percentage < 15 && !is_increasing) {
-            return { symbol, signal: 'Potential' };
-        } else {
-            return { symbol, signal: 'Not Recommended' };
         }
     }
 
     addLog(msg: string) {
-        // Optimized logging
         const timestamp = new Date().toLocaleTimeString();
         this.debug_info.unshift(`[${timestamp}] ${msg}`);
         if (this.debug_info.length > 20) {
@@ -256,8 +199,7 @@ export default class OverUnderStore {
     setIsAutomate(value: boolean) {
         this.is_automate = value;
         if (value && this.is_volatility_changer) {
-            this.addLog("Automate ON: Initial volatility analysis started.");
-            this.fetchAllVolatilityTicks();
+            this.startVolatilityAnalysis();
         }
     }
 
@@ -306,6 +248,7 @@ export default class OverUnderStore {
     }
 
     setSelectedSymbol(symbol: string) {
+        if (this.selected_symbol === symbol) return;
         this.selected_symbol = symbol;
         if (this.is_authorized || this.connection_status === STATUS_LIVE) {
             this.subscribeToTicks(symbol);
@@ -323,19 +266,20 @@ export default class OverUnderStore {
     handleStartStop() {
         if (!this.is_auto_running && !this.is_authorized) {
             this.addLog("Please log in to start the tool.");
-            this.root_store.journal.pushMessage('⚠️ Login required to trade.', 'error');
             return;
         }
         
         if (!this.is_auto_running) {
             this.initial_stake = this.stake;
-            this.setIsRecoveryActive(false); // Reset recovery on new start
+            this.setIsRecoveryActive(false);
         }
 
         this.setIsAutoRunning(!this.is_auto_running);
         if (this.is_auto_running) {
             this.addLog("Tool started. Waiting for trigger...");
-            this.root_store.run_panel.setActiveTab('journal');
+            if (this.is_automate) {
+                this.startVolatilityAnalysis();
+            }
         } else {
             this.addLog("Tool stopped by user.");
             this.setIsRecoveryActive(false);
@@ -364,19 +308,6 @@ export default class OverUnderStore {
         this.tick_history = [];
         this.last_digit = null;
     }
-
-    fetchAllVolatilityTicks() {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-            this.addLog('Cannot fetch all ticks: WebSocket not connected.');
-            return;
-        }
-        this.addLog('Fetching recent ticks for all volatilities...');
-        const symbols = Object.keys(pip_sizes);
-        this.ai_volatility_data.clear();
-        symbols.forEach(symbol => {
-            this.ws.send(JSON.stringify({ ticks_history: symbol, count: 50, end: 'latest', style: 'ticks' }));
-        });
-    }
     
     connectWebSocket() {
         if (this.ws) {
@@ -392,8 +323,8 @@ export default class OverUnderStore {
         this.connection_status = STATUS_CONNECTING;
         this.is_authorized = false;
 
-        const app_id = localStorage.getItem('config.app_id') || '117164';
-        const server_url = localStorage.getItem('config.server_url') || 'ws.derivws.com';
+        const app_id = '117164';
+        const server_url = 'ws.derivws.com';
 
         try {
             this.ws = new WebSocket(`wss://${server_url}/websockets/v3?app_id=${app_id}`);
@@ -402,10 +333,9 @@ export default class OverUnderStore {
                 this.addLog('WS Opened. Authorizing...');
                 this.connection_status = STATUS_LIVE;
 
-                const token =
-                    localStorage.getItem('authToken') ||
-                    localStorage.getItem('token') ||
-                    JSON.parse(localStorage.getItem('accountsList') || '{}')[this.root_store.client.loginid];
+                const token = localStorage.getItem('active_loginid') ? 
+                    JSON.parse(localStorage.getItem('client.accounts') || '{}')[localStorage.getItem('active_loginid')].token :
+                    null;
 
                 if (token) {
                     this.ws?.send(JSON.stringify({ authorize: token }));
@@ -420,46 +350,24 @@ export default class OverUnderStore {
                     const data = JSON.parse(msg.data);
 
                     if (data.error) {
-                        if (data.error.code === 'SelfExclusion') {
-                            this.setIsAutoRunning(false);
-                        }
-                        this.addLog(`Error Received: ${data.error.message} (Code: ${data.error.code})`);
+                        this.addLog(`Error: ${data.error.message}`);
                         return;
                     }
+                    
+                    if (this.is_analyzing_volatility && data.msg_type === 'history') {
+                        if(data.echo_req.ticks_history === this.current_analyzing_symbol){
+                            const pip_size = pip_sizes[this.current_analyzing_symbol] || 2;
+                            const prices = data.history.prices;
+                            const digits = prices.map((p: string | number) => {
+                                const price_str = Number(p).toFixed(pip_size);
+                                return parseInt(price_str.slice(-1), 10);
+                            });
 
-                    if ((this.is_automate || this.is_ai_scanning) && data.msg_type === 'history') {
-                        const symbol = data.echo_req.ticks_history;
-                        const pip_size = pip_sizes[symbol] || 2;
-                        const prices = data.history.prices;
-                        const digits = prices.map((p: string | number) => {
-                            const price_str = Number(p).toFixed(pip_size);
-                            return parseInt(price_str.slice(-1), 10);
-                        });
-                        this.ai_volatility_data.set(symbol, digits);
-
-                        if (this.ai_volatility_data.size === Object.keys(pip_sizes).length) {
-                             if (this.is_ai_scanning) {
-                                this.addLog('All volatility data received. Analyzing...');
-                                const results: AiScanResult[] = [];
-                                this.ai_volatility_data.forEach((ticks, sym) => {
-                                    results.push(this.analyzeVolatility(sym, ticks));
-                                });
-                                this.ai_scan_results = results;
-                                this.is_ai_scanning = false;
-                                this.addLog('AI Scan Finished.');
-                            } else if (this.is_automate) {
-                                this.addLog('All volatility data received. Analyzing for automation...');
-                                const contract_type = this.is_recovery_active ? this.recovery_contract_type : this.manual_contract_type;
-                                const barrier = this.is_recovery_active ? this.recovery_barrier : this.manual_barrier;
-
-                                const plain_tick_data = JSON.parse(JSON.stringify(Object.fromEntries(this.ai_volatility_data)));
-
-                                this.volatilityAnalyzer.postMessage({
-                                    tick_data: plain_tick_data,
-                                    contract_type,
-                                    barrier
-                                });
-                            }
+                            this.volatilityAnalyzer.postMessage({
+                                ticks: digits,
+                                contract_type: this.is_recovery_active ? this.recovery_contract_type : this.manual_contract_type,
+                                barrier: this.is_recovery_active ? this.recovery_barrier : this.manual_barrier,
+                            });
                         }
                         return;
                     }
@@ -472,24 +380,13 @@ export default class OverUnderStore {
                     }
 
                     if (data.msg_type === 'buy') {
-                        const buy_data = data.buy;
-                        const contract_id = buy_data.contract_id;
-                        this.addLog(`Purchase Successful: ${contract_id}`);
+                        const contract_id = data.buy.contract_id;
+                        this.addLog(`Purchase Sent: ${contract_id}`);
                         this.active_contracts.add(String(contract_id));
-
-                        this.ws?.send(
-                            JSON.stringify({
-                                proposal_open_contract: 1,
-                                contract_id: contract_id,
-                                subscribe: 1,
-                            })
-                        );
                     }
 
                     if (data.msg_type === 'proposal_open_contract') {
                         const contract = data.proposal_open_contract;
-
-                        this.root_store.transactions.pushTransaction(contract);
 
                         if (this.root_store.summary_card?.onBotContractEvent) {
                             this.root_store.summary_card.onBotContractEvent(contract);
@@ -497,23 +394,17 @@ export default class OverUnderStore {
 
                         if (contract.is_sold) {
                             const contract_id = String(contract.contract_id);
-                            const profit = contract.profit;
-                            this.contract_results.set(contract_id, profit);
-                            
-                            const result = profit >= 0 ? 'WON' : 'LOST';
-                            this.addLog(`Trade Result [${contract_id}]: ${result} ($${profit})`);
-                            this.root_store.journal.onLogSuccess({
-                                log_type: profit > 0 ? LogTypes.PROFIT : LogTypes.LOST,
-                                extra: { currency: this.root_store.client.currency, profit },
-                            });
+                            if (this.active_contracts.has(contract_id)) {
+                                const profit = contract.profit;
+                                this.contract_results.set(contract_id, profit);
+                                
+                                const result = profit >= 0 ? 'WON' : 'LOST';
+                                this.addLog(`Trade Result [${contract_id}]: ${result} ($${profit})`);
+                                
+                                this.active_contracts.delete(contract_id);
 
-                            // Check if all active trades for this round are finished
-                            const expected_count = (this.is_manual_mode || this.is_recovery_active) ? 1 : (this.use_second_trigger ? 2 : 1);
-                            if (this.contract_results.size >= expected_count) {
-                                this.processRoundResults();
-                                if (this.is_automate) {
-                                    this.addLog("Round finished. Automate: Analyzing volatilities again...");
-                                    this.fetchAllVolatilityTicks();
+                                if (this.active_contracts.size === 0) {
+                                    this.processRoundResults();
                                 }
                             }
                         }
@@ -530,7 +421,7 @@ export default class OverUnderStore {
                         if (digits.length > 0) {
                             this.last_digit = digits[digits.length - 1];
                         }
-                        this.addLog(`Loaded ${digits.length} historical ticks.`);
+                        this.addLog(`Loaded ${digits.length} historical ticks for ${this.selected_symbol}.`);
                     }
 
                     if (data.msg_type === 'tick') {
@@ -543,30 +434,26 @@ export default class OverUnderStore {
                         this.last_digit = digit;
                         this.tick_history = [...this.tick_history.slice(-MAX_TICKS + 1), digit];
 
-                        if (this.is_auto_running) {
+                        if (this.is_auto_running && !this.is_analyzing_volatility) {
                             let is_triggered = false;
                             
                             if (this.use_second_trigger) {
-                                const match1 = (this.last_last_digit === Number(this.entry_digit) && this.last_digit === Number(this.second_entry_digit));
-                                const match2 = (this.last_last_digit === Number(this.second_entry_digit) && this.last_digit === Number(this.entry_digit));
-                                is_triggered = match1 || match2;
+                                is_triggered = (this.last_last_digit === Number(this.entry_digit) && this.last_digit === Number(this.second_entry_digit)) || 
+                                             (this.last_last_digit === Number(this.second_entry_digit) && this.last_digit === Number(this.entry_digit));
                             } else {
                                 is_triggered = (this.last_digit === Number(this.entry_digit));
                             }
 
-                            if (is_triggered) {
-                                // Only trigger if no active trades
-                                if (this.active_contracts.size === 0) {
-                                     if (this.is_manual_mode) {
-                                        this.addLog(`Trigger Hit: Executing Manual Trade`);
-                                        this.executeTrade(this.manual_contract_type, this.manual_barrier);
-                                    } else if (this.is_recovery_active) {
-                                        this.addLog(`Trigger Hit: Executing Recovery Trade`);
-                                        this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
-                                    } else {
-                                        this.addLog(`Trigger Hit: Pattern matched`);
-                                        this.executeMultiTrade();
-                                    }
+                            if (is_triggered && this.active_contracts.size === 0) {
+                                if (this.is_manual_mode) {
+                                    this.addLog(`Trigger Hit: Manual Trade`);
+                                    this.executeTrade(this.manual_contract_type, this.manual_barrier);
+                                } else if (this.is_recovery_active) {
+                                    this.addLog(`Trigger Hit: Recovery Trade`);
+                                    this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
+                                } else {
+                                    this.addLog(`Trigger Hit: Standard Multi-Trade`);
+                                    this.executeMultiTrade();
                                 }
                             }
                         }
@@ -577,19 +464,19 @@ export default class OverUnderStore {
             };
 
             this.ws.onclose = e => {
-                this.addLog(`WS Closed: Code ${e.code}. Reconnecting in 5s...`);
+                this.addLog(`WS Closed. Reconnecting...`);
                 this.connection_status = STATUS_OFFLINE;
-                this.reconnectTimeout = setTimeout(this.connectWebSocket, 5000);
+                this.reconnectTimeout = setTimeout(() => this.connectWebSocket(), 5000);
             };
             this.ws.onerror = e => {
-                this.addLog(`WS Error: ${e.message}`);
+                this.addLog(`WS Error`);
             };
         } catch (e) {
             this.addLog(`WS Init Fail: ${e.message}`);
         }
     }
 
-    async processRoundResults() {
+    processRoundResults() {
         const profits = Array.from(this.contract_results.values());
         const all_loss = profits.every(p => p < 0);
 
@@ -601,108 +488,50 @@ export default class OverUnderStore {
             this.setIsRecoveryActive(true);
             
             if (!this.use_recovery_delay) {
-                this.addLog("Immediate recovery triggered (Delay OFF)");
+                this.addLog("Immediate recovery trade");
                 this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
             }
         } else {
             this.stake = this.initial_stake;
-            this.addLog(`Win or break-even detected. Resetting stake to ${this.initial_stake}`);
+            this.addLog(`Resetting stake to ${this.initial_stake}`);
             this.setIsRecoveryActive(false);
             
-            if (this.is_volatility_changer) {
-                if (this.is_automate) {
-                    this.addLog('Automate: Analyzing volatilities...');
-                    this.fetchAllVolatilityTicks();
-                } else {
-                    const symbols = Object.keys(pip_sizes);
-                    const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
-                    this.addLog(`Volatility Changer: Switching to ${randomSymbol}`);
-                    this.setSelectedSymbol(randomSymbol);
-                }
+            if (this.is_volatility_changer && this.is_automate) {
+                this.startVolatilityAnalysis();
             }
         }
 
-        // Reset for next round
-        this.active_contracts.clear();
         this.contract_results.clear();
 
         if (!this.is_turbo) {
             this.setIsAutoRunning(false);
-            this.addLog('Auto-run stopped: Turbo Mode is off.');
+            this.addLog('Turbo Mode is off. Stopping auto-run.');
         }
     }
 
     executeTrade(contract_type: string, barrier: string) {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.is_authorized) return;
-
         const tradeAmount = Number(this.stake);
-        const currency = this.root_store.client.currency || 'USD';
+        const currency = 'USD';
 
         const params = {
-            buy: 1,
-            price: tradeAmount,
-            parameters: {
-                amount: tradeAmount,
-                basis: 'stake',
-                currency: currency,
-                duration: 1,
-                duration_unit: 't',
-                symbol: this.selected_symbol,
-                contract_type,
-                barrier,
-            },
+            buy: 1, price: tradeAmount,
+            parameters: { amount: tradeAmount, basis: 'stake', currency, duration: 1, duration_unit: 't', symbol: this.selected_symbol, contract_type, barrier },
         };
-
-        this.addLog(`Executing Trade: ${contract_type} ${barrier}. Stake: ${tradeAmount}`);
+        this.addLog(`Executing: ${contract_type} ${barrier} @ ${tradeAmount}`);
         this.ws.send(JSON.stringify(params));
     }
 
     executeMultiTrade() {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-            this.addLog('Cannot trade: WS not open.');
-            return;
-        }
-
-        if (!this.is_authorized) {
-            this.addLog('Cannot trade: Not authorized. Please log in.');
-            this.root_store.journal.pushMessage('⚠️ Login required to trade.', 'error');
-            this.setIsAutoRunning(false);
-            return;
-        }
-
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.is_authorized) return;
         const tradeAmount = Number(this.stake);
-        if (tradeAmount <= 0) {
-            this.addLog(`Cannot trade: Invalid stake of ${tradeAmount}.`);
-            this.root_store.journal.pushMessage('⚠️ Stake must be a positive number.', 'error');
-            this.setIsAutoRunning(false);
-            return;
-        }
+        const currency = 'USD';
 
-        const currency = this.root_store.client.currency || 'USD';
+        const baseParams = { amount: tradeAmount, basis: 'stake', currency, duration: 1, duration_unit: 't', symbol: this.selected_symbol };
+        const trade1_params = { buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITOVER', barrier: '5' } };
+        const trade2_params = { buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITUNDER', barrier: '4' } };
 
-        const baseParameters = {
-            amount: tradeAmount,
-            basis: 'stake',
-            currency: currency,
-            duration: 1,
-            duration_unit: 't',
-            symbol: this.selected_symbol,
-        };
-
-        const trade1_params = {
-            buy: 1,
-            price: tradeAmount,
-            parameters: { ...baseParameters, contract_type: 'DIGITOVER', barrier: '5' },
-        };
-
-        const trade2_params = {
-            buy: 1,
-            price: tradeAmount,
-            parameters: { ...baseParameters, contract_type: 'DIGITUNDER', barrier: '4' },
-        };
-
-        this.addLog(`Executing trades: Over 5, Under 4. Stake: ${tradeAmount} ${currency}`);
-
+        this.addLog(`Executing Multi-Trade: O5/U4 @ ${tradeAmount}`);
         this.ws.send(JSON.stringify(trade1_params));
         this.ws.send(JSON.stringify(trade2_params));
     }

@@ -1,7 +1,7 @@
+
 import React, { useEffect, useMemo } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
-import AiScanner from './ai-scanner';
 import './over-under.scss';
 
 const OverUnder = observer(() => {
@@ -28,6 +28,7 @@ const OverUnder = observer(() => {
         is_turbo,
         selected_symbol,
         debug_info,
+        is_analyzing_volatility,
         setStake,
         setMartingale,
         setIsVolatilityChanger,
@@ -47,7 +48,6 @@ const OverUnder = observer(() => {
         connectWebSocket,
         handleStartStop,
         clearDebug,
-        toggleAiScanner,
     } = over_under;
 
     useEffect(() => {
@@ -55,7 +55,6 @@ const OverUnder = observer(() => {
         return () => {
             if (over_under.reconnectTimeout) clearTimeout(over_under.reconnectTimeout);
             if (over_under.ws) over_under.ws.close();
-            over_under.addLog("Component unmounted. Connection closed.");
         };
     }, [connectWebSocket, over_under]);
 
@@ -104,8 +103,6 @@ const OverUnder = observer(() => {
 
     return (
         <div className="over-under-container" style={{ height: 'calc(100vh - 15rem)', overflowY: 'auto' }}>
-            <AiScanner />
-            <button className="floating-ai-btn" onClick={toggleAiScanner}>AI</button>
             <div className="stats-grid">
                 {digitStats.map((count, i) => {
                     const percentage = ((count / totalTicksCount) * 100).toFixed(1);
@@ -135,7 +132,7 @@ const OverUnder = observer(() => {
                 <div className="input-row">
                     <div className="input-group">
                         <label>Index</label>
-                        <select className="ui-select" value={selected_symbol} onChange={(e) => setSelectedSymbol(e.target.value)} disabled={is_auto_running}>
+                        <select className="ui-select" value={selected_symbol} onChange={(e) => setSelectedSymbol(e.target.value)} disabled={is_auto_running || is_analyzing_volatility}>
                             {volatilityIndices.map(idx => <option key={idx.value} value={idx.value}>{idx.text}</option>)}
                         </select>
                     </div>
@@ -143,19 +140,19 @@ const OverUnder = observer(() => {
                         <label>Trigger Digits</label>
                         <div className="entry-config-row">
                             <div className="entry-config">
-                                <input className="ui-input digit-entry" type="number" min="0" max="9" value={entry_digit} onChange={(e) => setEntryDigit(Number(e.target.value))} disabled={is_auto_running} title="First Trigger" />
+                                <input className="ui-input digit-entry" type="number" min="0" max="9" value={entry_digit} onChange={(e) => setEntryDigit(Number(e.target.value))} disabled={is_auto_running || is_analyzing_volatility} title="First Trigger" />
                                 <div className={`status-led ${over_under.last_digit === Number(entry_digit) ? 'glow' : ''}`}></div>
                             </div>
                             {use_second_trigger && (
                                 <div className="entry-config">
-                                    <input className="ui-input digit-entry" type="number" min="0" max="9" value={second_entry_digit} onChange={(e) => setSecondEntryDigit(Number(e.target.value))} disabled={is_auto_running} title="Second Trigger" />
+                                    <input className="ui-input digit-entry" type="number" min="0" max="9" value={second_entry_digit} onChange={(e) => setSecondEntryDigit(Number(e.target.value))} disabled={is_auto_running || is_analyzing_volatility} title="Second Trigger" />
                                     <div className={`status-led ${over_under.last_last_digit === Number(entry_digit) && over_under.last_digit === Number(second_entry_digit) ? 'glow' : ''}`}></div>
                                 </div>
                             )}
                             <button 
                                 className={`ui-switch mini second-trigger-btn ${use_second_trigger ? 'active' : ''}`}
                                 onClick={() => setUseSecondTrigger(!use_second_trigger)}
-                                disabled={is_auto_running}
+                                disabled={is_auto_running || is_analyzing_volatility}
                                 title="Toggle Second Trigger"
                             >
                                 2ND
@@ -256,8 +253,8 @@ const OverUnder = observer(() => {
                     <button className={`btn-secondary ${is_turbo ? 'active' : ''}`} onClick={() => setIsTurbo(!is_turbo)} disabled={is_auto_running}>
                         {is_turbo ? 'TURBO ON' : 'TURBO OFF'}
                     </button>
-                    <button className={`btn-primary ${is_auto_running ? 'running' : ''}`} onClick={handleStartStop}>
-                        {is_auto_running ? 'STOP' : 'START'}
+                    <button className={`btn-primary ${is_auto_running ? 'running' : ''}`} onClick={handleStartStop} disabled={is_analyzing_volatility}>
+                        {is_analyzing_volatility ? 'ANALYZING...' : (is_auto_running ? 'STOP' : 'START')}
                     </button>
                 </div>
             </div>
