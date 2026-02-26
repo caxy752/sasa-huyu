@@ -68,6 +68,7 @@ export default class OverUnderStore {
 
     private _boundAuthHandler: (event: MessageEvent) => void;
     private _loginReaction: () => void;
+    private _accountReaction: () => void;
 
     constructor(root_store: RootStore) {
         makeObservable(this, {
@@ -132,6 +133,17 @@ export default class OverUnderStore {
             (is_logged_in) => {
                 if (is_logged_in && !this.is_authorized) {
                     this.addLog('Global login detected, reconnecting...');
+                    this.connectWebSocket();
+                }
+            }
+        );
+
+        // Sync with account switching
+        this._accountReaction = reaction(
+            () => this.root_store.client.loginid,
+            (loginid) => {
+                if (loginid) {
+                    this.addLog(`Account switched to ${loginid}, reconnecting...`);
                     this.connectWebSocket();
                 }
             }
@@ -286,7 +298,6 @@ export default class OverUnderStore {
         this.is_authorized = false;
         this.is_authorizing = true;
 
-        // DYNAMIC APP ID: Use the project's getAppId() and getSocketURL() utilities
         const app_id = getAppId();
         const server_url = getSocketURL();
 
@@ -368,6 +379,8 @@ export default class OverUnderStore {
                                 this.addLog(`Authorization Successful for ${data.authorize.loginid}!`);
                                 this.is_authorized = true;
                                 this.connection_status = STATUS_AUTHORIZED;
+                                // Request proposal_open_contract stream to track results globally
+                                this.ws?.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
                             }
                             this.subscribeToTicks(this.selected_symbol);
                             break;
@@ -380,7 +393,11 @@ export default class OverUnderStore {
                             break;
                         case 'proposal_open_contract':
                             const contract = data.proposal_open_contract;
-                            this.root_store.summary_card?.onBotContractEvent?.(contract);
+                            // SYNC WITH MAIN PANEL: Always report to SummaryCardStore
+                            if (this.root_store.summary_card) {
+                                this.root_store.summary_card.onBotContractEvent(contract);
+                            }
+                            
                             if (contract.is_sold) {
                                 const contract_id = String(contract.contract_id);
                                 if (this.active_contracts.has(contract_id)) {
@@ -518,6 +535,7 @@ export default class OverUnderStore {
     dispose() {
         window.removeEventListener('message', this._boundAuthHandler);
         if (this._loginReaction) this._loginReaction();
+        if (this._accountReaction) this._accountReaction();
         if (this.ws) { this.ws.onclose = null; this.ws.close(); }
         if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
         this.volatilityAnalyzer?.terminate();
