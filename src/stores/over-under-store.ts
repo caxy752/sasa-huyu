@@ -2,6 +2,7 @@
 import { action, makeObservable, observable, reaction } from 'mobx';
 import { TStores } from '@/types/stores.types';
 import RootStore from './root-store';
+import { getAppId, getSocketURL } from '@/components/shared';
 
 const STATUS_OFFLINE = 'Offline';
 const STATUS_CONNECTING = 'Connecting...';
@@ -239,14 +240,12 @@ export default class OverUnderStore {
     }
 
     handleStartStop() {
-        // Check internal auth, global store, and localStorage as a final fallback
         const is_logged_in = this.is_authorized || 
                            this.root_store.client.is_logged_in || 
                            !!localStorage.getItem('active_loginid');
 
         if (!is_logged_in) {
             this.addLog("Error: Please log in to start trading.");
-            // Try to reconnect if we think we might be logged in but aren't authorized
             if (localStorage.getItem('active_loginid')) {
                 this.addLog("Attempting to recover session...");
                 this.connectWebSocket();
@@ -287,24 +286,22 @@ export default class OverUnderStore {
         this.is_authorized = false;
         this.is_authorizing = true;
 
-        const app_id = '117164';
-        const server_url = 'ws.derivws.com';
+        // DYNAMIC APP ID: Use the project's getAppId() and getSocketURL() utilities
+        const app_id = getAppId();
+        const server_url = getSocketURL();
 
         try {
             this.ws = new WebSocket(`wss://${server_url}/websockets/v3?app_id=${app_id}`);
 
             this.ws.onopen = () => {
-                this.addLog('Connection opened. Requesting authorization...');
+                this.addLog(`Connection opened (App ID: ${app_id}). Requesting authorization...`);
                 this.connection_status = STATUS_LIVE;
 
                 if (window.self !== window.top) {
                     window.parent.postMessage({ name: 'request_auth_token' }, '*');
                 } else {
                     try {
-                        // Check multiple storage keys for the token
                         const active_loginid = localStorage.getItem('active_loginid');
-                        
-                        // 1. Try client.accounts (standard)
                         const client_accounts_str = localStorage.getItem('client.accounts');
                         if (client_accounts_str && active_loginid) {
                             const client_accounts = JSON.parse(client_accounts_str);
@@ -316,7 +313,6 @@ export default class OverUnderStore {
                             }
                         }
 
-                        // 2. Try accountsList (fallback)
                         const accountsListStr = localStorage.getItem('accountsList');
                         if (accountsListStr && active_loginid) {
                             const accountsList = JSON.parse(accountsListStr);
@@ -328,7 +324,6 @@ export default class OverUnderStore {
                             }
                         }
 
-                        // 3. Try global ClientStore getToken() if available
                         const storeToken = this.root_store.client.getToken?.();
                         if (storeToken) {
                             this.addLog('Authorizing with store token...');
