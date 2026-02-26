@@ -55,7 +55,6 @@ const OverUnder = observer(() => {
     } = over_under;
 
     useEffect(() => {
-        // Only connect if not already connected
         if (over_under.connection_status === 'Offline') {
             connectWebSocket();
         }
@@ -264,7 +263,7 @@ const OverUnder = observer(() => {
                         </div>
                         <div className="input-group">
                             <label>Recovery Type</label>
-                            <select className="ui-select" value={recovery_contract_type} onChange={(e) => setRecovery_contract_type(e.target.value)} disabled={is_auto_running || is_authorizing}>
+                            <select className="ui-select" value={recovery_contract_type} onChange={(e) => setRecoveryContractType(e.target.value)} disabled={is_auto_running || is_authorizing}>
                                 <option value="DIGITOVER">OVER</option>
                                 <option value="DIGITUNDER">UNDER</option>
                                 <option value="DIGITDIFF">DIFFERS</option>
@@ -288,9 +287,11 @@ const OverUnder = observer(() => {
                             {is_turbo ? 'ON' : 'OFF'}
                         </button>
                     </div>
-                    <button className={`ui-button start-btn ${is_auto_running ? 'stop' : ''}`} onClick={handleStartStop} disabled={is_authorizing}>
-                        {startButtonText}
-                    </button>
+                    <div className="button-group">
+                        <button className={`btn-primary ${is_auto_running ? 'running' : ''}`} onClick={handleStartStop} disabled={is_authorizing}>
+                            {startButtonText}
+                        </button>
+                    </div>
                 </div>
             </div>
 
