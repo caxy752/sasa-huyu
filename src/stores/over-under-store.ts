@@ -467,8 +467,9 @@ export default class OverUnderStore {
         if (this.differs_barrier_digit !== null) {
             if (this.last_digit === this.differs_barrier_digit) {
                 this.addLog(`Barrier digit ${this.differs_barrier_digit} appeared! Firing trade immediately.`);
-                this.executeTrade('DIGITDIFF', String(this.differs_barrier_digit));
-                this.differs_barrier_digit = null; // Reset after trade
+                const targetDigit = this.differs_barrier_digit;
+                this.differs_barrier_digit = null; // Reset first to avoid re-triggering
+                this.executeTrade('DIGITDIFF', String(targetDigit));
             }
             return;
         }
