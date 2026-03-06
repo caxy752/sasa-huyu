@@ -443,6 +443,9 @@ export default class OverUnderStore {
                                     if (this.is_recovery_active && !this.is_differs_mode) {
                                         this.addLog(`Recovery Active (Non-Differs): Executing immediately.`);
                                         this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
+                                    } else if (this.is_manual_mode && this.is_recovery_active) {
+                                        this.addLog(`Recovery Active (Manual): Executing immediately.`);
+                                        this.executeTrade(this.manual_contract_type, this.manual_barrier);
                                     } else {
                                         // Normal or Differs-Recovery mode: wait for trigger
                                         let is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
@@ -542,6 +545,9 @@ export default class OverUnderStore {
                 this.is_differs_recovery_mode = true;
                 this.differs_barrier_digit = null;
                 this.addLog(`Switching to Recovery Mode (Differs): ${this.recovery_contract_type} ${this.recovery_barrier}. Waiting for trigger...`);
+            } else if (this.is_manual_mode) {
+                this.addLog(`Switching to Recovery Mode (Manual Immediate): ${this.manual_contract_type} ${this.manual_barrier}`);
+                this.executeTrade(this.manual_contract_type, this.manual_barrier);
             } else {
                 this.addLog(`Switching to Recovery Mode (Immediate): ${this.recovery_contract_type} ${this.recovery_barrier}`);
                 this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
