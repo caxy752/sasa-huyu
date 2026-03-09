@@ -31,6 +31,28 @@ self.onmessage = (event) => {
         }
 
         const recent_ticks = p_ticks.slice(-50);
+        
+        // New logic for DIFFERS: Look for volatility where digits rarely repeat themselves
+        if (p_contract_type === 'DIGITDIFF') {
+            let repeat_count = 0;
+            for (let i = 1; i < recent_ticks.length; i++) {
+                if (recent_ticks[i] === recent_ticks[i - 1]) {
+                    repeat_count++;
+                }
+            }
+            
+            // Calculate percentage of repeats
+            const repeat_percent = (repeat_count / (recent_ticks.length - 1)) * 100;
+            
+            // Base instability from original logic
+            const totalCount = recent_ticks.filter(t => target_digits.includes(t)).length;
+            const totalPercent = (totalCount / 50) * 100;
+            
+            // Combine: we want low repeats AND low appearance of the barrier digit
+            // Lower score is better.
+            return (repeat_percent * 2.0) + totalPercent;
+        }
+
         const first_half = recent_ticks.slice(0, 25);
         const second_half = recent_ticks.slice(25, 50);
 
@@ -47,15 +69,7 @@ self.onmessage = (event) => {
         const totalPercent = (totalCount / 50) * 100;
 
         // Instability score: weighted sum of trend and total percentage of "bad" digits.
-        // For DIFFERS, we want the barrier digit to be extremely rare and not increasing.
         let instability_score = (trend * 2.0) + totalPercent;
-
-        // Penalty for very recent appearance (last 5 ticks) if it's a DIFFERS strategy
-        if (p_contract_type === 'DIGITDIFF') {
-            const last5 = recent_ticks.slice(-5);
-            const last5Count = last5.filter(t => t === barrier_num).length;
-            instability_score += (last5Count * 10); // Heavy penalty for recent hits
-        }
 
         return instability_score;
     };

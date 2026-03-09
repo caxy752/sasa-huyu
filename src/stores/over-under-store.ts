@@ -222,8 +222,12 @@ export default class OverUnderStore {
 
     addLog(msg: string) {
         const timestamp = new Date().toLocaleTimeString();
-        this.debug_info.unshift(`[${timestamp}] ${msg}`);
-        if (this.debug_info.length > 20) this.debug_info.pop();
+        const new_log = `[${timestamp}] ${msg}`;
+        // Use action to update observable array efficiently
+        action(() => {
+            this.debug_info.unshift(new_log);
+            if (this.debug_info.length > 20) this.debug_info.pop();
+        })();
         if (this.root_store.journal) {
             this.root_store.journal.pushMessage(msg, MessageTypes.NOTIFY);
         }

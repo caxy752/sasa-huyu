@@ -51,6 +51,8 @@ const FreeBots = observer(() => {
                 'Professional Under 7 bot with R56 recovery mechanism. Features intelligent risk management and recovery strategies for consistent returns.',
             'UNDER8 R67 PRO':
                 'Advanced Under 8 trading bot with R67 recovery system. Designed for optimal performance with sophisticated pattern recognition and recovery.',
+            'MAKOTIV3RISE FALL':
+                'Premium Rise/Fall trading bot with MACD analysis and intelligent recovery. Optimized for consistent returns in trending markets.',
         };
 
         // Try exact match first
@@ -82,6 +84,7 @@ const FreeBots = observer(() => {
             'OVER2_R43 PRO.xml',
             'UNDER8_R67 PRO.xml',
             'UNDER7_R56 PRO.xml',
+            'MAKOTIV3RISE_FALL.xml',
         ];
     };
 

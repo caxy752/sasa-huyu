@@ -300,11 +300,9 @@ const OverUnder = observer(() => {
                             <span className='digit-num'>{i}</span>
                             <span className='digit-percent'>{percentage}%</span>
                             <div className='digit-bar-wrapper'>
-                                <motion.div
+                                <div
                                     className={`digit-bar-fill ${barClass}`}
-                                    initial={{ height: 0 }}
-                                    animate={{ height: `${percentage}%` }}
-                                    transition={{ duration: 1, ease: 'easeOut' }}
+                                    style={{ height: `${percentage}%`, transition: 'height 0.2s ease-out' }}
                                 />
                             </div>
                         </motion.div>
@@ -639,19 +637,14 @@ const OverUnder = observer(() => {
                             </div>
                         ) : (
                             <div className='log-list'>
-                                {debug_info.map((log, i) => (
-                                    <motion.div
-                                        key={i}
-                                        className='log-item'
-                                        initial={{ opacity: 0, x: 10 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                    >
-                                        <span className='log-time'>
-                                            [{new Date().toLocaleTimeString([], { hour12: false })}]
-                                        </span>
-                                        <span className='log-text'>{log}</span>
-                                    </motion.div>
-                                ))}
+                                    {debug_info.map((log, i) => (
+                                        <div key={i} className='log-item'>
+                                            <span className='log-time'>
+                                                [{new Date().toLocaleTimeString([], { hour12: false })}]
+                                            </span>
+                                            <span className='log-text'>{log}</span>
+                                        </div>
+                                    ))}
                             </div>
                         )}
                     </div>
