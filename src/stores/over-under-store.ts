@@ -585,11 +585,11 @@ export default class OverUnderStore {
         const curr_direction: 'up' | 'down' = curr_price > prev_price ? 'up' : 'down';
         const surge_direction: 'up' | 'down' = curr_direction === 'up' ? 'down' : 'up';
 
-        // Walk backwards through price history counting consecutive surge-direction ticks.
-        // Stop immediately if any tick moves in the wrong direction (mixed = invalid).
+        // Walk backwards through price history counting strictly consecutive surge-direction ticks.
+        // Any flat tick (no movement) or opposite-direction tick immediately ends the streak.
         let surge_count = 0;
         for (let i = n - 2; i >= 1; i--) {
-            if (prices[i] === prices[i - 1]) continue; // flat tick – skip but don't break
+            if (prices[i] === prices[i - 1]) break; // flat tick – streak broken (not skipped)
             const tick_dir: 'up' | 'down' = prices[i] > prices[i - 1] ? 'up' : 'down';
             if (tick_dir === surge_direction) {
                 surge_count++;
@@ -601,12 +601,17 @@ export default class OverUnderStore {
         if (surge_count >= 3) {
             const rejection_digit = this.last_digit;
 
-            // ── Restriction 1: digit must not exceed 10% in last 1000 ticks ──
             const history = this.tick_history;
             const totalTicks = history.length;
-            const digitCount = history.filter(d => d === rejection_digit).length;
+
+            // Build per-digit counts once for all checks
+            const digitCounts = Array(10).fill(0) as number[];
+            history.forEach(d => { if (d >= 0 && d <= 9) digitCounts[d]++; });
+
+            const digitCount = digitCounts[rejection_digit!];
             const digitPct = totalTicks > 0 ? (digitCount / totalTicks) * 100 : 0;
 
+            // ── Restriction 1: digit must not exceed 10% in last 1000 ticks ──
             if (digitPct > 10) {
                 this.addLog(
                     `Differs: SKIP digit ${rejection_digit} — too frequent (${digitPct.toFixed(1)}% in ${totalTicks} ticks, limit 10%). Re-analyzing...`
@@ -614,7 +619,16 @@ export default class OverUnderStore {
                 return;
             }
 
-            // ── Restriction 2: digit must not appear more than 3 times in last 10 ticks ──
+            // ── Restriction 2: digit must not be the least-appearing digit ──
+            const minCount = Math.min(...digitCounts.filter((_, i) => digitCounts[i] > 0));
+            if (digitCount === minCount && totalTicks > 0) {
+                this.addLog(
+                    `Differs: SKIP digit ${rejection_digit} — least appearing digit (${digitCount} times). Re-analyzing...`
+                );
+                return;
+            }
+
+            // ── Restriction 3: digit must not appear more than 3 times in last 10 ticks ──
             const last10 = history.slice(-10);
             const recentCount = last10.filter(d => d === rejection_digit).length;
 
