@@ -27,7 +27,8 @@ import SpeedBotFloatingStop from '../../components/speedbot-floating-stop';
 import ChartModal from '../chart/chart-modal';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
-import TradingBots from '../free-bots/trading-bots';
+import OverUnder from '../OverUnder'; 
+import MakotiMagic from '../MakotiMagic'; // The new tool import
 import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -36,8 +37,7 @@ const AnalysisTools = lazy(() => import('../analysis-tool'));
 const CopyTrading = lazy(() => import('../copy-trading'));
 const Strategies = lazy(() => import('../free-bots/strategies'));
 const Dtrader = lazy(() => import('../dtrader'));
-const OverUnder = lazy(() => import('../OverUnder'));
-const MakotiMagic = lazy(() => import('../MakotiMagic'));
+import TradingBots from '../free-bots/trading-bots';
 
 const AppWrapper = observer(() => {
     const { connectionStatus } = useApiBase();
@@ -125,12 +125,12 @@ const AppWrapper = observer(() => {
                             <TradingBots />
                         </div>
                         <div label={<><LabelPairedPlayCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Over/Under' /></>} id='over_under'>
-                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Over/Under...')} />}><OverUnder /></Suspense>
+                            <OverUnder />
                         </div>
 
                         {/* MAKOTI MAGIC TAB START */}
                         <div label={<><LabelPairedPlayCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Makoti Magic' /></>} id='makoti_magic'>
-                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Makoti Magic...')} />}><MakotiMagic /></Suspense>
+                            <MakotiMagic />
                         </div>
                         {/* MAKOTI MAGIC TAB END */}
 
