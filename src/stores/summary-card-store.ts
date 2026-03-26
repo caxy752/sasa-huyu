@@ -118,15 +118,19 @@ export default class SummaryCardStore {
     }
 
     clear(should_unset_contract = true) {
-        if (should_unset_contract) {
-            this.contract_info = null;
-        }
+        try {
+            if (should_unset_contract) {
+                this.contract_info = null;
+            }
 
-        this.profit = 0;
-        this.profit_loss = 0;
-        this.indicative = 0;
-        this.indicative_movement = '';
-        this.profit_movement = '';
+            this.profit = 0;
+            this.profit_loss = 0;
+            this.indicative = 0;
+            this.indicative_movement = '';
+            this.profit_movement = '';
+        } catch (error) {
+            console.error('[Summary Card] ❌ Error in clear method:', error);
+        }
     }
 
     clearContractUpdateConfigValues() {

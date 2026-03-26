@@ -362,11 +362,20 @@ export default class TransactionsStore {
             console.error('[Transactions] Error in clear method:', e);
         }
         
-        // Clear in-memory state
-        this.elements = {};
-        this.recovered_completed_transactions = [];
-        this.recovered_transactions = [];
-        this.is_transaction_details_modal_open = false;
+        // Clear in-memory state in a separate try-catch
+        try {
+            this.elements = {};
+            this.recovered_completed_transactions = [];
+            this.recovered_transactions = [];
+            this.is_transaction_details_modal_open = false;
+        } catch (e) {
+            console.error('[Transactions] Error clearing in-memory state:', e);
+            // Still reset even if there was an error
+            this.elements = {};
+            this.recovered_completed_transactions = [];
+            this.recovered_transactions = [];
+            this.is_transaction_details_modal_open = false;
+        }
     }
 
     registerReactions() {

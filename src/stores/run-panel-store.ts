@@ -486,57 +486,53 @@ export default class RunPanelStore {
     };
 
     clearStat = () => {
-        const { journal, summary_card, transactions } = this.root_store;
-
-        this.onCloseDialog();
-        
-        // Call the proper clear methods - wrap each in try-catch to prevent one error from breaking others
         try {
-            if (journal?.clear) {
-                runInAction(() => {
-                    try {
-                        journal.clear();
-                        console.log('[Run Panel] Journal cleared');
-                    } catch (e) {
-                        console.error('[Run Panel] Journal clear error:', e);
-                    }
-                });
+            // Store references first
+            const journal = this.root_store?.journal;
+            const summary_card = this.root_store?.summary_card;
+            const transactions = this.root_store?.transactions;
+            
+            // Clear journal
+            if (journal?.clear && typeof journal.clear === 'function') {
+                try {
+                    journal.clear();
+                    console.log('[Run Panel] Journal cleared');
+                } catch (e) {
+                    console.error('[Run Panel] Journal clear error:', e);
+                }
             }
-        } catch (e) {
-            console.error('[Run Panel] Journal action error:', e);
-        }
-
-        try {
-            if (summary_card?.clear) {
-                runInAction(() => {
-                    try {
-                        summary_card.clear();
-                        console.log('[Run Panel] Summary card cleared');
-                    } catch (e) {
-                        console.error('[Run Panel] Summary clear error:', e);
-                    }
-                });
+            
+            // Clear summary card
+            if (summary_card?.clear && typeof summary_card.clear === 'function') {
+                try {
+                    summary_card.clear();
+                    console.log('[Run Panel] Summary card cleared');
+                } catch (e) {
+                    console.error('[Run Panel] Summary clear error:', e);
+                }
             }
-        } catch (e) {
-            console.error('[Run Panel] Summary action error:', e);
-        }
-
-        try {
-            if (transactions?.clear) {
-                runInAction(() => {
-                    try {
-                        transactions.clear();
-                        console.log('[Run Panel] Transactions cleared');
-                    } catch (e) {
-                        console.error('[Run Panel] Transactions clear error:', e);
-                    }
-                });
+            
+            // Clear transactions
+            if (transactions?.clear && typeof transactions.clear === 'function') {
+                try {
+                    transactions.clear();
+                    console.log('[Run Panel] Transactions cleared');
+                } catch (e) {
+                    console.error('[Run Panel] Transactions clear error:', e);
+                }
             }
+            
+            console.log('[Run Panel] ✅ Clear operation completed');
         } catch (e) {
-            console.error('[Run Panel] Transactions action error:', e);
+            console.error('[Run Panel] ❌ Unexpected error in clearStat:', e);
+        } finally {
+            // Close dialog LAST, after all clears are done
+            try {
+                this.onCloseDialog();
+            } catch (e) {
+                console.error('[Run Panel] Error closing dialog:', e);
+            }
         }
-
-        console.log('[Run Panel] ✅ Clear operation completed');
     };
 
     toggleStatisticsInfoModal = () => {

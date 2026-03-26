@@ -371,8 +371,12 @@ const RunPanel = observer(() => {
                     <Button
                         primary
                         onClick={() => {
-                            if (onOkButtonClick) {
-                                onOkButtonClick();
+                            try {
+                                if (onOkButtonClick) {
+                                    onOkButtonClick();
+                                }
+                            } catch (error) {
+                                console.error('[Run Panel] Error in confirm button handler:', error);
                             }
                         }}
                         text={localize('Confirm')}

@@ -390,43 +390,48 @@ export default class JournalStore {
     }
 
     clear() {
-        const loginid = this.core?.client?.loginid;
-        
-        this.unfiltered_messages = [];
+        try {
+            const loginid = this.core?.client?.loginid;
+            
+            // First, set messages to empty array (triggers MobX reaction)
+            this.unfiltered_messages = [];
 
-        const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-        const isSpecialCR = showAsCR === 'CR6779123';
-        
-        let clearAccountId = loginid;
-        if (isSpecialCR && showAsCR) {
-            clearAccountId = showAsCR;
-        }
-
-        if (clearAccountId) {
-            try {
-                const stored_journals = getStoredItemsByKey(this.JOURNAL_CACHE, {});
-                delete stored_journals[clearAccountId];
-                setStoredItemsByKey(this.JOURNAL_CACHE, stored_journals);
-                console.log(`[Journal] ✅ Cleared journal messages from storage for ${clearAccountId}`);
-            } catch (error) {
-                console.error('[Journal] ❌ Error clearing journal storage:', error);
+            const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
+            const isSpecialCR = showAsCR === 'CR6779123';
+            
+            let clearAccountId = loginid;
+            if (isSpecialCR && showAsCR) {
+                clearAccountId = showAsCR;
             }
-        }
-        
-        if (loginid && isSpecialCRAccount(loginid)) {
-            const demoAccountId = this.getDemoAccountId();
-            if (demoAccountId) {
+
+            if (clearAccountId) {
                 try {
                     const stored_journals = getStoredItemsByKey(this.JOURNAL_CACHE, {});
-                    if (stored_journals[demoAccountId]) {
-                        delete stored_journals[demoAccountId];
-                        setStoredItemsByKey(this.JOURNAL_CACHE, stored_journals);
-                        console.log(`[Journal] ✅ Cleared journal messages from storage for demo account ${demoAccountId}`);
-                    }
+                    delete stored_journals[clearAccountId];
+                    setStoredItemsByKey(this.JOURNAL_CACHE, stored_journals);
+                    console.log(`[Journal] ✅ Cleared journal messages from storage for ${clearAccountId}`);
                 } catch (error) {
-                    console.error('[Journal] ❌ Error clearing demo journal storage:', error);
+                    console.error('[Journal] ❌ Error clearing journal storage:', error);
                 }
             }
+            
+            if (loginid && isSpecialCRAccount(loginid)) {
+                const demoAccountId = this.getDemoAccountId();
+                if (demoAccountId) {
+                    try {
+                        const stored_journals = getStoredItemsByKey(this.JOURNAL_CACHE, {});
+                        if (stored_journals[demoAccountId]) {
+                            delete stored_journals[demoAccountId];
+                            setStoredItemsByKey(this.JOURNAL_CACHE, stored_journals);
+                            console.log(`[Journal] ✅ Cleared journal messages from storage for demo account ${demoAccountId}`);
+                        }
+                    } catch (error) {
+                        console.error('[Journal] ❌ Error clearing demo journal storage:', error);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[Journal] ❌ Error in clear method:', error);
         }
     }
 
