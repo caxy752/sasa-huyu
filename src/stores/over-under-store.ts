@@ -396,8 +396,15 @@ export default class OverUnderStore {
         if (this.is_auto_running) {
             this.initial_stake = this.stake;
             this.setIsRecoveryActive(false);
-            this.addLog("Tool started. Waiting for trigger...");
-            if (this.is_volatility_changer) this.startVolatilityAnalysis();
+            this.differs_v2_post_trade_ticks = 0;
+            
+            if (this.is_differs_v2_mode) {
+                this.addLog("Tool started. Differs V2: Predicting & executing immediately...");
+                this.analyzeAndExecuteDiffersV2();
+            } else {
+                this.addLog("Tool started. Waiting for trigger...");
+                if (this.is_volatility_changer) this.startVolatilityAnalysis();
+            }
         } else {
             this.addLog("Tool stopped by user.");
             this.setIsRecoveryActive(false);
@@ -561,7 +568,7 @@ export default class OverUnderStore {
                             this.tick_history = [...this.tick_history.slice(-MAX_TICKS + 1), digit];
                             this._tick_prices = [...this._tick_prices.slice(-MAX_TICKS + 1), Number(data.tick.quote)];
                             
-                            if (this.is_differs_v2_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
+                            if (this.is_differs_v2_mode && !this.is_differs_recovery_mode && !this.is_recovery_active && this.differs_v2_predicted_digit !== null) {
                                 this.differs_v2_post_trade_ticks++;
                             }
                             
@@ -773,8 +780,9 @@ export default class OverUnderStore {
         if (this.tick_history.length < 5 || this.is_purchasing) return;
 
         const autoSwitchOn = this.is_volatility_changer && this.is_analyzing_volatility;
+        const hasPlacedTrade = this.differs_v2_predicted_digit !== null;
         
-        if (!autoSwitchOn && this.differs_v2_post_trade_ticks < 3) {
+        if (hasPlacedTrade && !autoSwitchOn && this.differs_v2_post_trade_ticks < 3) {
             return;
         }
 
