@@ -72,6 +72,7 @@ export default class OverUnderStore {
     differs_v2_predicted_digit: number | null = null;
     differs_v2_post_trade_ticks = 0;
     differs_v2_analysis_ready = false;
+    differs_v2_5s_analysis_pending = false;
     private _tick_prices: number[] = [];
     total_loss_to_recover = 0;
     differs_digit_appearance_count = 0;
@@ -132,6 +133,7 @@ export default class OverUnderStore {
             differs_v2_predicted_digit: observable,
             differs_v2_post_trade_ticks: observable,
             differs_v2_analysis_ready: observable,
+            differs_v2_5s_analysis_pending: observable,
             setStake: action.bound,
             setIsRiseFallMode: action.bound,
             setIs2termMode: action.bound,
@@ -292,11 +294,16 @@ export default class OverUnderStore {
                 this.setSelectedSymbol(this.best_symbol);
                 
                 if (this.is_differs_v2_mode && this.is_auto_running) {
+                    runInAction(() => {
+                        this.differs_v2_analysis_ready = false;
+                        this.differs_v2_5s_analysis_pending = true;
+                    });
                     this.addLog("Differs V2: Analyzing new symbol data (5s)...");
                     setTimeout(() => {
-                        if (this.is_auto_running && this.is_differs_v2_mode && this.is_analyzing_volatility === false) {
+                        if (this.is_auto_running && this.is_differs_v2_mode) {
                             runInAction(() => {
                                 this.differs_v2_analysis_ready = true;
+                                this.differs_v2_5s_analysis_pending = false;
                             });
                             this.addLog("Differs V2: Analysis complete. Predicting & executing...");
                             this.analyzeAndExecuteDiffersV2();
@@ -830,7 +837,7 @@ export default class OverUnderStore {
             return;
         }
 
-        if (!this.differs_v2_analysis_ready && !autoSwitchOn) {
+        if (!this.differs_v2_analysis_ready && !autoSwitchOn && !this.differs_v2_5s_analysis_pending) {
             return;
         }
 
@@ -856,7 +863,7 @@ export default class OverUnderStore {
         for (let d = 0; d <= 9; d++) {
             if (!top9Digits.includes(d)) {
                 const recentCount = last20.filter(x => x === d).length;
-                if (recentCount <= 7) {
+                if (recentCount <= 6) {
                     differsDigit = d;
                     break;
                 }

@@ -66,15 +66,21 @@ const Strategies: React.FC = () => {
         return () => {
             clearTimeout(timeoutId1);
             clearTimeout(timeoutId2);
-            const allTabContents = document.querySelectorAll('.dc-tabs__content');
-            allTabContents.forEach((tabContent) => {
-                tabContent.classList.remove('strategies-tab-active');
-                const tabEl = tabContent as HTMLElement;
-                tabEl.style.overflowY = '';
-                tabEl.style.overflowX = '';
-                tabEl.style.height = '';
-                tabEl.style.maxHeight = '';
-            });
+            try {
+                const allTabContents = document.querySelectorAll('.dc-tabs__content');
+                allTabContents.forEach((tabContent) => {
+                    if (tabContent.classList.contains('strategies-tab-active')) {
+                        tabContent.classList.remove('strategies-tab-active');
+                        const tabEl = tabContent as HTMLElement;
+                        tabEl.style.overflowY = '';
+                        tabEl.style.overflowX = '';
+                        tabEl.style.height = '';
+                        tabEl.style.maxHeight = '';
+                    }
+                });
+            } catch (e) {
+                // Ignore cleanup errors
+            }
         };
     }, []);
 
@@ -84,23 +90,6 @@ const Strategies: React.FC = () => {
 
     const handleBackClick = () => {
         setActiveStrategy(null);
-    };
-
-    const renderContent = () => {
-        if (!active_strategy) return null;
-
-        switch (active_strategy) {
-            case 'over-under':
-                return <OverUnderStrategy onBack={handleBackClick} />;
-            case 'odd':
-                return <OddStrategy onBack={handleBackClick} />;
-            case 'even':
-                return <EvenStrategy onBack={handleBackClick} />;
-            case 'hit-and-run':
-                return <HitAndRunStrategy onBack={handleBackClick} />;
-            default:
-                return null;
-        }
     };
 
     // Icon components
@@ -146,7 +135,12 @@ const Strategies: React.FC = () => {
     if (active_strategy) {
         return (
             <div className='strategies strategies--standalone'>
-                <div className='strategies__content'>{renderContent()}</div>
+                <div className='strategies__content'>
+                    {active_strategy === 'over-under' && <OverUnderStrategy onBack={handleBackClick} />}
+                    {active_strategy === 'odd' && <OddStrategy onBack={handleBackClick} />}
+                    {active_strategy === 'even' && <EvenStrategy onBack={handleBackClick} />}
+                    {active_strategy === 'hit-and-run' && <HitAndRunStrategy onBack={handleBackClick} />}
+                </div>
             </div>
         );
     }
