@@ -885,11 +885,19 @@ export default class OverUnderStore {
         }
 
         let differsDigit: number | null = null;
+        let bestDiffersScore = -1;
+        
+        const last30 = this.tick_history.slice(-30);
+        const freqMap = Array(10).fill(0);
+        last30.forEach(d => { if (d >= 0 && d <= 9) freqMap[d]++; });
         
         for (let d = 0; d <= 9; d++) {
             if (!top9Digits.includes(d)) {
-                differsDigit = d;
-                break;
+                const score = 10 - freqMap[d];
+                if (score > bestDiffersScore) {
+                    bestDiffersScore = score;
+                    differsDigit = d;
+                }
             }
         }
 
