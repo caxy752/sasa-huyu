@@ -884,6 +884,7 @@ export default class OverUnderStore {
             });
         }
 
+        const top9Digits = prediction.rankedDigits.slice(0, 9).map(d => d.digit);
         const predictedDigit = prediction.rankedDigits[0].digit;
         
         const last30 = this.tick_history.slice(-30);
@@ -891,13 +892,12 @@ export default class OverUnderStore {
         last30.forEach(d => { if (d >= 0 && d <= 9) freqMap[d]++; });
         
         let differsDigit: number | null = null;
-        let bestDiffersScore = -1;
+        let lowestFreq = 100;
         
         for (let d = 0; d <= 9; d++) {
-            if (d !== predictedDigit) {
-                const score = 10 - freqMap[d];
-                if (score > bestDiffersScore) {
-                    bestDiffersScore = score;
+            if (!top9Digits.includes(d)) {
+                if (freqMap[d] < lowestFreq) {
+                    lowestFreq = freqMap[d];
                     differsDigit = d;
                 }
             }
@@ -916,7 +916,7 @@ export default class OverUnderStore {
             this.differs_v2_confidence_wait_start = null;
         });
 
-        this.addLog(`DiffersV2: Predict ${predictedDigit} will appear → DIFFER on ${differsDigit} (win if ${predictedDigit} appears)`);
+        this.addLog(`DiffersV2: Predict top 9 [${top9Digits.join(',')}] → DIFFER on ${differsDigit} (win if any top 9 appears)`);
 
         this.executeTrade('DIGITDIFF', String(differsDigit));
     }
