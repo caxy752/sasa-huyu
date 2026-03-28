@@ -5,6 +5,7 @@ This template was generated using  `create-deriv-v2`site.
 ## Getting started
 
 To run the development server: next
+
 ###bash 1
 npm run dev
 build:
