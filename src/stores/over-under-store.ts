@@ -370,7 +370,16 @@ export default class OverUnderStore {
     setIsVolatilityChanger(value: boolean) { this.is_volatility_changer = value; }
     setIsDiffersMode(value: boolean) { this.is_differs_mode = value; }
     setIsDiffersV2Mode(value: boolean) { this.is_differs_v2_mode = value; }
-    setIsAllVolMode(value: boolean) { this.is_all_vol_mode = value; }
+    
+    setIsAllVolMode(value: boolean) {
+        if (this.is_all_vol_mode === value) return;
+        this.is_all_vol_mode = value;
+        if (this.ws?.readyState === WebSocket.OPEN && (this.connection_status === STATUS_LIVE || this.connection_status === STATUS_AUTHORIZED)) {
+            this.addLog(`All Vol Mode changed to ${value ? 'ON' : 'OFF'}. Updating subscriptions.`);
+            this.subscribeToTicks(this.selected_symbol);
+        }
+    }
+
     setIs2termMode(value: boolean) { this.is_2term_mode = value; }
     setIsRiseFallMode(value: boolean) { this.is_rise_fall_mode = value; }
     setIsAutomate(value: boolean) { this.is_automate = value; }
@@ -458,25 +467,26 @@ export default class OverUnderStore {
 
     subscribeToTicks(symbol: string) {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+        // Always forget all previous tick subscriptions to ensure a clean state.
+        this.ws.send(JSON.stringify({ forget_all: 'ticks' }));
+        this.active_subscription_id = null;
+        this.addLog('Cleared all previous tick subscriptions.');
+
         if (this.is_all_vol_mode) {
-            if (this.active_subscription_id) {
-                this.ws.send(JSON.stringify({ forget_all: 'ticks' }));
-                this.active_subscription_id = null;
-            }
+            this.symbol_data = {}; // Reset data object
             for (const sym in pip_sizes) {
                 this.addLog(`Subscribing to: ${sym}`);
                 this.ws.send(JSON.stringify({ ticks_history: sym, count: MAX_TICKS, end: 'latest', style: 'ticks', subscribe: 1 }));
                 this.symbol_data[sym] = { tick_history: [], last_digit: null, last_last_digit: null, _tick_prices: [] };
             }
         } else {
-            if (this.active_subscription_id) {
-                this.ws.send(JSON.stringify({ forget: this.active_subscription_id }));
-                this.active_subscription_id = null;
-            }
             this.addLog(`Subscribing to: ${symbol}`);
             this.ws.send(JSON.stringify({ ticks_history: symbol, count: MAX_TICKS, end: 'latest', style: 'ticks', subscribe: 1 }));
             this.tick_history = [];
             this.last_digit = null;
+            this.last_last_digit = null;
+            this._tick_prices = [];
         }
     }
 
@@ -551,6 +561,9 @@ export default class OverUnderStore {
                         case 'history':
                             if (this.is_all_vol_mode) {
                                 const symbol = data.echo_req.ticks_history;
+                                if (!this.symbol_data[symbol]) {
+                                    this.symbol_data[symbol] = { tick_history: [], last_digit: null, last_last_digit: null, _tick_prices: [] };
+                                }
                                 const pip_size = pip_sizes[symbol] || 2;
                                 const prices = data.history.prices;
                                 const digits = prices.map((p: string | number) => Number(p).toFixed(pip_size).slice(-1)).map(Number);
@@ -627,21 +640,28 @@ export default class OverUnderStore {
                             }
                             break;
                         case 'tick':
-                            const symbol = data.tick.symbol;
-                            const quote_str = data.tick.quote.toFixed(data.tick.pip_size);
+                            const tick = data.tick;
+                            const symbol = tick.symbol;
+                            const pip_size = tick.pip_size || pip_sizes[symbol] || 2;
+                            const quote_str = tick.quote.toFixed(pip_size);
                             const digit = parseInt(quote_str.slice(-1), 10);
 
                             if (this.is_all_vol_mode) {
+                                // Defensive check to prevent crash on unexpected tick
+                                if (!this.symbol_data[symbol]) {
+                                    this.symbol_data[symbol] = { tick_history: [], last_digit: null, last_last_digit: null, _tick_prices: [] };
+                                    this.addLog(`Received tick for unsubscribed symbol ${symbol} in All Vol mode. Initializing...`);
+                                }
                                 const current_symbol_data = this.symbol_data[symbol];
                                 current_symbol_data.last_last_digit = current_symbol_data.last_digit;
                                 current_symbol_data.last_digit = digit;
                                 current_symbol_data.tick_history = [...current_symbol_data.tick_history.slice(-MAX_TICKS + 1), digit];
-                                current_symbol_data._tick_prices = [...current_symbol_data._tick_prices.slice(-MAX_TICKS + 1), Number(data.tick.quote)];
+                                current_symbol_data._tick_prices = [...current_symbol_data._tick_prices.slice(-MAX_TICKS + 1), Number(tick.quote)];
                             } else {
                                 this.last_last_digit = this.last_digit;
                                 this.last_digit = digit;
                                 this.tick_history = [...this.tick_history.slice(-MAX_TICKS + 1), digit];
-                                this._tick_prices = [...this._tick_prices.slice(-MAX_TICKS + 1), Number(data.tick.quote)];
+                                this._tick_prices = [...this._tick_prices.slice(-MAX_TICKS + 1), Number(tick.quote)];
                             }
                             
                             if (this.is_differs_v2_mode && !this.is_differs_recovery_mode && !this.is_recovery_active && this.differs_v2_predicted_digit !== null) {
@@ -649,12 +669,13 @@ export default class OverUnderStore {
                             }
                             
                             if (this.is_auto_running && !this.is_analyzing_volatility && !this.is_purchasing && !this.is_processing_round && this.active_contracts.size === 0) {
+                                const active_symbol = this.is_all_vol_mode ? symbol : undefined;
                                 if (this.is_rise_fall_mode) {
                                     this.analyzeAndExecuteRiseFall();
                                 } else if (this.is_differs_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
-                                    this.analyzeAndExecuteDiffers(this.is_all_vol_mode ? symbol : undefined);
+                                    this.analyzeAndExecuteDiffers(active_symbol);
                                 } else if (this.is_differs_v2_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
-                                    this.analyzeAndExecuteDiffersV2(this.is_all_vol_mode ? symbol : undefined);
+                                    this.analyzeAndExecuteDiffersV2(active_symbol);
                                 } else {
                                     // Recovery mode with trigger wait
                                     if (this.is_recovery_active && this.use_recovery_delay) {
@@ -782,7 +803,7 @@ export default class OverUnderStore {
         const current_symbol = symbol || this.selected_symbol;
         const data = this.is_all_vol_mode ? this.symbol_data[current_symbol] : this;
 
-        if (data.tick_history.length < 5 || this.is_purchasing) return;
+        if (!data || data.tick_history.length < 5 || this.is_purchasing) return;
 
         const digits = data.tick_history;
         const n = digits.length;
@@ -870,7 +891,7 @@ export default class OverUnderStore {
         const current_symbol = symbol || this.selected_symbol;
         const data = this.is_all_vol_mode ? this.symbol_data[current_symbol] : this;
 
-        if (data.tick_history.length < 5 || this.is_purchasing) return;
+        if (!data || data.tick_history.length < 5 || this.is_purchasing) return;
 
         const history = data.tick_history;
         const lastTick = data.last_digit;
