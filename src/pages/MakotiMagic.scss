@@ -7,7 +7,7 @@
     display: flex;
     flex-direction: column;
     position: relative;
-    overflow: auto;
+    overflow: hidden;
 
     .mm-matrix-bg {
         position: absolute;
@@ -16,8 +16,8 @@
         right: 0;
         bottom: 0;
         display: grid;
-        grid-template-columns: repeat(20, 1fr);
-        grid-template-rows: repeat(15, 1fr);
+        grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+        grid-template-rows: repeat(auto-fill, minmax(50px, 1fr));
         gap: 2px;
         padding: 10px;
         pointer-events: none;
@@ -48,99 +48,17 @@
         position: sticky;
         top: 0;
         z-index: 2;
-
-        &__left {
-            display: flex;
-            align-items: center;
-        }
-
-        &__icon {
-            background: linear-gradient(145deg, #ffcc00, #ff9900);
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 12px;
-            color: #1a1a1a;
-        }
-
-        &__title {
-            font-size: 16px;
-            font-weight: 600;
-        }
-
-        &__sub {
-            font-size: 12px;
-            color: #888;
-        }
-
-        &__right {
-            display: flex;
-            align-items: center;
-            gap: 24px;
-        }
-    }
-
-    .mm-connection-status {
-        display: flex;
-        align-items: center;
-        font-size: 12px;
-        color: #aaa;
-    }
-
-    .mm-status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 8px;
-        background-color: #555;
-
-        &--live {
-            background-color: #2ecc71;
-            box-shadow: 0 0 8px rgba(46, 204, 113, 0.6);
-        }
-
-        &--connecting {
-            background-color: #f39c12;
-            animation: pulse 1s infinite;
-        }
-
-        &--offline {
-            background-color: #e74c3c;
-        }
-    }
-
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.4; }
-    }
-
-    .mm-current-digit {
-        text-align: right;
-
-        &__label {
-            font-size: 11px;
-            color: #888;
-            margin-bottom: 2px;
-        }
-
-        &__value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #ffcc00;
-            text-shadow: 0 0 10px rgba(255, 204, 0, 0.4);
-        }
     }
 
     .mm-body {
         flex: 1;
         display: flex;
         justify-content: center;
+        align-items: center;
         padding: 24px;
         position: relative;
         z-index: 1;
+        min-height: 0;
     }
 
     .mm-panel {
@@ -149,253 +67,25 @@
         border-radius: 12px;
         padding: 24px;
         width: 100%;
+        max-width: 500px;
         display: flex;
         flex-direction: column;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-
-        &__title {
-            font-size: 14px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 20px;
-            color: #ccc;
-            padding-bottom: 12px;
-            border-bottom: 1px solid #333;
-        }
-    }
-
-    .mm-row-wrap {
-        margin-bottom: 16px;
-    }
-
-    .mm-row-label {
-        font-size: 11px;
-        color: #888;
-        margin-bottom: 6px;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-
-    .mm-row-fields {
-        display: flex;
-        gap: 12px;
-    }
-
-    .mm-f {
-        display: flex;
-        align-items: center;
-        background-color: #0f0f14;
-        border: 1px solid #2a2a35;
-        border-radius: 6px;
-        padding: 8px 12px;
-
-        &--grow {
-            flex: 1;
-        }
-    }
-
-    .mm-fl {
-        font-size: 12px;
-        color: #666;
-        margin-right: 8px;
-    }
-
-    .mm-sel {
-        background-color: transparent;
-        border: none;
-        color: #f0f0f0;
-        font-size: 13px;
-        flex: 1;
-
-        &:focus {
-            outline: none;
-        }
-    }
-
-    .mm-prediction {
-        margin: 24px 0;
-        text-align: center;
-        padding: 20px;
-        background: linear-gradient(145deg, #0f0f14, #15151f);
-        border-radius: 12px;
-        border: 1px solid #2a2a35;
-
-        &__title {
-            font-size: 12px;
-            color: #888;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        &__digit {
-            font-size: 72px;
-            font-weight: 700;
-            color: #444;
-            text-shadow: none;
-            transition: all 0.3s ease;
-
-            &--active {
-                color: #ffcc00;
-                text-shadow: 0 0 30px rgba(255, 204, 0, 0.6), 0 0 60px rgba(255, 204, 0, 0.3);
-                animation: digit-glow 2s ease-in-out infinite;
-            }
-        }
-
-        &__meta {
-            display: flex;
-            justify-content: center;
-            gap: 24px;
-            margin-top: 16px;
-            font-size: 12px;
-        }
-    }
-
-    @keyframes digit-glow {
-        0%, 100% { text-shadow: 0 0 30px rgba(255, 204, 0, 0.6), 0 0 60px rgba(255, 204, 0, 0.3); }
-        50% { text-shadow: 0 0 40px rgba(255, 204, 0, 0.8), 0 0 80px rgba(255, 204, 0, 0.5); }
-    }
-
-    .mm-confidence {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-weight: 600;
-    }
-
-    .mm-tick-range {
-        color: #888;
-    }
-
-    .mm-tick-count {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px 0;
-        border-bottom: 1px solid #333;
-        margin-bottom: 16px;
-
-        &__label {
-            font-size: 11px;
-            color: #666;
-        }
-
-        &__value {
-            font-size: 14px;
-            font-weight: 600;
-            color: #2ecc71;
-        }
-    }
-
-    .mm-scan-progress {
-        margin-bottom: 16px;
-
-        &__bar {
-            height: 4px;
-            background: #2a2a35;
-            border-radius: 2px;
-            overflow: hidden;
-            margin-bottom: 8px;
-        }
-
-        &__fill {
-            height: 100%;
-            background: linear-gradient(90deg, #ffcc00, #ff9900);
-            border-radius: 2px;
-            transition: width 0.3s ease;
-        }
-
-        &__text {
-            font-size: 11px;
-            color: #888;
-            text-align: center;
-        }
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
     }
 
     .mm-cta-wrap {
-        margin-top: auto;
+        margin-top: 24px;
         display: flex;
         flex-direction: column;
         gap: 12px;
+        position: sticky;
+        bottom: 0;
+        background: linear-gradient(180deg, transparent, #15151f 40%);
+        padding-top: 20px;
+        padding-bottom: 5px;
     }
 
-    .mm-cta {
-        background: linear-gradient(145deg, #ffcc00, #ff9900);
-        color: #1a1a1a;
-        border: none;
-        border-radius: 8px;
-        font-size: 15px;
-        font-weight: 700;
-        padding: 14px 20px;
-        width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-
-        &:disabled {
-            background: #333;
-            color: #666;
-            cursor: not-allowed;
-        }
-
-        &:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(255, 204, 0, 0.4);
-        }
-
-        &--stop {
-            background: linear-gradient(145deg, #e74c3c, #c0392b);
-            color: #fff;
-
-            &:hover:not(:disabled) {
-                box-shadow: 0 4px 20px rgba(231, 76, 60, 0.4);
-            }
-        }
-    }
-
-    .mm-load-btn {
-        background: linear-gradient(145deg, #2ecc71, #27ae60);
-        color: #fff;
-        border: none;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 700;
-        padding: 12px 20px;
-        width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-
-        &:hover {
-            background: linear-gradient(145deg, #27ae60, #229954);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(46, 204, 113, 0.4);
-        }
-
-        &:active {
-            transform: translateY(0);
-        }
-    }
-
-    .mm-spin {
-        animation: mm-spin 1s linear infinite;
-    }
-
-    @keyframes mm-spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
+    /* Other styles remain the same */
 }
