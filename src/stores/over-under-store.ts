@@ -1052,11 +1052,17 @@ export default class OverUnderStore {
                         this.last_lost_contract_symbol = lost_symbol;
                         this.is_awaiting_immediate_recovery = true;
                         
-                        // Stake to recover the total accumulated loss. Payout is ~8.2-9x, use 8.2 for safety.
-                        const new_stake = (this.total_loss_to_recover / 8.2) + 0.02;
-                        this.stake = Math.max(0.35, parseFloat(new_stake.toFixed(2)));
+                        // Stake to recover the total accumulated loss. 
+                        // A DIGITDIFF contract's profit is approx. 8.5-9x the stake. We'll use a conservative
+                        // multiplier of 8.0 to ensure the stake is sufficient to recover the loss.
+                        const payout_multiplier = 8.0;
+                        const required_stake = (this.total_loss_to_recover / payout_multiplier);
+                        
+                        // Add a small buffer and round up to the nearest cent.
+                        this.stake = Math.ceil((required_stake + 0.01) * 100) / 100;
+                        this.stake = Math.max(0.35, this.stake); // Ensure minimum stake
                     });
-                    this.addLog(`Tatu Bora: Engaging instant recovery for ${this.last_lost_contract_symbol}. New stake: ${this.stake}`);
+                    this.addLog(`Tatu Bora: Engaging instant recovery for ${this.last_lost_contract_symbol}. Total loss: ${this.total_loss_to_recover.toFixed(2)}. New stake: ${this.stake.toFixed(2)}`);
                     
                 } else {
                     this.stake = Number((this.stake * this.martingale).toFixed(2));
@@ -1064,14 +1070,29 @@ export default class OverUnderStore {
                 }
             } else { // Win
                 if (this.total_loss_to_recover > 0) {
-                    this.addLog(`Tatu Bora: Recovery successful! Cleared ${this.total_loss_to_recover.toFixed(2)} loss.`);
-                    this.total_loss_to_recover = 0;
+                    // If a winning trade was a recovery trade, subtract the profit from the loss.
+                    // Note: roundProfit is the actual profit, not the full return.
+                    this.total_loss_to_recover -= roundProfit;
+                    if (this.total_loss_to_recover <= 0.01) {
+                        this.addLog(`Tatu Bora: Recovery successful! Cleared accumulated loss.`);
+                        this.total_loss_to_recover = 0;
+                        this.stake = this.initial_stake;
+                    } else {
+                        // This case should not happen with the new stake logic, but as a fallback...
+                        this.addLog(`Tatu Bora: Partial recovery. Remaining loss: ${this.total_loss_to_recover.toFixed(2)}`);
+                        // Here, we should recalculate the stake for the remaining loss
+                        const payout_multiplier = 8.0;
+                        const required_stake = (this.total_loss_to_recover / payout_multiplier);
+                        this.stake = Math.ceil((required_stake + 0.01) * 100) / 100;
+                        this.stake = Math.max(0.35, this.stake);
+                        this.addLog(`Recalculating stake for remaining loss: ${this.stake.toFixed(2)}`);
+                    }
                 }
-                if (this.is_2term_mode) {
+                if (this.is_2term_mode && this.total_loss_to_recover === 0) {
                     const nextStake = Number((this.stake + roundProfit).toFixed(2));
                     this.stake = nextStake;
                     this.addLog(`DiffersV2: Win! 2-term ON - Stake: ${this.stake}`);
-                } else {
+                } else if (this.total_loss_to_recover === 0) {
                     this.stake = this.initial_stake;
                     this.addLog(`DiffersV2: Win! Stake reset: ${this.stake}`);
                 }
@@ -1185,7 +1206,7 @@ export default class OverUnderStore {
         this.is_purchasing = true;
         this._armPurchaseTimeout();
         
-        const tradeAmount = Number(this.stake);
+        const tradeAmount = Number(this.stake.toFixed(2));
         const tradeSymbol = symbol || this.selected_symbol;
         this.addLog(`Trade: ${contract_type} ${barrier} on ${tradeSymbol} @ ${tradeAmount}`);
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: tradeSymbol, contract_type, barrier } }));
@@ -1197,7 +1218,7 @@ export default class OverUnderStore {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !is_logged_in) return;
         this.is_purchasing = true;
         this._armPurchaseTimeout();
-        const tradeAmount = Number(this.stake);
+        const tradeAmount = Number(this.stake.toFixed(2));
         this.addLog(`Trade: O5/U4 @ ${tradeAmount}`);
         const baseParams = { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: this.selected_symbol };
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITOVER', barrier: '5' } }));
