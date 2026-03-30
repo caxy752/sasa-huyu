@@ -901,16 +901,16 @@ export default class OverUnderStore {
     analyzeAndExecuteDiffersV2(symbol?: string) {
         const current_symbol = symbol || this.selected_symbol;
         const data = this.is_all_vol_mode ? this.symbol_data[current_symbol] : this;
-    
+
         if (!data || data.tick_history.length < 4 || this.is_purchasing) return;
-    
+
         const history = data.tick_history;
         const lastTick = data.last_digit;
         const n = history.length;
-    
+
         let trigger_condition = false;
         let trigger_name = 'double';
-    
+
         if (this.is_nne_kwisha_mode) {
             trigger_name = 'quad';
             if (n >= 4 && lastTick === history[n - 2] && lastTick === history[n - 3] && lastTick === history[n - 4]) {
@@ -926,59 +926,66 @@ export default class OverUnderStore {
                 trigger_condition = true;
             }
         }
-    
+
         if (trigger_condition) {
             const barrier_digit = lastTick;
-            const history_1000 = data.tick_history.slice(-1000);
-            const totalTicks = history_1000.length;
-            const digitCounts = Array(10).fill(0);
-            history_1000.forEach(d => { if (d >= 0 && d <= 9) digitCounts[d]++; });
-    
-            const digitCount = digitCounts[barrier_digit!];
-            const digitPct = totalTicks > 0 ? (digitCount / totalTicks) * 100 : 0;
-    
-            const reasons_to_skip: string[] = [];
-    
-            if (barrier_digit === 0 || barrier_digit === 9) {
-                reasons_to_skip.push('digit is 0 or 9');
+            let should_execute = true;
+
+            // Only apply restrictions if Nne Kwisha mode is OFF
+            if (!this.is_nne_kwisha_mode) {
+                const history_1000 = data.tick_history.slice(-1000);
+                const totalTicks = history_1000.length;
+                const digitCounts = Array(10).fill(0);
+                history_1000.forEach(d => { if (d >= 0 && d <= 9) digitCounts[d]++; });
+
+                const digitCount = digitCounts[barrier_digit!];
+                const digitPct = totalTicks > 0 ? (digitCount / totalTicks) * 100 : 0;
+
+                const reasons_to_skip: string[] = [];
+
+                if (barrier_digit === 0 || barrier_digit === 9) {
+                    reasons_to_skip.push('digit is 0 or 9');
+                }
+
+                if (digitPct >= 10.3) {
+                    reasons_to_skip.push(`too frequent (${digitPct.toFixed(1)}%)`);
+                }
+
+                const minCount = Math.min(...digitCounts.filter(c => c > 0));
+                const maxCount = Math.max(...digitCounts);
+                if (digitCount === minCount || digitCount === maxCount) {
+                    reasons_to_skip.push('is most or least frequent');
+                }
+
+                const getPct = (digit: number, hist: number[]) => {
+                    if (hist.length === 0) return 0;
+                    const count = hist.filter(d => d === digit).length;
+                    return (count / hist.length) * 100;
+                };
+                const old_history = data.tick_history.slice(0, -27);
+                const new_history = data.tick_history;
+                const oldPct = getPct(barrier_digit!, old_history);
+                const newPct = getPct(barrier_digit!, new_history);
+                const increase = newPct - oldPct;
+                if (increase > 0.4) {
+                    reasons_to_skip.push(`rapidly increasing (+${increase.toFixed(2)}%)`);
+                }
+
+                if (reasons_to_skip.length > 0) {
+                    this.addLog(`DiffersV2: SKIP digit ${barrier_digit} on ${current_symbol} — ${reasons_to_skip.join(', ')}. Re-analyzing...`);
+                    should_execute = false;
+                }
             }
-    
-            if (digitPct >= 10.3) {
-                reasons_to_skip.push(`too frequent (${digitPct.toFixed(1)}%)`);
+
+            if (should_execute) {
+                runInAction(() => {
+                    this.differs_v2_predicted_digit = lastTick;
+                    this.differs_predicted_top4 = [lastTick!];
+                });
+
+                this.addLog(`DiffersV2: ${trigger_name} ${lastTick} detected on ${current_symbol} → DIFFER on ${lastTick}`);
+                this.executeTrade('DIGITDIFF', String(lastTick), current_symbol);
             }
-    
-            const minCount = Math.min(...digitCounts.filter(c => c > 0));
-            const maxCount = Math.max(...digitCounts);
-            if (digitCount === minCount || digitCount === maxCount) {
-                reasons_to_skip.push('is most or least frequent');
-            }
-    
-            const getPct = (digit: number, hist: number[]) => {
-                if (hist.length === 0) return 0;
-                const count = hist.filter(d => d === digit).length;
-                return (count / hist.length) * 100;
-            };
-            const old_history = data.tick_history.slice(0, -27);
-            const new_history = data.tick_history;
-            const oldPct = getPct(barrier_digit!, old_history);
-            const newPct = getPct(barrier_digit!, new_history);
-            const increase = newPct - oldPct;
-            if (increase > 0.4) {
-                reasons_to_skip.push(`rapidly increasing (+${increase.toFixed(2)}%)`);
-            }
-    
-            if (reasons_to_skip.length > 0) {
-                this.addLog(`DiffersV2: SKIP digit ${barrier_digit} on ${current_symbol} — ${reasons_to_skip.join(', ')}. Re-analyzing...`);
-                return;
-            }
-    
-            runInAction(() => {
-                this.differs_v2_predicted_digit = lastTick;
-                this.differs_predicted_top4 = [lastTick!];
-            });
-    
-            this.addLog(`DiffersV2: ${trigger_name} ${lastTick} detected on ${current_symbol} → DIFFER on ${lastTick}`);
-            this.executeTrade('DIGITDIFF', String(lastTick), current_symbol);
         } else {
             const sequence_length = this.is_nne_kwisha_mode ? 4 : (this.is_tatu_bora_mode ? 3 : 2);
             const sequence = history.slice(-sequence_length).join(',');
