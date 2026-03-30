@@ -1,9 +1,10 @@
 import React from 'react';
 import { useFormik } from 'formik';
-import { getAppId, getDefaultAppIdAndUrl, getSocketURL } from '@/components/shared';
+import { getAppId, getSocketURL } from '@/components/shared';
 import { Button, Input, Text } from '@deriv-com/ui';
 import { LocalStorageConstants } from '@deriv-com/utils';
 import './endpoint.scss';
+
 const Endpoint = () => {
     const formik = useFormik({
         initialValues: {
@@ -61,7 +62,8 @@ const Endpoint = () => {
                         className='endpoint__button'
                         color='black'
                         onClick={() => {
-                            const { server_url, app_id } = getDefaultAppIdAndUrl();
+                            const server_url = getSocketURL();
+                            const app_id = getAppId();
                             localStorage.setItem(LocalStorageConstants.configServerURL, server_url);
                             localStorage.setItem(LocalStorageConstants.configAppId, app_id.toString());
 
