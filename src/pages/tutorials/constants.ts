@@ -453,108 +453,92 @@ export const faq_content = (): TFaqContent[] => [
         search_id: 'faq-17',
     },
     {
-        title: localize('What are the "Digit Occurrence Filter" and "Rebounce" features?'),
+        title: localize('How to use the Over/Under Switches'),
         description: [
             {
                 type: 'text',
                 content: localize(
-                    'These are advanced features for the "Over 5/Under 4" strategy, available in the Over/Under tab.'
+                    'This guide explains the function of each switch in the Over/Under tab.'
                 ),
             },
             {
                 type: 'text',
-                content: localize('<strong>Digit Occurrence Filter</strong>'),
+                content: localize('<strong>Mode Switches</strong>'),
             },
             {
                 type: 'text',
                 content: localize(
-                    'This is a safety mechanism to avoid trading in volatile markets. It automatically skips trades if it detects that the losing digits (4 and 5) are appearing too frequently. It uses a combination of short-term, long-term, and velocity checks to make its decision.'
-                ),
-            },
-            {
-                type: 'text',
-                content: localize('<strong>Rebounce</strong>'),
-            },
-            {
-                type: 'text',
-                content: localize(
-                    'This feature adds an extra confirmation step. After your initial trigger condition is met, it waits for a "rebounce" tick (a 4 or a 5) before executing the Over 5 and Under 4 trades.'
-                ),
-            },
-        ],
-        search_id: 'faq-18',
-    },
-    {
-        title: localize('What are the "Differs", "Differs V2", "Tatu Bora", and "Nne Kwisha" modes?'),
-        description: [
-            {
-                type: 'text',
-                content: localize(
-                    'These are alternative trading strategies available in the Over/Under tab, focused on "Digit Differs" contracts.'
-                ),
-            },
-            {
-                type: 'text',
-                content: localize('<strong>Differs & Differs V2</strong>'),
-            },
-            {
-                type: 'text',
-                content: localize(
-                    'These modes try to predict which digit will *not* be the next tick. They use pattern recognition and statistical analysis to place "Digit Differs" trades.'
-                ),
-            },
-            {
-                type: 'text',
-                content: localize('<strong>Tatu Bora & Nne Kwisha</strong>'),
-            },
-            {
-                type: 'text',
-                content: localize(
-                    'These are specific trigger variations for the "Differs V2" strategy. "Tatu Bora" triggers a trade after three identical consecutive digits, while "Nne Kwisha" waits for four.'
-                ),
-            },
-        ],
-        search_id: 'faq-19',
-    },
-    {
-        title: localize('What do "All Vol Mode", "Volatility Changer", and "2-Term Mode" do?'),
-        description: [
-            {
-                type: 'text',
-                content: localize('These features help automate and optimize your trading across different markets.'),
-            },
-            {
-                type: 'text',
-                content: localize('<strong>All Volatility Mode</strong>'),
-            },
-            {
-                type: 'text',
-                content: localize(
-                    'Instead of trading on just one selected market, this mode monitors all available volatility indices and executes trades on any of them as soon as a trigger condition is met.'
-                ),
-            },
-            {
-                type: 'text',
-                content: localize('<strong>Volatility Changer</strong>'),
-            },
-            {
-                type: 'text',
-                content: localize(
-                    'When enabled, this feature automatically analyzes all volatility indices to find the one with the most favorable conditions (lowest volatility) for your chosen strategy before starting to trade.'
+                    '• <strong>Differs:</strong> Toggle this ON to trade the "Digit Differs" contract type based on a surge/reversal pattern.'
                 ),
             },
              {
                 type: 'text',
-                content: localize('<strong>2-Term Mode</strong>'),
+                content: localize(
+                    '• <strong>Differs V2:</strong> Toggle this ON to trade "Digit Differs" based on consecutive identical digits. Use the switches below to set the trigger.'
+                ),
+            },
+             {
+                type: 'text',
+                content: localize(
+                    '• <strong>Tatu Bora:</strong> When "Differs V2" is ON, toggle this ON to trigger a trade after <strong>three</strong> identical digits.'
+                ),
+            },
+             {
+                type: 'text',
+                content: localize(
+                    '• <strong>Nne Kwisha:</strong> When "Differs V2" is ON, toggle this ON to trigger a trade after <strong>four</strong> identical digits.'
+                ),
+            },
+             {
+                type: 'text',
+                content: localize(
+                    '• <strong>Rise/Fall:</strong> Toggle this ON to trade "Rise" or "Fall" contracts based on MACD indicators, instead of digits.'
+                ),
+            },
+            {
+                type: 'text',
+                content: localize('<strong>Automation Switches</strong>'),
             },
             {
                 type: 'text',
                 content: localize(
-                    'This is an alternative to the standard Martingale strategy. After a winning trade, the profit is added to the next stake. After a loss, the stake is also adjusted based on the loss, allowing for a different risk management approach.'
+                    '• <strong>All Volatility Mode:</strong> Toggle this ON to monitor and trade on all available volatility indices simultaneously.'
+                ),
+            },
+            {
+                type: 'text',
+                content: localize(
+                    '• <strong>Volatility Changer:</strong> Toggle this ON to automatically select the market with the lowest volatility before starting the bot.'
+                ),
+            },
+            {
+                type: 'text',
+                content: localize('<strong>Safety and Trigger Switches</strong>'),
+            },
+            {
+                type: 'text',
+                content: localize(
+                    '• <strong>Digit Occurrence Filter:</strong> Toggle this ON to activate a multi-layered safety filter that skips trades if it detects unfavorable market conditions for the "Over 5/Under 4" strategy.'
+                ),
+            },
+            {
+                type: 'text',
+                content: localize(
+                    '• <strong>Rebounce:</strong> Toggle this ON to add a confirmation step to the "Over 5/Under 4" strategy. The bot will wait for a losing digit (4 or 5) to appear immediately after your trigger before placing a trade.'
+                ),
+            },
+            {
+                type: 'text',
+                content: localize('<strong>Staking Switch</strong>'),
+            },
+            {
+                type: 'text',
+                content: localize(
+                    '• <strong>2-Term Mode:</strong> Toggle this ON to use an alternative staking strategy. After a win, the profit is added to the next stake. After a loss, the stake is also adjusted. This is an alternative to the standard Martingale strategy.'
                 ),
             },
         ],
-        search_id: 'faq-20',
+        search_id: 'faq-18',
     },
 ];
 
