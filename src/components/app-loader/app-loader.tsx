@@ -79,13 +79,13 @@ const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete }) => {
 
             <div className='logo-container'>
                 <h1 className='logo-text'>{logoText}</h1>
-                <div className='subtitle-container'>
-                    <p className='subtitle-item'>Powered by Deriv API</p>
-                    <p className='subtitle-item'>Advanced AI Trading</p>
-                    <p className='subtitle-item'>Automated Strategies</p>
-                    <p className='subtitle-item'>Version 2.0</p>
-                </div>
             </div>
+
+            <p className='subtitle subtitle-1'>&gt; Initializing Trading Matrix...</p>
+            <p className='subtitle subtitle-2'>&gt; Loading Strategies: Martingale, D'Alembert, Oscar's Grind...</p>
+            <p className='subtitle subtitle-3'>&gt; Activating AI Core: Version 2.0</p>
+            <p className='subtitle subtitle-4'>&gt; Real-time Analytics & Reporting</p>
+            <p className='subtitle subtitle-5'>&gt; Welcome, Trader.</p>
 
             <div className='film-grain'></div>
             <div className='vignette'></div>

@@ -1,5 +1,5 @@
 
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
 
 .gta-loader {
     position: fixed;
@@ -10,7 +10,7 @@
     background-color: #000;
     overflow: hidden;
     z-index: 9999;
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Orbitron', sans-serif;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -94,7 +94,7 @@
 
 .logo-text {
     color: #fff;
-    font-size: 5rem;
+    font-size: 4rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.2rem;
@@ -108,53 +108,72 @@
     margin-bottom: 1rem;
 }
 
-.subtitle-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-top: 1rem;
-}
-
-.subtitle-item {
-    font-size: 1.2rem;
-    font-weight: 500;
+.subtitle {
+    position: absolute;
+    font-size: 1rem;
+    font-weight: 400;
     text-transform: uppercase;
     letter-spacing: 0.1rem;
     opacity: 0;
-    animation: subtitle-fade-in 1s ease-out forwards;
+    white-space: nowrap;
+    overflow: hidden;
+    border-right: .15em solid orange; /* The typwriter cursor */
 
-    &:nth-child(1) {
-        color: #ffab00; // Amber
+    &.subtitle-1 {
+        top: 20%;
+        left: 5%;
+        color: #76ff03;
+        animation: typing 3s steps(40, end), blink-caret .75s step-end infinite;
+        animation-delay: 2s;
+        animation-fill-mode: forwards;
+    }
+    &.subtitle-2 {
+        top: 40%;
+        right: 5%;
+        color: #ffab00;
+        animation: typing 3s steps(60, end), blink-caret .75s step-end infinite;
         animation-delay: 3s;
-        text-shadow: 0 0 5px #ffab00;
+        animation-fill-mode: forwards;
     }
-    &:nth-child(2) {
-        color: #00e5ff; // Cyan
-        animation-delay: 3.5s;
-        text-shadow: 0 0 5px #00e5ff;
-    }
-    &:nth-child(3) {
-        color: #76ff03; // Light Green
+    &.subtitle-3 {
+        top: 60%;
+        left: 10%;
+        color: #00e5ff;
+        animation: typing 3s steps(30, end), blink-caret .75s step-end infinite;
         animation-delay: 4s;
-        text-shadow: 0 0 5px #76ff03;
+        animation-fill-mode: forwards;
     }
-    &:nth-child(4) {
-        color: #ff4081; // Pink
-        animation-delay: 4.5s;
-        text-shadow: 0 0 5px #ff4081;
+    &.subtitle-4 {
+        bottom: 20%;
+        right: 10%;
+        color: #ff4081;
+        animation: typing 3s steps(35, end), blink-caret .75s step-end infinite;
+        animation-delay: 5s;
+        animation-fill-mode: forwards;
+    }
+    &.subtitle-5 {
+        top: 70%;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 1.5rem;
+        color: #fff;
+        text-shadow: 0 0 10px #fff;
+        animation: typing 2s steps(20, end), blink-caret .75s step-end infinite;
+        animation-delay: 6s;
+        animation-fill-mode: forwards;
     }
 }
 
-@keyframes subtitle-fade-in {
-    from {
-        opacity: 0;
-        transform: translateY(20px) scale(0.95);
-    }
-    to {
-        opacity: 0.8;
-        transform: translateY(0) scale(1);
-    }
+@keyframes typing {
+  from { width: 0; opacity: 1; }
+  to { width: 100%; opacity: 1; }
 }
+
+@keyframes blink-caret {
+  from, to { border-color: transparent }
+  50% { border-color: orange; }
+}
+
 
 @keyframes logo-flash {
     0% { opacity: 1; }
