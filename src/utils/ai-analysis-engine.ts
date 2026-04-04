@@ -1,682 +1,291 @@
+
+// ═══════════════════════════════════════════════════════════
+//  Makoti AI - Advanced Over/Under Analysis Engine
+// ═══════════════════════════════════════════════════════════
+
+// ── Type Definitions ────────────────────────────────────────
+export interface AnalysisResult {
+    goldenEntries: GoldenEntry[];
+}
+
 export interface GoldenEntry {
-    contractType: string;
+    contractType: 'DIGITOVER' | 'DIGITUNDER';
     triggerDigits: number[];
     barrier: string;
     duration: number;
     winRate: number;
     confidence: number;
     analysis: string;
-    triggerType: 'single' | 'consecutive' | 'pattern';
+    triggerType: 'consecutive' | 'single';
 }
 
-export interface AnalysisResult {
+interface StrategyInput {
+    history: number[];
+    pip_sizes: { [key: string]: number };
     symbol: string;
-    goldenEntries: GoldenEntry[];
-    analysisTime: number;
-    tickCount: number;
-    summary: string;
-    detailedAnalysis: {
-        sequential: any[];
-        coldDigit: any[];
-        markov: any[];
-        streakCluster: any[];
-        movingAvg: any[];
-        dispersion: any[];
-        quantLevel: any[];
-    };
 }
 
-function chiSquareTest(digitCounts: number[]): { chiSquare: number; pValue: number; isUniform: boolean } {
-    const n = digitCounts.length;
-    const total = digitCounts.reduce((a, b) => a + b, 0);
-    const expected = total / n;
-    
-    let chiSq = 0;
-    digitCounts.forEach(c => {
-        chiSq += ((c - expected) ** 2) / expected;
-    });
-    
-    const df = n - 1;
-    const pValue = Math.max(0, 1 - chiSq / (df * 2));
-    const isUniform = pValue > 0.05;
-    
-    return { chiSquare: chiSq, pValue, isUniform };
+interface StrategyOutput {
+    votes: { [key: string]: number }; // e.g., { 'OVER_3': 0.7, 'UNDER_6': -0.4 }
 }
 
-function analyzeSequentialTriggers(history: number[]): any[] {
-    const results: any[] = [];
-    const payout = 1.5;
-    
-    for (let d = 0; d <= 9; d++) {
-        const indices: number[] = [];
-        for (let i = 0; i < history.length; i++) {
-            if (history[i] === d) indices.push(i);
-        }
-        
-        if (indices.length < 5) continue;
-        
-        for (const idx of indices) {
-            if (idx + 2 >= history.length) continue;
-            
-            const next1 = history[idx + 1];
-            const next2 = history[idx + 2];
-            
-            const next1Over3 = next1 > 3 ? 1 : 0;
-            const next1Over4 = next1 > 4 ? 1 : 0;
-            const next1Under5 = next1 < 5 ? 1 : 0;
-            const next1Under6 = next1 < 6 ? 1 : 0;
-            
-            const next2Over3 = next2 > 3 ? 1 : 0;
-            const next2Over4 = next2 > 4 ? 1 : 0;
-            const next2Under5 = next2 < 5 ? 1 : 0;
-            const next2Under6 = next2 < 6 ? 1 : 0;
-            
-            results.push({
-                triggerDigit: d,
-                next1Over3, next1Over4, next1Under5, next1Under6,
-                next2Over3, next2Over4, next2Under5, next2Under6
-            });
-        }
-    }
-    
-    const aggregated: any[] = [];
-    for (let d = 0; d <= 9; d++) {
-        const matches = results.filter(r => r.triggerDigit === d);
-        if (matches.length < 10) continue;
-        
-        const total = matches.length;
-        
-        const over3_1tick = matches.reduce((sum, r) => sum + r.next1Over3, 0) / total;
-        const over4_1tick = matches.reduce((sum, r) => sum + r.next1Over4, 0) / total;
-        const under5_1tick = matches.reduce((sum, r) => sum + r.next1Under5, 0) / total;
-        const under6_1tick = matches.reduce((sum, r) => sum + r.next1Under6, 0) / total;
-        
-        const over3_2tick = matches.reduce((sum, r) => sum + r.next2Over3, 0) / total;
-        const over4_2tick = matches.reduce((sum, r) => sum + r.next2Over4, 0) / total;
-        const under5_2tick = matches.reduce((sum, r) => sum + r.next2Under5, 0) / total;
-        const under6_2tick = matches.reduce((sum, r) => sum + r.next2Under6, 0) / total;
-        
-        aggregated.push({
-            digit: d,
-            sampleSize: total,
-            next1Tick: { over3: over3_1tick, over4: over4_1tick, under5: under5_1tick, under6: under6_1tick },
-            next2Tick: { over3: over3_2tick, over4: over4_2tick, under5: under5_2tick, under6: under6_2tick }
-        });
-    }
-    
-    return aggregated;
-}
+// ── 1. Probabilistic & Frequency Models ──────────────────────
 
-function analyzeColdDigitReversion(history: number[]): any[] {
-    const results: any[] = [];
-    const window = Math.min(500, history.length);
-    const slice = history.slice(-window);
-    
-    const digitCounts = Array(10).fill(0);
-    slice.forEach(d => digitCounts[d]++);
-    
-    const total = slice.length;
-    const expected = total / 10;
-    
-    const coldest = digitCounts.map((count, digit) => ({ digit, count, deviation: count - expected }))
-        .sort((a, b) => a.deviation - b.deviation);
-    
-    for (let i = 0; i < Math.min(3, coldest.length); i++) {
-        const cold = coldest[i];
-        if (cold.deviation >= 0) continue;
-        
-        const indices: number[] = [];
-        for (let j = 0; j < slice.length; j++) {
-            if (slice[j] === cold.digit) indices.push(j);
-        }
-        
-        if (indices.length < 3) continue;
-        
-        let highAfter = 0;
-        let lowAfter = 0;
-        let evenAfter = 0;
-        let oddAfter = 0;
-        
-        for (const idx of indices) {
-            if (idx + 1 < slice.length) {
-                const next = slice[idx + 1];
-                if (next >= 5) highAfter++;
-                if (next <= 4) lowAfter++;
-                if (next % 2 === 0) evenAfter++;
-                else oddAfter++;
-            }
-        }
-        
-        const totalAfter = indices.length;
-        
-        results.push({
-            coldDigit: cold.digit,
-            appearanceCount: cold.count,
-            deviationPercent: (cold.deviation / expected) * 100,
-            afterHigh: highAfter / totalAfter,
-            afterLow: lowAfter / totalAfter,
-            afterEven: evenAfter / totalAfter,
-            afterOdd: oddAfter / totalAfter,
-            winningPattern: highAfter > lowAfter ? 'High' : (lowAfter > highAfter ? 'Low' : 'Neutral')
-        });
-    }
-    
-    return results;
-}
+/**
+ * Calculates the historical probability of each digit.
+ */
+const globalFrequencyStrategy = (input: StrategyInput): StrategyOutput => {
+    const { history } = input;
+    const votes: { [key: string]: number } = {};
+    if (history.length < 100) return { votes };
 
-function analyzeMarkovChains(history: number[]): any[] {
-    const results: any[] = [];
-    const window = Math.min(1000, history.length);
-    const slice = history.slice(-window);
-    
-    const matrix: number[][] = Array.from({ length: 10 }, () => Array(10).fill(0));
-    for (let i = 1; i < slice.length; i++) {
-        const from = slice[i - 1];
-        const to = slice[i];
-        if (from >= 0 && from <= 9 && to >= 0 && to <= 9) {
-            matrix[from][to]++;
-        }
-    }
-    
-    for (let from = 0; from < 10; from++) {
-        const row = matrix[from];
-        const total = row.reduce((a, b) => a + b, 0);
-        
-        if (total < 10) continue;
-        
-        for (let to = 0; to < 10; to++) {
-            const count = row[to];
-            const prob = count / total;
-            
-            if (count >= 5) {
-                results.push({
-                    fromDigit: from,
-                    toDigit: to,
-                    probability: prob,
-                    count,
-                    total,
-                    isDiffers: from !== to,
-                    isMatch: from === to
-                });
-            }
-        }
-    }
-    
-    return results.sort((a, b) => b.probability - a.probability);
-}
+    const counts = Array(10).fill(0);
+    history.forEach(digit => counts[digit]++);
+    const total = history.length;
 
-function analyzeStreakCluster(history: number[]): any[] {
-    const results: any[] = [];
-    
-    for (let n = 2; n <= 4; n++) {
-        if (history.length < n + 20) continue;
-        
-        const ngramCounts: Record<string, Record<number, number>> = {};
-        
-        for (let i = 0; i <= history.length - n - 1; i++) {
-            const seq = history.slice(i, i + n).join(',');
-            const next = history[i + n];
-            
-            if (!ngramCounts[seq]) ngramCounts[seq] = {};
-            ngramCounts[seq][next] = (ngramCounts[seq][next] || 0) + 1;
+    for (let barrier = 0; barrier <= 9; barrier++) {
+        // Vote for OVER
+        let over_prob = 0;
+        for (let i = barrier + 1; i <= 9; i++) {
+            over_prob += (counts[i] / total);
         }
-        
-        const lastN = history.slice(-n).join(',');
-        const counts = ngramCounts[lastN];
-        
-        if (counts) {
-            const total = Object.values(counts).reduce((a, b) => a + b, 0);
-            Object.entries(counts).forEach(([next, count]) => {
-                const digit = parseInt(next, 10);
-                results.push({
-                    sequence: lastN,
-                    n,
-                    nextDigit: digit,
-                    count,
-                    frequency: count / total,
-                    isHigh: digit >= 5,
-                    isLow: digit <= 4,
-                    isEven: digit % 2 === 0,
-                    isOdd: digit % 2 === 1
-                });
-            });
-        }
-    }
-    
-    return results.sort((a, b) => b.frequency - a.frequency).slice(0, 20);
-}
+        votes[`OVER_${barrier}`] = (over_prob - 0.45) * 2; // Normalize around 0.5 avg
 
-function analyzeDigitMovingAverages(history: number[]): any[] {
-    const results: any[] = [];
-    const windows = [5, 10, 20, 50, 100];
-    
-    for (const w of windows) {
-        if (history.length < w) continue;
-        
-        const slice = history.slice(-w);
-        const sum = slice.reduce((a, b) => a + b, 0);
-        const avg = sum / w;
-        
-        const firstHalf = slice.slice(0, Math.floor(slice.length / 2));
-        const secondHalf = slice.slice(Math.floor(slice.length / 2));
-        
-        const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
-        const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
-        
-        const trend = secondAvg - firstAvg;
-        
-        results.push({
-            window: w,
-            average: avg,
-            firstHalfAvg: firstAvg,
-            secondHalfAvg: secondAvg,
-            trend,
-            trendDirection: trend > 0.5 ? 'Rising' : (trend < -0.5 ? 'Falling' : 'Stable'),
-            bias: avg > 6 ? 'High' : (avg < 4 ? 'Low' : 'Neutral')
-        });
-    }
-    
-    return results;
-}
-
-function analyzeDispersionVolatility(history: number[]): any[] {
-    const results: any[] = [];
-    
-    const windows = [50, 100, 200, 500];
-    
-    for (const w of windows) {
-        if (history.length < w) continue;
-        
-        const slice = history.slice(-w);
-        
-        const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
-        const variance = slice.reduce((s, v) => s + (v - mean) ** 2, 0) / slice.length;
-        const stdDev = Math.sqrt(variance);
-        
-        const digitCounts = Array(10).fill(0);
-        slice.forEach(d => digitCounts[d]++);
-        
-        const { chiSquare, pValue, isUniform } = chiSquareTest(digitCounts);
-        
-        let alternations = 0;
-        for (let i = 1; i < slice.length; i++) {
-            if (slice[i] !== slice[i - 1]) alternations++;
+        // Vote for UNDER
+        let under_prob = 0;
+        for (let i = 0; i < barrier; i++) {
+            under_prob += (counts[i] / total);
         }
-        const altRate = alternations / (slice.length - 1);
-        
-        const range = Math.max(...slice) - Math.min(...slice);
-        
-        results.push({
-            window: w,
-            mean,
-            stdDev,
-            chiSquare,
-            pValue,
-            isUniform,
-            alternationRate: altRate,
-            range,
-            volatility: stdDev > 2.5 ? 'High' : (stdDev < 1.5 ? 'Low' : 'Medium'),
-            dispersion: isUniform ? 'Uniform' : 'Biased'
-        });
+        votes[`UNDER_${barrier}`] = (under_prob - 0.45) * 2; // Normalize around 0.5 avg
     }
-    
-    return results;
-}
+    return { votes };
+};
 
-function analyzeQuantLevel(history: number[]): any[] {
-    const results: any[] = [];
-    const window = Math.min(500, history.length);
-    const slice = history.slice(-window);
-    
-    const digitCounts = Array(10).fill(0);
-    slice.forEach(d => digitCounts[d]++);
-    
-    const matrix: number[][] = Array.from({ length: 10 }, () => Array(10).fill(0));
-    for (let i = 1; i < slice.length; i++) {
-        const from = slice[i - 1];
-        const to = slice[i];
-        if (from >= 0 && from <= 9 && to >= 0 && to <= 9) {
-            matrix[from][to]++;
-        }
-    }
-    
-    const { chiSquare, pValue, isUniform } = chiSquareTest(digitCounts);
-    
-    let lag1HighHigh = 0;
-    let lag1LowLow = 0;
-    let lag1HighLow = 0;
-    let lag1LowHigh = 0;
-    
-    for (let i = 1; i < slice.length; i++) {
-        const prev = slice[i - 1];
-        const curr = slice[i];
-        const prevHigh = prev >= 5;
-        const currHigh = curr >= 5;
-        
-        if (prevHigh && currHigh) lag1HighHigh++;
-        else if (!prevHigh && !currHigh) lag1LowLow++;
-        else if (prevHigh && !currHigh) lag1HighLow++;
-        else lag1LowHigh++;
-    }
-    
-    const total = slice.length - 1;
-    const clusterProbability = Math.max(lag1HighHigh, lag1LowLow) / total;
-    const meanReversionProbability = Math.max(lag1HighLow, lag1LowHigh) / total;
-    
-    const payout = 1.5;
-    
-    for (let trigger = 0; trigger <= 9; trigger++) {
-        const row = matrix[trigger];
-        const rowTotal = row.reduce((a, b) => a + b, 0);
-        
-        if (rowTotal < 10) continue;
-        
-        for (let barrier = 0; barrier <= 9; barrier++) {
-            const count = row[barrier];
-            if (count < 3) continue;
-            
-            const pWin = count / rowTotal;
-            const ev = (pWin * payout) - ((1 - pWin) * 1);
-            
-            if (ev > 0) {
-                results.push({
-                    triggerDigit: trigger,
-                    barrier,
-                    probability: pWin,
-                    expectedValue: ev,
-                    isPositiveEV: ev > 0,
-                    count,
-                    total: rowTotal
-                });
-            }
-        }
-    }
-    
-    return {
-        chiSquare,
-        pValue,
-        isUniform,
-        clusterProbability,
-        meanReversionProbability,
-        marketState: clusterProbability > meanReversionProbability ? 'Clustering' : 'Mean-Reverting',
-        positiveEVs: results.sort((a, b) => b.expectedValue - a.expectedValue).slice(0, 10)
-    };
-}
+/**
+ * Identifies "hot" or "cold" digits based on recent activity.
+ */
+const localFrequencyStrategy = (input: StrategyInput): StrategyOutput => {
+    const { history } = input;
+    const votes: { [key: string]: number } = {};
+    if (history.length < 50) return { votes };
+    const local_history = history.slice(-50);
 
-function simulateTrade(history: number[], contractType: string, barrier: number, triggerDigits: number[], triggerType: string): number {
-    let wins = 0;
-    let total = 0;
-    
-    const window = Math.min(1000, history.length);
-    const slice = history.slice(-window);
-    
-    for (let i = 1; i < slice.length - 1; i++) {
-        let matchesTrigger = false;
-        
-        if (triggerType === 'consecutive') {
-            if (i >= 1) {
-                const last = slice[i];
-                const prev = slice[i - 1];
-                matchesTrigger = triggerDigits.includes(last) && prev === last;
-            }
-        } else if (triggerType === 'pattern') {
-            matchesTrigger = triggerDigits.includes(slice[i]);
+    const counts = Array(10).fill(0);
+    local_history.forEach(digit => counts[digit]++);
+
+    for (let barrier = 3; barrier <= 6; barrier++) {
+        const high_hotness = (counts[7] + counts[8] + counts[9]) / 15; // Avg 3 digits over 50 ticks
+        const low_hotness = (counts[0] + counts[1] + counts[2]) / 15;
+
+        votes[`OVER_${barrier}`] = (high_hotness - low_hotness) * 1.5;
+        votes[`UNDER_${barrier}`] = (low_hotness - high_hotness) * 1.5;
+    }
+    return { votes };
+};
+
+
+// ── 2. Markovian & Transition Models ───────────────────────
+/**
+ * Uses a Lag-1 Transition Matrix to predict the next digit based on the current one.
+ */
+const markovChainStrategy = (input: StrategyInput): StrategyOutput => {
+    const { history } = input;
+    const votes: { [key: string]: number } = {};
+    if (history.length < 200) return { votes };
+
+    const matrix = Array(10).fill(0).map(() => Array(10).fill(0));
+    for (let i = 1; i < history.length; i++) {
+        const prev_digit = history[i - 1];
+        const curr_digit = history[i];
+        matrix[prev_digit][curr_digit]++;
+    }
+
+    const last_digit = history[history.length - 1];
+    const next_digit_counts = matrix[last_digit];
+    const total_transitions = next_digit_counts.reduce((a, b) => a + b, 0);
+    if (total_transitions === 0) return { votes };
+
+    const next_digit_probs = next_digit_counts.map(c => c / total_transitions);
+
+    for (let barrier = 0; barrier <= 9; barrier++) {
+        let over_prob = 0;
+        for (let i = barrier + 1; i <= 9; i++) {
+            over_prob += next_digit_probs[i];
+        }
+        votes[`OVER_${barrier}`] = (over_prob - 0.45) * 2.5; // Stronger weight
+
+        let under_prob = 0;
+        for (let i = 0; i < barrier; i++) {
+            under_prob += next_digit_probs[i];
+        }
+        votes[`UNDER_${barrier}`] = (under_prob - 0.45) * 2.5;
+    }
+    return { votes };
+};
+
+
+// ── 3. Trend & Oscillator Adaptations ────────────────────────
+/**
+ * Adapts the Relative Strength Index (RSI) to measure momentum of high vs. low digits.
+ */
+const digitRSIStrategy = (input: StrategyInput): StrategyOutput => {
+    const { history } = input;
+    const votes: { [key: string]: number } = {};
+    if (history.length < 30) return { votes };
+    const period = 14;
+    const rsi_history = history.slice(-30);
+
+    let gains = 0;
+    let losses = 0;
+
+    for (let i = 1; i < rsi_history.length; i++) {
+        const diff = rsi_history[i] - rsi_history[i - 1];
+        if (diff > 0) {
+            gains += diff;
         } else {
-            matchesTrigger = triggerDigits.includes(slice[i]);
-        }
-        
-        if (matchesTrigger) {
-            const actual = slice[i + 1];
-            let won = false;
-            
-            if (contractType === 'DIGITOVER') {
-                won = actual > barrier;
-            } else if (contractType === 'DIGITUNDER') {
-                won = actual < barrier;
-            } else if (contractType === 'DIGITDIFF') {
-                won = actual !== barrier;
-            }
-            
-            if (won) wins++;
-            total++;
+            losses -= diff;
         }
     }
-    
-    return total > 5 ? wins / total : 0.5;
-}
 
-function generateGoldenEntries(history: number[]): GoldenEntry[] {
+    const avg_gain = gains / period;
+    const avg_loss = losses / period;
+    if (avg_loss === 0) return { votes };
+    const rs = avg_gain / avg_loss;
+    const rsi = 100 - (100 / (1 + rs));
+
+    const rsi_vote = (rsi - 50) / 25; // Normalize: >0 is bullish (favors OVER), <0 is bearish (favors UNDER)
+
+    for (let barrier = 3; barrier <= 6; barrier++) {
+        votes[`OVER_${barrier}`] = rsi_vote;
+        votes[`UNDER_${barrier}`] = -rsi_vote;
+    }
+    return { votes };
+};
+
+/**
+ * Uses a moving average to find the "trend" of the digits.
+ */
+const digitMovingAverageStrategy = (input: StrategyInput): StrategyOutput => {
+    const { history } = input;
+    const votes: { [key:string]: number } = {};
+    if (history.length < 20) return { votes };
+
+    const short_ma_history = history.slice(-5);
+    const long_ma_history = history.slice(-20);
+    const short_ma = short_ma_history.reduce((a, b) => a + b, 0) / short_ma_history.length;
+    const long_ma = long_ma_history.reduce((a, b) => a + b, 0) / long_ma_history.length;
+
+    // If short MA is above long MA, it's an "uptrend" for digits (favors OVER)
+    const ma_vote = (short_ma - long_ma); // Can be positive or negative
+
+    for (let barrier = 3; barrier <= 6; barrier++) {
+        votes[`OVER_${barrier}`] = ma_vote;
+        votes[`UNDER_${barrier}`] = -ma_vote;
+    }
+    return { votes };
+};
+
+
+// ── Master Analysis Function ─────────────────────────────────
+
+const strategies = [
+    globalFrequencyStrategy,
+    localFrequencyStrategy,
+    markovChainStrategy,
+    digitRSIStrategy,
+    digitMovingAverageStrategy,
+];
+
+const simulateTrade = (
+    history: number[],
+    contractType: 'DIGITOVER' | 'DIGITUNDER',
+    barrier: number,
+    triggerDigit: number,
+    duration: number
+): number => {
+    let wins = 0;
+    let trades = 0;
+    
+    for (let i = 1; i < history.length - duration; i++) {
+        if (history[i - 1] === triggerDigit) {
+            trades++;
+            const outcome_tick = history[i + duration - 1];
+            if (contractType === 'DIGITOVER' && outcome_tick > barrier) {
+                wins++;
+            } else if (contractType === 'DIGITUNDER' && outcome_tick < barrier) {
+                wins++;
+            }
+        }
+    }
+    return trades > 5 ? wins / trades : 0;
+};
+
+export const analyzeDigits = (history: number[], symbol: string): AnalysisResult => {
     const goldenEntries: GoldenEntry[] = [];
-    
-    const sequential = analyzeSequentialTriggers(history);
-    sequential.forEach(s => {
-        const checkWinRate = (barrier: number, isOver: boolean) => {
-            const contract = isOver ? 'DIGITOVER' : 'DIGITUNDER';
-            const winRate = simulateTrade(history, contract, barrier, [s.digit], 'single');
-            if (winRate >= 0.6) {
-                goldenEntries.push({
-                    contractType: contract,
-                    triggerDigits: [s.digit],
-                    barrier: String(barrier),
-                    duration: 1,
-                    winRate,
-                    confidence: winRate,
-                    analysis: `When the entry digit is ${s.digit}, the probability of the next tick being ${isOver ? 'Over' : 'Under'} ${barrier} is ${(winRate * 100).toFixed(0)}%.`,
-                    triggerType: 'single'
-                });
-            }
-        };
-        
-        if (s.next1Tick.over3 >= 0.6) checkWinRate(3, true);
-        if (s.next1Tick.over4 >= 0.6) checkWinRate(4, true);
-        if (s.next1Tick.under5 >= 0.6) checkWinRate(5, false);
-        if (s.next1Tick.under6 >= 0.6) checkWinRate(6, false);
-        
-        if (s.next2Tick.over3 >= 0.6) {
-            const winRate = simulateTrade(history, 'DIGITOVER', 3, [s.digit], 'consecutive');
-            if (winRate >= 0.6) {
-                goldenEntries.push({
-                    contractType: 'DIGITOVER',
-                    triggerDigits: [s.digit],
-                    barrier: '3',
-                    duration: 2,
-                    winRate,
-                    confidence: winRate,
-                    analysis: `When the entry digit is ${s.digit}, the probability of the next 2 ticks being Over 3 is ${(winRate * 100).toFixed(0)}%.`,
-                    triggerType: 'consecutive'
-                });
-            }
+    if (history.length < 200) {
+        return { goldenEntries };
+    }
+
+    const strategy_input: StrategyInput = { history, pip_sizes: {}, symbol };
+    const all_votes: { [key: string]: number[] } = {};
+
+    // 1. Run all strategies and collect votes
+    strategies.forEach(strategy => {
+        const output = strategy(strategy_input);
+        for (const [key, value] of Object.entries(output.votes)) {
+            if (!all_votes[key]) all_votes[key] = [];
+            all_votes[key].push(value);
         }
     });
-    
-    const coldDigits = analyzeColdDigitReversion(history);
-    coldDigits.forEach(c => {
-        const barrier = c.winningPattern === 'High' ? 7 : (c.winningPattern === 'Low' ? 3 : 5);
-        const contract = c.winningPattern === 'High' ? 'DIGITOVER' : (c.winningPattern === 'Low' ? 'DIGITUNDER' : 'DIGITOVER');
-        const winRate = simulateTrade(history, contract, barrier, [c.coldDigit], 'single');
-        
-        if (winRate >= 0.55) {
-            goldenEntries.push({
-                contractType: contract,
-                triggerDigits: [c.coldDigit],
-                barrier: String(barrier),
-                duration: 1,
-                winRate,
-                confidence: c.afterHigh + c.afterLow,
-                analysis: `Cold digit ${c.coldDigit} reversion: ${c.winningPattern} pattern with ${(Math.max(c.afterHigh, c.afterLow) * 100).toFixed(0)}% probability.`,
-                triggerType: 'single'
-            });
-        }
-    });
-    
-    const markov = analyzeMarkovChains(history);
-    
-    const differsPatterns = markov.filter(m => m.isDiffers && m.probability > 0.05).slice(0, 10);
-    differsPatterns.forEach(m => {
-        const winRate = simulateTrade(history, 'DIGITDIFF', m.toDigit, [m.fromDigit], 'single');
-        if (winRate >= 0.6) {
-            goldenEntries.push({
-                contractType: 'DIGITDIFF',
-                triggerDigits: [m.fromDigit],
-                barrier: String(m.toDigit),
-                duration: 1,
-                winRate,
-                confidence: m.probability,
-                analysis: `Markov: ${m.fromDigit} -> ${m.toDigit} (${(m.probability * 100).toFixed(0)}%). Differs strategy with ${(winRate * 100).toFixed(0)}% win rate.`,
-                triggerType: 'single'
-            });
-        }
-    });
-    
-    const matchPatterns = markov.filter(m => m.isMatch && m.probability > 0.12).slice(0, 5);
-    matchPatterns.forEach(m => {
-        const winRate = simulateTrade(history, 'DIGITMATCH', m.toDigit, [m.fromDigit], 'single');
-        if (winRate >= 0.6) {
-            goldenEntries.push({
-                contractType: 'DIGITMATCH',
-                triggerDigits: [m.fromDigit],
-                barrier: String(m.toDigit),
-                duration: 1,
-                winRate,
-                confidence: m.probability,
-                analysis: `Markov: ${m.fromDigit} -> ${m.toDigit} Match (${(m.probability * 100).toFixed(0)}%).`,
-                triggerType: 'single'
-            });
-        }
-    });
-    
-    const streaks = analyzeStreakCluster(history);
-    
-    const highCluster = streaks.filter(s => s.isHigh && s.frequency > 0.6).slice(0, 5);
-    highCluster.forEach(s => {
-        const winRate = simulateTrade(history, 'DIGITOVER', 5, [s.nextDigit], 'single');
-        if (winRate >= 0.55) {
-            goldenEntries.push({
-                contractType: 'DIGITOVER',
-                triggerDigits: [s.nextDigit],
-                barrier: '5',
-                duration: 1,
-                winRate,
-                confidence: s.frequency,
-                analysis: `N-Gram: Sequence ${s.sequence} -> High digit ${s.nextDigit} (${(s.frequency * 100).toFixed(0)}%).`,
-                triggerType: 'pattern'
-            });
-        }
-    });
-    
-    const evenOdd = streaks.filter(s => s.isEven && s.isHigh).slice(0, 5);
-    evenOdd.forEach(s => {
-        const nextOddWin = simulateTrade(history, 'DIGITUNDER', 5, [s.nextDigit], 'single');
-        if (nextOddWin >= 0.55) {
-            goldenEntries.push({
-                contractType: 'DIGITUNDER',
-                triggerDigits: [s.nextDigit],
-                barrier: '5',
-                duration: 1,
-                winRate: nextOddWin,
-                confidence: s.frequency,
-                analysis: `Even-High pattern ${s.sequence} -> ${s.nextDigit}. Expect odd next.`,
-                triggerType: 'pattern'
-            });
-        }
-    });
-    
-    const movingAvg = analyzeDigitMovingAverages(history);
-    const latestMA = movingAvg[movingAvg.length - 1];
-    if (latestMA) {
-        if (latestMA.bias === 'High' || latestMA.trend > 1) {
-            for (let d = 0; d <= 9; d++) {
-                const winRate = simulateTrade(history, 'DIGITOVER', 5, [d], 'single');
-                if (winRate >= 0.55) {
-                    goldenEntries.push({
-                        contractType: 'DIGITOVER',
-                        triggerDigits: [d],
-                        barrier: '5',
-                        duration: 1,
-                        winRate,
-                        confidence: latestMA.average / 10,
-                        analysis: `Trend bias: ${latestMA.bias}, Avg ${latestMA.average.toFixed(1)}. High bias detected.`,
-                        triggerType: 'single'
-                    });
-                }
-            }
-        } else if (latestMA.bias === 'Low' || latestMA.trend < -1) {
-            for (let d = 0; d <= 9; d++) {
-                const winRate = simulateTrade(history, 'DIGITUNDER', 5, [d], 'single');
-                if (winRate >= 0.55) {
-                    goldenEntries.push({
-                        contractType: 'DIGITUNDER',
-                        triggerDigits: [d],
-                        barrier: '5',
-                        duration: 1,
-                        winRate,
-                        confidence: Math.abs(latestMA.average) / 10,
-                        analysis: `Trend bias: ${latestMA.bias}, Avg ${latestMA.average.toFixed(1)}. Low bias detected.`,
-                        triggerType: 'single'
-                    });
-                }
-            }
-        }
+
+    // 2. Aggregate votes to get a final score for each potential trade
+    const final_scores: { [key: string]: number } = {};
+    for (const [key, values] of Object.entries(all_votes)) {
+        final_scores[key] = values.reduce((a, b) => a + b, 0) / values.length;
     }
     
-    const quant = analyzeQuantLevel(history);
-    quant.positiveEVs.forEach(ev => {
-        const winRate = simulateTrade(history, 'DIGITDIFF', ev.barrier, [ev.triggerDigit], 'single');
-        if (winRate >= 0.6) {
-            goldenEntries.push({
-                contractType: 'DIGITDIFF',
-                triggerDigits: [ev.triggerDigit],
-                barrier: String(ev.barrier),
-                duration: 1,
-                winRate,
-                confidence: ev.expectedValue,
-                analysis: `Quant EV: ${ev.triggerDigit} -> ${ev.barrier}. EV: ${ev.expectedValue.toFixed(3)}, Win: ${(winRate * 100).toFixed(0)}%.`,
-                triggerType: 'single'
-            });
-        }
-    });
+    // 3. Find the best trade opportunities by simulating them
+    const potential_trades: {contractType: 'DIGITOVER' | 'DIGITUNDER', barrier: number}[] = [
+        { contractType: 'DIGITOVER', barrier: 3 },
+        { contractType: 'DIGITOVER', barrier: 4 },
+        { contractType: 'DIGITUNDER', barrier: 5 },
+        { contractType: 'DIGITUNDER', barrier: 6 },
+    ];
     
-    goldenEntries.sort((a, b) => b.winRate - a.winRate);
-    
-    return goldenEntries;
-}
+    for (let triggerDigit = 0; triggerDigit <= 9; triggerDigit++) {
+        for (const trade of potential_trades) {
+             for (let duration = 1; duration <= 3; duration++) {
+                // Check score from strategies
+                const score_key = `${trade.contractType.replace('DIGIT', '')}_${trade.barrier}`;
+                const confidence = final_scores[score_key] || 0;
 
-export function analyzeDigits(history: number[], symbol: string = 'Unknown'): AnalysisResult {
-    const startTime = performance.now();
-    
-    const tickCount = history.length;
-    
-    const sequential = analyzeSequentialTriggers(history);
-    const coldDigit = analyzeColdDigitReversion(history);
-    const markov = analyzeMarkovChains(history);
-    const streakCluster = analyzeStreakCluster(history);
-    const movingAvg = analyzeDigitMovingAverages(history);
-    const dispersion = analyzeDispersionVolatility(history);
-    const quantLevel = analyzeQuantLevel(history);
-    
-    const goldenEntries = generateGoldenEntries(history);
-    
-    const topEntry = goldenEntries[0];
-    const summary = topEntry
-        ? `${topEntry.contractType} ${topEntry.barrier} trigger:${topEntry.triggerDigits.join(',')} WR:${(topEntry.winRate * 100).toFixed(0)}%`
-        : 'No high-confidence patterns found';
-    
-    const analysisTime = performance.now() - startTime;
-    
-    return {
-        symbol,
-        goldenEntries: goldenEntries.slice(0, 10),
-        analysisTime,
-        tickCount,
-        summary,
-        detailedAnalysis: {
-            sequential,
-            coldDigit,
-            markov,
-            streakCluster,
-            movingAvg,
-            dispersion,
-            quantLevel
+                // Only proceed if the strategies show a strong signal
+                if ((trade.contractType === 'DIGITOVER' && confidence > 0.5) || (trade.contractType === 'DIGITUNDER' && confidence < -0.5)) {
+                    const winRate = simulateTrade(history, trade.contractType, trade.barrier, triggerDigit, duration);
+                    
+                    if (winRate > 0.65) { // High threshold for a golden entry
+                        goldenEntries.push({
+                            contractType: trade.contractType,
+                            barrier: String(trade.barrier),
+                            triggerDigits: [triggerDigit],
+                            duration: duration,
+                            winRate: winRate,
+                            confidence: Math.abs(confidence),
+                            analysis: `Trade ${trade.contractType.replace('DIGIT','')} ${trade.barrier} when trigger digit ${triggerDigit} appears. (WR: ${(winRate*100).toFixed(0)}%, Confidence: ${Math.abs(confidence).toFixed(2)})`,
+                            triggerType: 'single',
+                        });
+                    }
+                }
+             }
         }
-    };
-}
+    }
+
+    // 4. Sort to find the best of the best
+    goldenEntries.sort((a, b) => {
+        const score_a = a.winRate * a.confidence;
+        const score_b = b.winRate * b.confidence;
+        return score_b - score_a;
+    });
+
+    return { goldenEntries: goldenEntries.slice(0, 5) }; // Return top 5
+};

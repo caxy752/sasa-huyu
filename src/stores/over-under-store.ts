@@ -5,7 +5,7 @@ import RootStore from './root-store';
 import { getAppId, getSocketURL } from '@/components/shared';
 import { MessageTypes } from '@/external/bot-skeleton';
 import { predictNextDigits } from '@/utils/differs-prediction-engine';
-import { analyzeDigits, AnalysisResult } from '@/utils/ai-analysis-engine';
+import { analyzeDigits, GoldenEntry } from '@/utils/ai-analysis-engine';
 
 const STATUS_OFFLINE = 'Offline';
 const STATUS_CONNECTING = 'Connecting...';
@@ -101,7 +101,7 @@ export default class OverUnderStore {
     // New feature flags
     is_digit_occurrence_filter_active = false;
     is_ai_scanning = false;
-    ai_scan_results: { symbol: string; winRate: number; confidence: number; contractType: string; barrier: string; triggerDigits: number[]; duration: number }[] = [];
+    ai_scan_results: GoldenEntry[] = [];
     is_rebounce_active = false;
     private rebounce_sequences: { [symbol: string]: boolean } = {};
 
@@ -432,47 +432,44 @@ export default class OverUnderStore {
     setIsDigitOccurrenceFilterActive(value: boolean) { this.is_digit_occurrence_filter_active = value; }
     setIsRebounceActive(value: boolean) { this.is_rebounce_active = value; }
     setIsAiScanning(value: boolean) { this.is_ai_scanning = value; }
-    setAiScanResults(results: { symbol: string; winRate: number; confidence: number; contractType: string; barrier: string; triggerDigits: number[]; duration: number }[]) { this.ai_scan_results = results; }
+    setAiScanResults(results: GoldenEntry[]) { this.ai_scan_results = results; }
 
     startAiManualScan() {
-        if (this.tick_history.length < 100) {
-            this.addLog('Need at least 100 ticks for analysis');
+        if (this.tick_history.length < 200) { // Increased for better analysis
+            this.addLog('AI Scan requires at least 200 historical ticks.');
             return;
         }
 
-        this.is_ai_scanning = true;
-        this.addLog('AI Analysis: Scanning patterns...');
+        runInAction(() => { this.is_ai_scanning = true; });
+        this.addLog('🤖 AI Engine: Starting advanced analysis... This may take a few seconds.');
 
         const history = [...this.tick_history];
         
+        // Run analysis in a non-blocking way
         setTimeout(() => {
             const result = analyzeDigits(history, this.selected_symbol);
             
-            const formattedResults = result.goldenEntries.map(entry => ({
-                symbol: this.selected_symbol,
-                winRate: entry.winRate,
-                confidence: entry.confidence,
-                contractType: entry.contractType,
-                barrier: entry.barrier,
-                triggerDigits: entry.triggerDigits,
-                duration: entry.duration
-            }));
+            runInAction(() => {
+                this.setAiScanResults(result.goldenEntries);
+                this.is_ai_scanning = false;
 
-            this.setAiScanResults(formattedResults);
-            this.is_ai_scanning = false;
+                if (result.goldenEntries.length > 0) {
+                    const best_entry = result.goldenEntries[0];
+                    
+                    // Auto-configure the UI with the best signal
+                    this.setManualContractType(best_entry.contractType);
+                    this.setManualBarrier(best_entry.barrier);
+                    this.setManualDuration(best_entry.duration);
+                    this.setEntryDigit(best_entry.triggerDigits[0]);
+                    this.setUseSecondTrigger(false); // New engine provides a single, precise trigger
 
-            if (formattedResults.length > 0) {
-                const best = formattedResults[0];
-                this.manual_contract_type = best.contractType;
-                this.manual_barrier = best.barrier;
-                this.manual_duration = best.duration;
-                this.entry_digit = best.triggerDigits[0];
-                
-                this.addLog(`AI: Applied best config - ${best.contractType} ${best.barrier}, WR:${(best.winRate * 100).toFixed(0)}%`);
-            } else {
-                this.addLog('AI: No high-confidence patterns found');
-            }
-        }, 50);
+                    this.addLog(`SIGNAL: ${best_entry.analysis}`);
+                    this.addLog(`✅ UI configured. Ready to run.`);
+                } else {
+                    this.addLog('AI Engine: No high-confidence trading signals found in the current market conditions.');
+                }
+            });
+        }, 50); // 50ms timeout to allow UI to update
     }
 
     setSelectedSymbol(symbol: string) {
