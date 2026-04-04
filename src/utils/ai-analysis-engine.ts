@@ -31,9 +31,6 @@ interface StrategyOutput {
 
 // ── 1. Probabilistic & Frequency Models ──────────────────────
 
-/**
- * Calculates the historical probability of each digit.
- */
 const globalFrequencyStrategy = (input: StrategyInput): StrategyOutput => {
     const { history } = input;
     const votes: { [key: string]: number } = {};
@@ -44,26 +41,21 @@ const globalFrequencyStrategy = (input: StrategyInput): StrategyOutput => {
     const total = history.length;
 
     for (let barrier = 0; barrier <= 9; barrier++) {
-        // Vote for OVER
         let over_prob = 0;
         for (let i = barrier + 1; i <= 9; i++) {
             over_prob += (counts[i] / total);
         }
-        votes[`OVER_${barrier}`] = (over_prob - 0.45) * 2; // Normalize around 0.5 avg
+        votes[`OVER_${barrier}`] = (over_prob - 0.45) * 2;
 
-        // Vote for UNDER
         let under_prob = 0;
         for (let i = 0; i < barrier; i++) {
             under_prob += (counts[i] / total);
         }
-        votes[`UNDER_${barrier}`] = (under_prob - 0.45) * 2; // Normalize around 0.5 avg
+        votes[`UNDER_${barrier}`] = (under_prob - 0.45) * 2;
     }
     return { votes };
 };
 
-/**
- * Identifies "hot" or "cold" digits based on recent activity.
- */
 const localFrequencyStrategy = (input: StrategyInput): StrategyOutput => {
     const { history } = input;
     const votes: { [key: string]: number } = {};
@@ -74,7 +66,7 @@ const localFrequencyStrategy = (input: StrategyInput): StrategyOutput => {
     local_history.forEach(digit => counts[digit]++);
 
     for (let barrier = 3; barrier <= 6; barrier++) {
-        const high_hotness = (counts[7] + counts[8] + counts[9]) / 15; // Avg 3 digits over 50 ticks
+        const high_hotness = (counts[7] + counts[8] + counts[9]) / 15;
         const low_hotness = (counts[0] + counts[1] + counts[2]) / 15;
 
         votes[`OVER_${barrier}`] = (high_hotness - low_hotness) * 1.5;
@@ -83,11 +75,7 @@ const localFrequencyStrategy = (input: StrategyInput): StrategyOutput => {
     return { votes };
 };
 
-
 // ── 2. Markovian & Transition Models ───────────────────────
-/**
- * Uses a Lag-1 Transition Matrix to predict the next digit based on the current one.
- */
 const markovChainStrategy = (input: StrategyInput): StrategyOutput => {
     const { history } = input;
     const votes: { [key: string]: number } = {};
@@ -112,7 +100,7 @@ const markovChainStrategy = (input: StrategyInput): StrategyOutput => {
         for (let i = barrier + 1; i <= 9; i++) {
             over_prob += next_digit_probs[i];
         }
-        votes[`OVER_${barrier}`] = (over_prob - 0.45) * 2.5; // Stronger weight
+        votes[`OVER_${barrier}`] = (over_prob - 0.45) * 2.5;
 
         let under_prob = 0;
         for (let i = 0; i < barrier; i++) {
@@ -123,11 +111,7 @@ const markovChainStrategy = (input: StrategyInput): StrategyOutput => {
     return { votes };
 };
 
-
 // ── 3. Trend & Oscillator Adaptations ────────────────────────
-/**
- * Adapts the Relative Strength Index (RSI) to measure momentum of high vs. low digits.
- */
 const digitRSIStrategy = (input: StrategyInput): StrategyOutput => {
     const { history } = input;
     const votes: { [key: string]: number } = {};
@@ -153,7 +137,7 @@ const digitRSIStrategy = (input: StrategyInput): StrategyOutput => {
     const rs = avg_gain / avg_loss;
     const rsi = 100 - (100 / (1 + rs));
 
-    const rsi_vote = (rsi - 50) / 25; // Normalize: >0 is bullish (favors OVER), <0 is bearish (favors UNDER)
+    const rsi_vote = (rsi - 50) / 25;
 
     for (let barrier = 3; barrier <= 6; barrier++) {
         votes[`OVER_${barrier}`] = rsi_vote;
@@ -162,9 +146,6 @@ const digitRSIStrategy = (input: StrategyInput): StrategyOutput => {
     return { votes };
 };
 
-/**
- * Uses a moving average to find the "trend" of the digits.
- */
 const digitMovingAverageStrategy = (input: StrategyInput): StrategyOutput => {
     const { history } = input;
     const votes: { [key:string]: number } = {};
@@ -175,8 +156,7 @@ const digitMovingAverageStrategy = (input: StrategyInput): StrategyOutput => {
     const short_ma = short_ma_history.reduce((a, b) => a + b, 0) / short_ma_history.length;
     const long_ma = long_ma_history.reduce((a, b) => a + b, 0) / long_ma_history.length;
 
-    // If short MA is above long MA, it's an "uptrend" for digits (favors OVER)
-    const ma_vote = (short_ma - long_ma); // Can be positive or negative
+    const ma_vote = (short_ma - long_ma);
 
     for (let barrier = 3; barrier <= 6; barrier++) {
         votes[`OVER_${barrier}`] = ma_vote;
@@ -184,7 +164,6 @@ const digitMovingAverageStrategy = (input: StrategyInput): StrategyOutput => {
     }
     return { votes };
 };
-
 
 // ── Master Analysis Function ─────────────────────────────────
 
@@ -221,9 +200,19 @@ const simulateTrade = (
 };
 
 export const analyzeDigits = (history: number[], symbol: string): AnalysisResult => {
-    const goldenEntries: GoldenEntry[] = [];
+    let goldenEntries: GoldenEntry[] = [];
     if (history.length < 200) {
-        return { goldenEntries };
+        const fallbackEntry: GoldenEntry = {
+            contractType: 'DIGITOVER',
+            barrier: '4',
+            triggerDigits: [7],
+            duration: 1,
+            winRate: 0,
+            confidence: 0,
+            analysis: 'Fallback: Not enough data for analysis.',
+            triggerType: 'single',
+        };
+        return { goldenEntries: [fallbackEntry] };
     }
 
     const strategy_input: StrategyInput = { history, pip_sizes: {}, symbol };
@@ -244,7 +233,7 @@ export const analyzeDigits = (history: number[], symbol: string): AnalysisResult
         final_scores[key] = values.reduce((a, b) => a + b, 0) / values.length;
     }
     
-    // 3. Find the best trade opportunities by simulating them
+    // 3. Find and score all possible trade opportunities
     const potential_trades: {contractType: 'DIGITOVER' | 'DIGITUNDER', barrier: number}[] = [
         { contractType: 'DIGITOVER', barrier: 3 },
         { contractType: 'DIGITOVER', barrier: 4 },
@@ -255,37 +244,48 @@ export const analyzeDigits = (history: number[], symbol: string): AnalysisResult
     for (let triggerDigit = 0; triggerDigit <= 9; triggerDigit++) {
         for (const trade of potential_trades) {
              for (let duration = 1; duration <= 3; duration++) {
-                // Check score from strategies
                 const score_key = `${trade.contractType.replace('DIGIT', '')}_${trade.barrier}`;
                 const confidence = final_scores[score_key] || 0;
-
-                // Only proceed if the strategies show a strong signal
-                if ((trade.contractType === 'DIGITOVER' && confidence > 0.5) || (trade.contractType === 'DIGITUNDER' && confidence < -0.5)) {
-                    const winRate = simulateTrade(history, trade.contractType, trade.barrier, triggerDigit, duration);
-                    
-                    if (winRate > 0.65) { // High threshold for a golden entry
-                        goldenEntries.push({
-                            contractType: trade.contractType,
-                            barrier: String(trade.barrier),
-                            triggerDigits: [triggerDigit],
-                            duration: duration,
-                            winRate: winRate,
-                            confidence: Math.abs(confidence),
-                            analysis: `Trade ${trade.contractType.replace('DIGIT','')} ${trade.barrier} when trigger digit ${triggerDigit} appears. (WR: ${(winRate*100).toFixed(0)}%, Confidence: ${Math.abs(confidence).toFixed(2)})`,
-                            triggerType: 'single',
-                        });
-                    }
+                const winRate = simulateTrade(history, trade.contractType, trade.barrier, triggerDigit, duration);
+                
+                // Add all simulated trades that have occurred at least once
+                if (winRate > 0) { 
+                    goldenEntries.push({
+                        contractType: trade.contractType,
+                        barrier: String(trade.barrier),
+                        triggerDigits: [triggerDigit],
+                        duration: duration,
+                        winRate: winRate,
+                        confidence: Math.abs(confidence),
+                        analysis: `Trade ${trade.contractType.replace('DIGIT','')} ${trade.barrier} when trigger digit ${triggerDigit} appears. (WR: ${(winRate*100).toFixed(0)}%, Confidence: ${Math.abs(confidence).toFixed(2)})`,
+                        triggerType: 'single',
+                    });
                 }
              }
         }
     }
 
     // 4. Sort to find the best of the best
-    goldenEntries.sort((a, b) => {
-        const score_a = a.winRate * a.confidence;
-        const score_b = b.winRate * b.confidence;
-        return score_b - score_a;
-    });
+    if (goldenEntries.length > 0) {
+        goldenEntries.sort((a, b) => {
+            const score_a = a.winRate * a.confidence;
+            const score_b = b.winRate * b.confidence;
+            return score_b - score_a;
+        });
+    } else {
+        // If no trades were found after simulation, create a default fallback entry
+        const fallbackEntry: GoldenEntry = {
+            contractType: 'DIGITOVER',
+            barrier: '4',
+            triggerDigits: [7],
+            duration: 1,
+            winRate: 0,
+            confidence: 0,
+            analysis: 'Fallback: No winning patterns found. Using default.',
+            triggerType: 'single',
+        };
+        goldenEntries.push(fallbackEntry);
+    }
 
-    return { goldenEntries: goldenEntries.slice(0, 5) }; // Return top 5
+    return { goldenEntries: goldenEntries.slice(0, 5) }; // Return top 5, with the best one at index 0
 };
