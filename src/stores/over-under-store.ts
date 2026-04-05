@@ -1341,12 +1341,27 @@ export default class OverUnderStore {
     }
 
     dispose() {
+        // If the bot is actively running, keep everything alive so it continues in the background.
         if (this.is_auto_running) { this.addLog('Tab switched. Bot continuing in background...'); return; }
-        window.removeEventListener('message', this._boundAuthHandler);
-        if (this._loginReaction) this._loginReaction();
-        if (this._accountReaction) this._accountReaction();
-        if (this.ws) { this.ws.onclose = null; this.ws.close(); }
-        if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-        this.volatilityAnalyzer?.terminate();
+
+        // Close the WebSocket and cancel any pending reconnect.
+        if (this.ws) { this.ws.onclose = null; this.ws.close(); this.ws = null; }
+        if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
+
+        // IMPORTANT: Reset connection_status to 'Offline' so that when the component
+        // re-mounts (navigating back to this tab) the useEffect guard correctly
+        // triggers connectWebSocket() again.
+        runInAction(() => {
+            this.connection_status = STATUS_OFFLINE;
+            this.is_authorized = false;
+            this.is_authorizing = false;
+        });
+
+        // NOTE: Do NOT dispose _loginReaction, _accountReaction, or remove
+        // _boundAuthHandler here. This store is a singleton (created once in
+        // RootStore and shared for the entire app session). Those listeners must
+        // remain alive across tab navigations so that login/account-switch events
+        // are still handled correctly after the component re-mounts.
+        // They are only truly cleaned up if the entire app is torn down.
     }
 }

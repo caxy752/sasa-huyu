@@ -103,7 +103,10 @@ const OverUnder = observer(() => {
     };
 
     useEffect(() => {
-        if (over_under.connection_status === 'Offline') connectWebSocket();
+        // Always attempt to connect/reconnect when the component mounts.
+        // The connectWebSocket() method itself has a guard that returns early
+        // if already connected and authorized, so this is safe to call unconditionally.
+        connectWebSocket();
         return () => over_under.dispose();
     }, [connectWebSocket, over_under]);
 
