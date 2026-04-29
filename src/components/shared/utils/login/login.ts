@@ -30,15 +30,15 @@ export const loginUrl = ({ language }: TLoginUrl) => {
     const signup_device = signup_device_cookie.get('signup_device');
     const date_first_contact_cookie = new (CookieStorage as any)('date_first_contact');
     const date_first_contact = date_first_contact_cookie.get('date_first_contact');
-    const marketing_queries = `${signup_device ? `&signup_device=${signup_device}` : ''}${
-        date_first_contact ? `&date_first_contact=${date_first_contact}` : ''
-    }`;
+    const marketing_queries = `${signup_device ? `&signup_device=${signup_device}` : ''}${''}`;
     const getOAuthUrl = () => {
-        return `https://oauth.${deriv_urls.DERIV_HOST_NAME}/oauth2/authorize?app_id=${getAppId()}&l=${language}${marketing_queries}&brand=${website_name.toLowerCase()}`;
+        const redirect_uri = `${window.location.origin}/callback`;
+        return `https://oauth.${deriv_urls.DERIV_HOST_NAME}/oauth2/authorize?app_id=${getAppId()}&l=${language}&redirect_uri=${redirect_uri}${marketing_queries}&brand=${website_name.toLowerCase()}`;
     };
 
     if (server_url && /qa/.test(server_url)) {
-        return `https://${server_url}/oauth2/authorize?app_id=${getAppId()}&l=${language}${marketing_queries}&brand=${website_name.toLowerCase()}`;
+        const redirect_uri = `${window.location.origin}/callback`;
+        return `https://${server_url}/oauth2/authorize?app_id=${getAppId()}&l=${language}&redirect_uri=${redirect_uri}${marketing_queries}&brand=${website_name.toLowerCase()}`;
     }
 
     return urlForCurrentDomain(getOAuthUrl());
