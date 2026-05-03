@@ -33,9 +33,6 @@ export default Engine =>
 
             this.store.dispatch(purchaseSuccessful());
 
-            // Renew proposals for the NEXT trade immediately after virtual purchase
-            this.renewProposalsOnPurchase();
-
             const {
                 duration,
                 duration_unit,
@@ -155,8 +152,10 @@ export default Engine =>
                 is_virtual: true,
             });
 
+            this.renewProposalsOnPurchase();
+
             const unsubscribe = this.store.subscribe(() => {
-                const { proposalsReady } = this.store.getState();
+                const proposalsReady = this.store.getState().proposalsReady;
                 if (proposalsReady) {
                     unsubscribe();
                     if (this.afterPromise) {
