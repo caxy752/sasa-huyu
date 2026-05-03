@@ -18,6 +18,7 @@ export type TContractInfo = Omit<
         buy?: number;
         sell?: number;
     };
+    display_name?: string;
 };
 
 export interface TSummaryCardProps {

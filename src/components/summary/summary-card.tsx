@@ -94,6 +94,7 @@ const SummaryCard = observer(({ contract_info, is_contract_loading, is_bot_runni
                     is_multiplier={is_multiplier}
                     profit_loss={contract_info.profit}
                     should_show_result_overlay={true}
+                    result={(contract_info as any)?.display_name}
                 >
                     <div
                         className={classNames('dc-contract-card', {

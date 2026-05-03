@@ -76,6 +76,12 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
         this.subscription_id_for_accumulators = null;
         this.is_proposal_requested_for_accumulators = false;
         this.store = createStore(rootReducer, applyMiddleware(thunk));
+        this.vh_state = {
+            is_virtual: false,
+            loss_count: 0,
+            enabled: false,
+            threshold: 0,
+        };
     }
 
     init(...args) {
@@ -84,6 +90,12 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
 
         this.initArgs = args;
         this.options = options;
+        if (options.virtualHook) {
+            this.vh_state.enabled = options.virtualHook.enabled;
+            this.vh_state.threshold = Number(options.virtualHook.threshold);
+            this.vh_state.is_virtual = this.vh_state.enabled;
+            this.vh_state.loss_count = 0;
+        }
         this.startPromise = this.loginAndGetBalance(token);
 
         if (!this.checkTicksPromiseExists()) this.watchTicks(symbol);

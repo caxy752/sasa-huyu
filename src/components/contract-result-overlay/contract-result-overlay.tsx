@@ -9,10 +9,12 @@ import { Localize } from '@deriv-com/translations';
 
 type TContractResultOverlayProps = {
     profit: number;
+    result?: string;
 };
 
-const ContractResultOverlay = ({ profit }: TContractResultOverlayProps) => {
+const ContractResultOverlay = ({ profit, result }: TContractResultOverlayProps) => {
     const has_won_contract = profit >= 0;
+    const is_virtual = result?.toLowerCase().includes('virtual');
 
     return (
         <div
@@ -22,7 +24,16 @@ const ContractResultOverlay = ({ profit }: TContractResultOverlayProps) => {
             })}
         >
             <Text weight='bold' className='db-contract-card__result-caption'>
-                {has_won_contract ? (
+                {result ? (
+                    <React.Fragment>
+                        {result}
+                        {has_won_contract ? (
+                            <LabelPairedCircleCheckMdRegularIcon className='db-contract-card__result-icon' color='green' />
+                        ) : (
+                            <LabelPairedCircleXmarkMdRegularIcon className='db-contract-card__result-icon' color='red' />
+                        )}
+                    </React.Fragment>
+                ) : has_won_contract ? (
                     <React.Fragment>
                         <Localize i18n_default_text='Won' />
                         <LabelPairedCircleCheckMdRegularIcon className='db-contract-card__result-icon' color='green' />
