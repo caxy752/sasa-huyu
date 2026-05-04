@@ -4,7 +4,7 @@ import { api_base } from '../../api/api-base';
 import ApiHelpers from '../../api/api-helpers';
 import { contractStatus, info, log } from '../utils/broadcast';
 import { doUntilDone, getUUID, recoverFromError, tradeOptionToBuy } from '../utils/helpers';
-import { purchaseSuccessful, sell } from './state/actions';
+import { openContractReceived, purchaseSuccessful, sell } from './state/actions';
 import { BEFORE_PURCHASE } from './state/constants';
 import { observer as globalObserver } from '../../../utils/observer';
 import { getBalanceSwapState } from '@/utils/balance-swap-utils';
@@ -69,9 +69,7 @@ export default Engine =>
             
             // 2. Mimic "Open Contract" signal
             // This satisfies watchDuring and allows the interpreter to proceed to the next block
-            setTimeout(() => {
-                this.store.dispatch(openContractReceived());
-            }, 50);
+            this.store.dispatch(openContractReceived());
 
             const entry_spot = proposal.spot;
 
@@ -198,6 +196,7 @@ export default Engine =>
                 underlying: this.tradeOptions.symbol,
                 contract_type: this.tradeOptions.contract_type,
                 currency: this.tradeOptions.currency || 'USD',
+                contract_type: this.tradeOptions.contract_type,
                 shortcode: `VIRTUAL_${this.tradeOptions.contract_type}_${this.tradeOptions.symbol}`,
             };
 
