@@ -109,14 +109,14 @@ export const generateOAuthURL = (is_new_account = false) => {
     const app_id = getAppId();
 
     if (server_url && /qa/.test(server_url)) {
-        return `https://${server_url}/oauth2/authorize?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}`;
+        return `https://${server_url}/oauth2/authorize?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
     }
 
-    // New accounts use auth.deriv.com/oauth2/auth
+    // New accounts: auth.deriv.com/oauth2/auth
     if (is_new_account) {
-        return `https://auth.deriv.com/oauth2/auth?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}`;
+        return `https://auth.deriv.com/oauth2/auth?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
     }
 
-    // Old accounts use oauth.deriv.com/oauth2/authorize
-    return `https://oauth.deriv.com/oauth2/authorize?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}`;
+    // Old accounts: oauth.deriv.com/oauth2/authorize
+    return `https://oauth.deriv.com/oauth2/authorize?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
 };

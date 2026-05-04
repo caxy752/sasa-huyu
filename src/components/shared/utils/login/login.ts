@@ -29,12 +29,12 @@ export const loginUrl = ({ language }: TLoginUrl) => {
     const server_url = LocalStore.get('config.server_url');
     const getOAuthUrl = () => {
         const redirect_uri = `${window.location.origin}/callback`;
-        return `https://oauth.deriv.com/oauth2/authorize?app_id=${getAppId()}&l=${language}&redirect_uri=${redirect_uri}`;
+        return `https://oauth.deriv.com/oauth2/authorize?app_id=${getAppId()}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
     };
 
     if (server_url && /qa/.test(server_url)) {
         const redirect_uri = `${window.location.origin}/callback`;
-        return `https://${server_url}/oauth2/authorize?app_id=${getAppId()}&l=${language}&redirect_uri=${redirect_uri}`;
+        return `https://${server_url}/oauth2/authorize?app_id=${getAppId()}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
     }
 
     return getOAuthUrl();
