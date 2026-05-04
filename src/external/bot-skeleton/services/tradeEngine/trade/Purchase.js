@@ -160,8 +160,7 @@ export default Engine =>
                 console.log('🤖 [VIRTUAL HOOK] Virtual win. Staying in virtual mode.');
             }
 
-            // Update internal statistics so martingale logic can see the virtual results
-            this.updateTotals({
+            const virtual_contract = {
                 ...contract,
                 buy_price: contract.ask_price,
                 sell_price: contract.profit > 0 ? contract.payout : 0,
@@ -170,6 +169,24 @@ export default Engine =>
                 exit_tick: contract.exit_spot,
                 entry_tick_time: Math.floor(Date.now() / 1000) - 1,
                 exit_tick_time: Math.floor(Date.now() / 1000),
+                display_name: win ? localize('Virtual Win') : localize('Virtual Loss'),
+                is_virtual: true,
+            };
+
+            // Update internal statistics so martingale logic can see the virtual results
+            this.updateTotals(virtual_contract);
+
+            // Emit events to update the UI (Trade Summary, Transactions, etc.)
+            globalObserver.emit('bot.contract', {
+                ...virtual_contract,
+                is_sold: true,
+            });
+
+            info({
+                profit: contract.profit,
+                contract: virtual_contract,
+                accountID: 'VIRTUAL',
+                is_virtual: true,
             });
 
             this.store.dispatch(sell());
