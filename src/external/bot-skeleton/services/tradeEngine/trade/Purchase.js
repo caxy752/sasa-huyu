@@ -24,7 +24,15 @@ export default Engine =>
         }
 
         async virtualPurchase(contract_type) {
-            console.log('🤖 [VIRTUAL HOOK] Executing realistic virtual trade simulation.');
+            const {
+                duration,
+                duration_unit,
+                contract_type: trade_contract_type,
+                symbol,
+                prediction,
+            } = this.tradeOptions;
+
+            console.log(`🤖 [VIRTUAL HOOK] Executing virtual trade for ${symbol} (${trade_contract_type})`);
             
             let proposal;
             let retries = 0;
@@ -58,21 +66,11 @@ export default Engine =>
 
             this.store.dispatch(purchaseSuccessful());
             
-            // In real trades, the state machine transitions to DURING_PURCHASE and waits for openContract: true.
-            // We must mimic this for virtual trades to satisfy the watchDuring(this.store) in index.js.
-            import('./state/actions').then(actions => {
-                if (actions.openContractReceived) {
-                    this.store.dispatch(actions.openContractReceived());
-                }
-            });
-
-            const {
-                duration,
-                duration_unit,
-                contract_type: trade_contract_type,
-                symbol,
-                prediction,
-            } = this.tradeOptions;
+            // Mimic the real trade lifecycle by dispatching openContractReceived
+            // This satisfies watchDuring and prevents the bot from freezing
+            setTimeout(() => {
+                this.store.dispatch(openContractReceived());
+            }, 100);
 
             const entry_spot = proposal.spot;
 
