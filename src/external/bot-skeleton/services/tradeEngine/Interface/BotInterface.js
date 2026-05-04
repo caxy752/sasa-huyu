@@ -2,7 +2,13 @@ import { observer as globalObserver } from '../../../utils/observer';
 import { createDetails } from '../utils/helpers';
 
 const getBotInterface = tradeEngine => {
-    const getDetail = i => createDetails(tradeEngine.data.contract)[i];
+    const getDetail = i => {
+        const contract = tradeEngine.data.contract;
+        if (!contract || Object.keys(contract).length === 0) {
+            return '';
+        }
+        return createDetails(contract)[i];
+    };
 
     return {
         init: (...args) => tradeEngine.init(...args),

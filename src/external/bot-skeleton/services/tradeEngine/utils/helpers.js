@@ -326,15 +326,15 @@ export const createDetails = contract => {
     console.log('[createDetails] 💰 Profit for bot (REAL API):', profit, 'Result:', result);
 
     return [
-        contract.transaction_ids.buy,
-        +contract.buy_price,
-        +contract.sell_price,
+        contract.transaction_ids?.buy || '',
+        +(contract.buy_price || 0),
+        +(contract.sell_price || 0),
         profit,
-        contract.contract_type,
-        formatTime(parseInt(`${contract.entry_tick_time}000`), 'HH:mm:ss'),
-        +contract.entry_tick,
-        formatTime(parseInt(`${contract.exit_tick_time}000`), 'HH:mm:ss'),
-        +contract.exit_tick,
+        contract.contract_type || '',
+        contract.entry_tick_time ? formatTime(parseInt(`${contract.entry_tick_time}000`), 'HH:mm:ss') : '',
+        +(contract.entry_tick || 0),
+        contract.exit_tick_time ? formatTime(parseInt(`${contract.exit_tick_time}000`), 'HH:mm:ss') : '',
+        +(contract.exit_tick || 0),
         +(contract.barrier ? contract.barrier : 0),
         result,
     ];
