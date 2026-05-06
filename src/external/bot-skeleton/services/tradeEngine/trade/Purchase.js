@@ -40,27 +40,15 @@ export default Engine =>
                 target_ticks = Math.ceil(duration_seconds);
             }
 
-            // Resolve the actual prediction/barrier in order of priority:
-            //  1. window.BinaryBotCustomPrediction — set dynamically by the "set custom prediction" block
-            //  2. The matching proposal's barrier — what Deriv actually accepted for this contract type
-            //  3. this.tradeOptions.prediction — the static value from the Trade Definition block
-            const matching_proposal = this.data.proposals.find(
-                p => p.contract_type === contract_type && p.purchase_reference === this.getPurchaseReference()
-            );
-            const proposal_barrier =
-                matching_proposal?.barrier !== undefined ? Number(matching_proposal.barrier) : undefined;
-
-            const custom_prediction =
-                typeof window !== 'undefined' && window.BinaryBotCustomPrediction !== undefined
-                    ? Number(window.BinaryBotCustomPrediction)
-                    : undefined;
-
-            const resolved_prediction =
-                custom_prediction !== undefined
-                    ? custom_prediction
-                    : proposal_barrier !== undefined
-                    ? proposal_barrier
-                    : this.tradeOptions.prediction;
+            // Prediction comes directly from the bot's Trade Definition block via tradeOptions.
+            // The "set custom prediction" block writes to window.BinaryBotCustomPrediction —
+            // read and immediately clear it so stale values don't leak into future trades.
+            // No proposal lookup needed — virtual trades are fully self-contained.
+            let resolved_prediction = this.tradeOptions.prediction;
+            if (typeof window !== 'undefined' && window.BinaryBotCustomPrediction !== undefined) {
+                resolved_prediction = Number(window.BinaryBotCustomPrediction);
+                window.BinaryBotCustomPrediction = undefined;
+            }
 
             console.log(
                 `🤖 [VIRTUAL HOOK] Initiating trade: type=${contract_type}, prediction=${resolved_prediction}, duration=${target_ticks} ticks.`
@@ -135,9 +123,18 @@ export default Engine =>
             this.vh_state.virtual_tick_count++;
             const current_tick_count = this.vh_state.virtual_tick_count;
 
-            console.log(`🤖 [VIRTUAL HOOK] Settlement progress: Tick ${current_tick_count}/${virtual_target_duration}`);
+            // Digit contracts: entry spot IS the Nth tick itself (1-indexed).
+            //   Duration 1 → settled on entry tick (handled above).
+            //   Duration 2 → entry = tick 1, exit = tick 2 → 1 extra tick needed.
+            //   Duration N → exit = tick N → (N-1) extra ticks needed.
+            // CALL/PUT contracts: exit is N ticks AFTER the entry tick.
+            //   Duration 1 → exit = tick 2 → 1 extra tick needed.
+            //   Duration N → exit = tick (N+1) → N extra ticks needed.
+            const settle_after = isDigitTrade ? virtual_target_duration - 1 : virtual_target_duration;
 
-            if (current_tick_count >= virtual_target_duration) {
+            console.log(`🤖 [VIRTUAL HOOK] Settlement progress: Tick ${current_tick_count}/${settle_after}`);
+
+            if (current_tick_count >= settle_after) {
                 this.settleVirtualTrade(tick_data);
             }
         }
@@ -302,7 +299,6 @@ export default Engine =>
             };
 
             globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true, is_virtual: true });
-            this.renewProposalsOnPurchase();
         }
         
         // ... (rest of the file remains the same)

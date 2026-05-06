@@ -206,8 +206,12 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
 
     makeDirectPurchaseDecision() {
         const { has_payout_block, is_basis_payout } = checkBlocksForProposalRequest();
-        const is_vh_enabled = this.vh_state?.enabled;
-        this.is_proposal_subscription_required = has_payout_block || is_basis_payout || is_vh_enabled;
+        // Virtual trades do NOT need proposals — they compute results purely from
+        // tick data + tradeOptions. Proposals are only needed when the bot's Before
+        // Purchase block uses getAskPrice/getPayout blocks, or when basis is payout.
+        // When virtual hook switches to real trades it uses the direct buy path which
+        // also doesn't require a prior proposal (sends buy parameters directly).
+        this.is_proposal_subscription_required = has_payout_block || is_basis_payout;
 
         if (this.is_proposal_subscription_required) {
             this.makeProposals({ ...this.options, ...this.tradeOptions });
