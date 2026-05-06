@@ -25,7 +25,12 @@ export default Engine =>
         }
 
         async virtualPurchase(contract_type) {
-            const { duration, duration_unit, contract_type: trade_contract_type, symbol, prediction } = this.tradeOptions;
+            // contract_type is the specific type being purchased (e.g. 'DIGITOVER', 'CALL').
+            // Do NOT use this.tradeOptions.contract_type — that field is undefined on the
+            // tradeOptions object (it stores contractTypes as a plural array instead).
+            // Using the wrong source caused virtual_contract_type to always be undefined,
+            // which made the win/loss switch fall to its default (is_win = false) every time.
+            const { duration, duration_unit, symbol, prediction } = this.tradeOptions;
 
             let target_ticks = 0;
             if (duration_unit === 't') {
@@ -36,13 +41,13 @@ export default Engine =>
             }
 
             console.log(
-                `🤖 [VIRTUAL HOOK] Initiating trade: type=${trade_contract_type}, duration=${target_ticks} ticks. Waiting for entry tick.`
+                `🤖 [VIRTUAL HOOK] Initiating trade: type=${contract_type}, duration=${target_ticks} ticks. Waiting for entry tick.`
             );
 
             this.vh_state.virtual_trade_active = true;
             this.vh_state.virtual_tick_count = 0;
             this.vh_state.virtual_target_duration = target_ticks;
-            this.vh_state.virtual_contract_type = trade_contract_type;
+            this.vh_state.virtual_contract_type = contract_type;
             this.vh_state.virtual_prediction = prediction;
             this.vh_state.virtual_entry_spot = 0;
             this.vh_state.entry_spot_captured = false;
@@ -108,13 +113,9 @@ export default Engine =>
             this.vh_state.virtual_tick_count++;
             const current_tick_count = this.vh_state.virtual_tick_count;
 
-            // For an N-tick contract: entry = tick 1, exit = tick N (N-1 ticks after entry).
-            // So settle when tick_count reaches (target - 1), not target.
-            const settle_at = Math.max(1, virtual_target_duration - 1);
+            console.log(`🤖 [VIRTUAL HOOK] Settlement progress: Tick ${current_tick_count}/${virtual_target_duration}`);
 
-            console.log(`🤖 [VIRTUAL HOOK] Settlement progress: Tick ${current_tick_count}/${settle_at}`);
-
-            if (current_tick_count >= settle_at) {
+            if (current_tick_count >= virtual_target_duration) {
                 this.settleVirtualTrade(tick_data);
             }
         }
