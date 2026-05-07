@@ -579,17 +579,38 @@ body.theme--dark .app-header .powered-by-deriv-header {
 
 // Custom button styles - same blue as active tab
 .auth-login-button {
-    background: #1e40af !important; // Same blue as active tab
-    color: #ffffff !important; // White text
+    background: #1e40af !important;
+    color: #ffffff !important;
     border: 1px solid #1e40af !important;
 
     &:hover:not([disabled]) {
-        background: #1e3a8a !important; // Darker blue on hover
+        background: #1e3a8a !important;
         border-color: #1e3a8a !important;
     }
 
     .dc-btn__text {
-        color: #ffffff !important; // White text
+        color: #ffffff !important;
+    }
+}
+
+.auth-new-accounts-button {
+    background: #065f46 !important;
+    color: #ffffff !important;
+    border: 1px solid #065f46 !important;
+    white-space: nowrap;
+
+    &:hover:not([disabled]) {
+        background: #064e3b !important;
+        border-color: #064e3b !important;
+    }
+
+    .dc-btn__text {
+        color: #ffffff !important;
+    }
+
+    @include mobile-or-tablet-screen {
+        font-size: 1rem !important;
+        padding: 0.4rem 0.6rem !important;
     }
 }
 

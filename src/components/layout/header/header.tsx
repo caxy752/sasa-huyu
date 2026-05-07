@@ -11,6 +11,7 @@ import { useStore } from '@/hooks/useStore';
 import useTMB from '@/hooks/useTMB';
 import { handleOidcAuthFailure } from '@/utils/auth-utils';
 import { getBalanceSwapState } from '@/utils/balance-swap-utils';
+import { redirectToNewAccountsLogin } from '@/utils/pkce';
 import { StandaloneCircleUserRegularIcon } from '@deriv/quill-icons/Standalone';
 
 
@@ -275,7 +276,6 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                                 if (tmbEnabled) {
                                     await onRenderTMBCheck(true, undefined, false);
                                 } else {
-                                    // Direct link to working authorize endpoint
                                     window.location.href = generateOAuthURL(false, 'home');
                                 }
                             } catch (error) {
@@ -284,6 +284,19 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                         }}
                     >
                         <Localize i18n_default_text='Log in' />
+                    </Button>
+                    <Button
+                        tertiary
+                        className='auth-new-accounts-button'
+                        onClick={async () => {
+                            try {
+                                await redirectToNewAccountsLogin();
+                            } catch (error) {
+                                console.error('[New Accounts Login]', error);
+                            }
+                        }}
+                    >
+                        <Localize i18n_default_text='Login (new accounts)' />
                     </Button>
                     <Button
                         primary
