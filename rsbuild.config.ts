@@ -56,35 +56,34 @@ export default defineConfig({
                 './src/components/shims/ui-submenu/index.js'
             ),
             '../Submenu /index.js': path.resolve(__dirname, './src/components/shims/ui-submenu/index.js'),
-            // Redirect quill-icons root and all sub-paths to the nested copy inside @deriv-com/quill-ui
-            // (the top-level @deriv/quill-icons index.js references icon files that don't exist on disk)
+            // Route all @deriv/quill-icons paths to the top-level package (now complete with all categories)
             '@deriv/quill-icons': path.resolve(
                 __dirname,
-                'node_modules/@deriv-com/quill-ui/node_modules/@deriv/quill-icons/dist/esm/index.js'
+                'node_modules/@deriv/quill-icons/dist/esm/index.js'
             ),
             '@deriv/quill-icons/Legacy': path.resolve(
                 __dirname,
-                'node_modules/@deriv-com/quill-ui/node_modules/@deriv/quill-icons/dist/esm/react/Legacy'
+                'node_modules/@deriv/quill-icons/dist/esm/react/Legacy'
             ),
             '@deriv/quill-icons/LabelPaired': path.resolve(
                 __dirname,
-                'node_modules/@deriv-com/quill-ui/node_modules/@deriv/quill-icons/dist/esm/react/LabelPaired'
+                'node_modules/@deriv/quill-icons/dist/esm/react/LabelPaired'
             ),
             '@deriv/quill-icons/Standalone': path.resolve(
                 __dirname,
-                'node_modules/@deriv-com/quill-ui/node_modules/@deriv/quill-icons/dist/esm/react/Standalone'
+                'node_modules/@deriv/quill-icons/dist/esm/react/Standalone'
             ),
             '@deriv/quill-icons/Flags': path.resolve(
                 __dirname,
-                'node_modules/@deriv-com/quill-ui/node_modules/@deriv/quill-icons/dist/esm/react/Flags'
+                'node_modules/@deriv/quill-icons/dist/esm/react/Flags'
             ),
             '@deriv/quill-icons/Illustration': path.resolve(
                 __dirname,
-                'node_modules/@deriv-com/quill-ui/node_modules/@deriv/quill-icons/dist/esm/react/Illustration'
+                'node_modules/@deriv/quill-icons/dist/esm/react/Illustration'
             ),
             '@deriv/quill-icons/Logo': path.resolve(
                 __dirname,
-                'node_modules/@deriv-com/quill-ui/node_modules/@deriv/quill-icons/dist/esm/react/Logo'
+                'node_modules/@deriv/quill-icons/dist/esm/react/Logo'
             ),
             '@deriv/quill-icons/Currencies': path.resolve(
                 __dirname,
@@ -113,6 +112,11 @@ export default defineConfig({
             '@deriv/quill-icons/TradeTypes': path.resolve(
                 __dirname,
                 'node_modules/@deriv/quill-icons/dist/esm/react/TradeTypes'
+            ),
+            // Ensure rudderstack analytics-js resolves from top-level node_modules
+            '@rudderstack/analytics-js': path.resolve(
+                __dirname,
+                'node_modules/@rudderstack/analytics-js/dist/npm/modern/cjs/index.cjs'
             ),
             // Stub object.fromentries to avoid pulling in broken es-abstract/2024 dependencies
             'object.fromentries': path.resolve(

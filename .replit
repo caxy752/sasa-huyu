@@ -27,7 +27,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run start"
+args = "node --experimental-vm-modules node_modules/@rsbuild/core/bin/rsbuild.js dev"
 waitForPort = 5000
 
 [[ports]]
