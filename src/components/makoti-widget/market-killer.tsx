@@ -19,9 +19,9 @@ interface LogEntry {
 }
 
 /* ── Constants ─────────────────────────────────────────────────────────────── */
-const MAX_TICKS           = 1000;   // mirror over-under-store MAX_TICKS
-const MIN_TICKS_BEFORE_TRADE = 60;  // need enough history for reliable analysis
-const CONFIDENCE_THRESHOLD   = 68;  // only trade high-confidence signals
+const MAX_TICKS              = 1000;  // mirror over-under-store MAX_TICKS
+const MIN_TICKS_BEFORE_TRADE = 30;   // RSI(7) + BB(14) need ~15-20 prices; 30 is safe
+const CONFIDENCE_THRESHOLD   = 72;   // new multi-indicator engine is more selective
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MarketKiller
