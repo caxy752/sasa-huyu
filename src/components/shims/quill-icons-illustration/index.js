@@ -17,3 +17,4 @@ export { IllustrativeListIcon       as DerivLightEmptyCardboardBoxIcon } from '@
 export { IllustrativePlatformsIcon  as DerivLightBotBuilderIcon    } from '@deriv/quill-icons/Illustrative';
 export { IllustrativeOptionsIcon    as DerivLightQuickStrategyIcon } from '@deriv/quill-icons/Illustrative';
 export { IllustrativeMobileIcon     as DerivLightGoogleDriveIcon   } from '@deriv/quill-icons/Illustrative';
+export { IllustrativeCriticalIcon   as DerivLightDeclinedPoaIcon   } from '@deriv/quill-icons/Illustrative';
