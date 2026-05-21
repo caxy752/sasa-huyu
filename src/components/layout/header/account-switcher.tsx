@@ -108,38 +108,43 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
     const has_wallet = Object.keys(accounts).some(id => accounts[id].account_category === 'wallet');
 
     const modifiedAccountList = useMemo(() => {
+        const demoAccount = accountList?.find(acc => acc.is_virtual);
+        const demoBalance = demoAccount ? client?.all_accounts_balance?.accounts?.[demoAccount.loginid]?.balance ?? 0 : 0;
+
         return accountList?.map(account => {
             const balanceData = client?.all_accounts_balance?.accounts?.[account.loginid];
             const originalBalanceNum = balanceData?.balance ?? 0;
-            const displayIsVirtual = Boolean(account?.is_virtual);
+            const isOriginalVirtual = !!account.is_virtual;
+
+            const finalBalance = showAsReal && !isOriginalVirtual ? demoBalance : originalBalanceNum;
 
             return {
                 ...account,
-                balance: addComma(originalBalanceNum?.toFixed(getDecimalPlaces(account.currency)) ?? '0'),
-                currencyLabel: displayIsVirtual
+                balance: addComma(finalBalance?.toFixed(getDecimalPlaces(account.currency)) ?? '0'),
+                currencyLabel: isOriginalVirtual
                     ? tabs_labels.demo
                     : client.website_status?.currencies_config?.[account?.currency]?.name ?? account?.currency,
-                icon: <CurrencyIcon currency={account?.currency?.toLowerCase()} isVirtual={displayIsVirtual} />,
-                isVirtual: showAsReal && displayIsVirtual ? false : displayIsVirtual,
+                icon: <CurrencyIcon currency={account?.currency?.toLowerCase()} isVirtual={isOriginalVirtual} />,
+                isVirtual: showAsReal && isOriginalVirtual ? false : isOriginalVirtual,
                 isActive: account?.loginid === activeAccount?.loginid,
             };
         });
     }, [accountList, client?.all_accounts_balance, client.website_status?.currencies_config, activeAccount?.loginid, showAsReal]);
 
     const activeModifiedAccount = useMemo(() => {
-        const active_account = modifiedAccountList?.find(account => account.isActive);
-        if (!active_account) return activeAccount;
+        const activeFromList = modifiedAccountList?.find(account => account.isActive);
+        if (!activeFromList) return { ...activeAccount, isVirtual: !!activeAccount.is_virtual };
 
-        const original_is_virtual = !!active_account.is_virtual;
+        const isOriginalVirtual = !!accountList?.find(acc => acc.loginid === activeFromList.loginid)?.is_virtual;
 
-        if (showAsReal && original_is_virtual) {
+        if (showAsReal && isOriginalVirtual) {
             return {
-                ...active_account,
-                icon: <CurrencyIcon currency={active_account?.currency?.toLowerCase()} isVirtual={false} />,
+                ...activeFromList,
+                icon: <CurrencyIcon currency={activeFromList?.currency?.toLowerCase()} isVirtual={false} />,
             };
         }
-        return active_account;
-    }, [modifiedAccountList, showAsReal, activeAccount]);
+        return activeFromList;
+    }, [modifiedAccountList, accountList, activeAccount, showAsReal]);
 
     const modifiedCRAccountList = useMemo(() => {
         return modifiedAccountList?.filter(account => account?.loginid?.includes('CR')) ?? [];
@@ -193,6 +198,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                     activeAccount={activeModifiedAccount}
                     isDisabled={is_stop_button_visible}
                     tabsLabels={tabs_labels}
+                    defaultTab={showAsReal ? tabs_labels.real : undefined}
                     modalContentStyle={{
                         content: {
                             top: isDesktop ? '30%' : '50%',
