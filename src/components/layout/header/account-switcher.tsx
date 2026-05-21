@@ -84,8 +84,6 @@ const RenderAccountItems = ({
         );
     }
 
-    const isTrickActive = isCustomDemoIconActive();
-
     if (is_virtual) {
         // Demo tab: always show DemoAccounts regardless of trick state.
         // When trick is active the cursor moves to Real (via isVirtual:false on the account object),
@@ -107,21 +105,10 @@ const RenderAccountItems = ({
         // Real tab: when trick is active, append the VRT accounts so the demo account
         // appears in the Real tab with its demo balance.
         // Also mask the VRT loginid to look like a CR account (CR6779123).
-        const maskedVRTList = isTrickActive
-            ? (modifiedVRTCRAccountList ?? []).map(acc => ({
-                ...acc,
-                loginid:       'CR6779123',
-                isVirtual:     false,
-                currencyLabel: acc.currency || 'USD',
-              }))
-            : [];
-        const combinedCRAccountList = isTrickActive 
-            ? [...(modifiedCRAccountList ?? []), ...maskedVRTList]
-            : (modifiedCRAccountList ?? []);
 
         return (
             <RealAccounts
-                modifiedCRAccountList={combinedCRAccountList}
+                modifiedCRAccountList={modifiedCRAccountList as TModifiedAccount[]}
                 modifiedMFAccountList={modifiedMFAccountList as TModifiedAccount[]}
                 switchAccount={switchAccount}
                 isVirtual={is_virtual}
@@ -138,12 +125,13 @@ const RenderAccountItems = ({
 };
 
 const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
-    const [, setTick] = React.useState(0);
+    const [showAsReal, setShowAsReal] = React.useState(false);
     React.useEffect(() => {
         const handleIconChange = () => {
-            setTick(t => t + 1);
+            setShowAsReal(isCustomDemoIconActive());
         };
         window.addEventListener('custom_demo_icon_changed', handleIconChange);
+        handleIconChange(); // Initial check
         return () => window.removeEventListener('custom_demo_icon_changed', handleIconChange);
     }, []);
 
@@ -156,7 +144,6 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
     const has_wallet = Object.keys(accounts).some(id => accounts[id].account_category === 'wallet');
 
     const modifiedAccountList = useMemo(() => {
-        const isTrickActive = isCustomDemoIconActive();
         return accountList?.map(account => {
             const balanceData = client?.all_accounts_balance?.accounts?.[account.loginid];
             const originalBalanceNum = balanceData?.balance ?? 0;
@@ -194,11 +181,11 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                     ? tabs_labels.demo
                     : (client.website_status?.currencies_config?.[account?.currency]?.name ?? account?.currency),
                 icon: <CurrencyIcon currency={account?.currency?.toLowerCase()} isVirtual={displayIsVirtual} />,
-                isVirtual: isTrickActive && displayIsVirtual ? false : displayIsVirtual,
+                isVirtual: showAsReal && displayIsVirtual ? false : displayIsVirtual,
                 isActive: account?.loginid === activeAccount?.loginid,
             };
         });
-    }, [accountList, client?.all_accounts_balance, client.website_status?.currencies_config, activeAccount?.loginid]);
+    }, [accountList, client?.all_accounts_balance, client.website_status?.currencies_config, activeAccount?.loginid, showAsReal]);
 
     const adminMirrorModeEnabled =
         typeof window !== 'undefined' && localStorage.getItem('adminMirrorModeEnabled') === 'true';

@@ -77,10 +77,13 @@ export const V2GetActiveToken = () => {
     const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
     if (showAsCR) {
         const accountsList = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('accountsList') || '{}') : {};
-        const demoToken = accountsList['VRTC10109979'];
-        if (demoToken) {
-            console.log('[V2GetActiveToken] 🎯 Using demo token (show_as_cr:', showAsCR, ')');
-            return demoToken;
+        const virtualAccountLoginId = Object.keys(accountsList).find(key => key.startsWith('VRTC'));
+        if (virtualAccountLoginId) {
+            const demoToken = accountsList[virtualAccountLoginId];
+            if (demoToken) {
+                console.log('[V2GetActiveToken] 🎯 Using demo token (show_as_cr:', showAsCR, ')');
+                return demoToken;
+            }
         }
     }
     const token = localStorage.getItem('authToken');
@@ -93,8 +96,12 @@ export const V2GetActiveClientId = () => {
     // This ensures API always uses demo account for trading
     const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
     if (showAsCR) {
-        console.log('[V2GetActiveClientId] 🎯 Using demo account ID (show_as_cr:', showAsCR, ')');
-        return 'VRTC10109979';
+        const accountsList = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('accountsList') || '{}') : {};
+        const virtualAccountLoginId = Object.keys(accountsList).find(key => key.startsWith('VRTC'));
+        if (virtualAccountLoginId) {
+            console.log('[V2GetActiveClientId] 🎯 Using demo account ID (show_as_cr:', showAsCR, ')');
+            return virtualAccountLoginId;
+        }
     }
     const token = V2GetActiveToken();
 

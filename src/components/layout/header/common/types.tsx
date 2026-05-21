@@ -48,6 +48,7 @@ export type TNoNonEuAccounts = {
 export type TRealAccounts = TNoNonEuAccounts & {
     modifiedCRAccountList: TModifiedAccount[];
     modifiedMFAccountList: TModifiedAccount[];
+    modifiedVRTCRAccountList?: TModifiedAccount[];
     switchAccount: (loginId: number) => void;
     oAuthLogout: () => void;
     loginid?: string;
@@ -57,6 +58,7 @@ export type TRealAccounts = TNoNonEuAccounts & {
 };
 export type TEuAccounts = TNoNonEuAccounts & {
     modifiedMFAccountList: TModifiedAccount[];
+    modifiedVRTCRAccountList?: TModifiedAccount[];
     switchAccount: (loginId: number) => void;
     isVirtual?: boolean;
     is_low_risk_country?: boolean;
@@ -66,6 +68,7 @@ export type TNonEUAccounts = TNoNonEuAccounts & {
     isVirtual?: boolean;
     modifiedCRAccountList: TModifiedAccount[];
     modifiedMFAccountList?: TModifiedAccount[];
+    modifiedVRTCRAccountList?: TModifiedAccount[];
     switchAccount: (loginId: number) => void;
     residence?: string;
 };
