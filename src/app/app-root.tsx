@@ -6,7 +6,6 @@ import ChunkLoader from '@/components/loader/chunk-loader';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
 import useTMB from '@/hooks/useTMB';
-import { isNewLoggedIn } from '@/auth/NewDerivAuth';
 import { localize } from '@deriv-com/translations';
 import './app-root.scss';
 
@@ -76,14 +75,6 @@ const AppRoot = () => {
 
         const initializeApi = async () => {
             if (!api_base_initialized.current) {
-                // Skip legacy WebSocket init for new auth system users
-                if (isNewLoggedIn()) {
-                    console.log('[APP] New auth user detected, skipping legacy WebSocket init');
-                    api_base_initialized.current = true;
-                    setIsApiInitialized(true);
-                    clearTimeout(timeoutId);
-                    return;
-                }
                 try {
                     await api_base.init();
                     api_base_initialized.current = true;

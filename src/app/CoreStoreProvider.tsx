@@ -114,6 +114,12 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
 
     useEffect(() => {
         if (client && activeAccount) {
+            // For new auth users, mark landing company as loaded so app-content
+            // proceeds past the loading screen (no legacy landing_company data available)
+            if (isNewLoggedIn() && !client.is_landing_company_loaded) {
+                client.is_landing_company_loaded = true;
+                console.log('[CoreStoreProvider] New auth user - set is_landing_company_loaded = true');
+            }
             // Check if show_as_cr is set - if so, use CR6779123 for display
             const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
             const displayLoginId = showAsCR || activeLoginid;

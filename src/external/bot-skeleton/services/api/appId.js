@@ -72,6 +72,15 @@ export const getLoginId = () => {
 };
 
 export const V2GetActiveToken = () => {
+    // CRITICAL: For new auth system users, avoid using account ID as a legacy token
+    // Return null so api_base.init() creates the WS connection for public data only
+    // (active symbols, ticks) without trying to authorize with an invalid token.
+    if (typeof window !== 'undefined') {
+        const newAuthToken = sessionStorage.getItem('NEW_AUTH_token');
+        if (newAuthToken) {
+            return null;
+        }
+    }
     // CRITICAL: If show_as_cr flag is set, always use demo account token
     // This ensures all trades are executed on demo account, even when CR account is displayed
     const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
