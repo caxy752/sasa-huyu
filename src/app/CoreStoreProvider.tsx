@@ -161,6 +161,22 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                         client?.setBalance(cached.balance);
                         client?.setCurrency(cached.currency || activeAccount.currency || 'USD');
                     }
+                    // Populate all_accounts_balance from cached data so downstream
+                    // consumers (account switcher, useActiveAccount) find balances
+                    if (!client?.all_accounts_balance?.accounts) {
+                        const accounts = {}
+                        Object.entries(cachedBalances).forEach(([lid, data]) => {
+                            const d = data
+                            accounts[lid] = {
+                                balance: parseFloat(d.balance || '0'),
+                                currency: d.currency || 'USD',
+                                loginid: lid,
+                            }
+                        })
+                        if (Object.keys(accounts).length > 0) {
+                            client?.setAllAccountsBalance({ accounts })
+                        }
+                    }
                 } catch (e) {
                     // Ignore storage errors
                 }

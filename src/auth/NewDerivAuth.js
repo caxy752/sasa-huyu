@@ -369,7 +369,11 @@ export async function createNewWebSocket() {
     
     // Notify the legacy auth observables so useApiBase / useActiveAccount pick it up
     try {
-      const { setAuthData, setAccountList } = await import(
+      const { 
+        setAuthData, setAccountList, 
+        setConnectionStatus, CONNECTION_STATUS,
+        setIsAuthorized, setIsAuthorizing 
+      } = await import(
         /* webpackChunkName: "connection-status-stream" */
         '@/external/bot-skeleton/services/api/observables/connection-status-stream'
       )
@@ -406,6 +410,9 @@ export async function createNewWebSocket() {
         country:  '',
         account_list: accountList,
       })
+      setConnectionStatus(CONNECTION_STATUS.OPENED)
+      setIsAuthorized(true)
+      setIsAuthorizing(false)
     } catch(e) {
       console.warn("[NEW WS] Could not wire legacy auth state:", e)
     }
