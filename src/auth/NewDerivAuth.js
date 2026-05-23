@@ -114,7 +114,7 @@ export async function handleNewCallback() {
     throw new Error("Missing state parameter from Deriv")
   }
   
-  const savedState = localStorage.getItem(K.state)
+  const savedState = sessionStorage.getItem('deriv_oauth_state')
   
   if (!savedState) {
     throw new Error(
@@ -132,7 +132,7 @@ export async function handleNewCallback() {
     )
   }
   
-  const verifier = localStorage.getItem(K.verifier)
+  const verifier = sessionStorage.getItem('deriv_code_verifier')
   
   if (!verifier) {
     throw new Error(
@@ -173,9 +173,8 @@ export async function handleNewCallback() {
     const errMsg = data.error_description || data.error || 
       "Unknown error"
     console.error("[NEW AUTH] Token error:", errMsg)
-    localStorage.removeItem(K.verifier)
-    localStorage.removeItem(K.state)
-    localStorage.removeItem(K.active)
+    sessionStorage.removeItem('deriv_code_verifier')
+    sessionStorage.removeItem('deriv_oauth_state')
     throw new Error("Login failed: " + errMsg)
   }
   
@@ -186,9 +185,8 @@ export async function handleNewCallback() {
     K.expiry,
     String(Date.now() + (data.expires_in * 1000))
   )
-  localStorage.removeItem(K.verifier)
-  localStorage.removeItem(K.state)
-  localStorage.removeItem(K.active)
+  sessionStorage.removeItem('deriv_code_verifier')
+  sessionStorage.removeItem('deriv_oauth_state')
   
   console.log("[NEW AUTH] Token saved. Login complete.")
   
