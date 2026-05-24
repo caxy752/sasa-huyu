@@ -123,9 +123,9 @@ export function subscribeNewSystemTopics() {
   const ws = window._newSystemWS
   if (!ws || ws.readyState !== WebSocket.OPEN) return false
   try {
-    // One-shot balance request (OTP WS may not support subscribe, so we rely on
-    // explicit balance requests after buy/settle in over-under-store.ts).
-    ws.send(JSON.stringify({ balance: 1 }))
+    // Subscribe to live balance updates — subscribe:1 makes the server push
+    // a new balance message after every trade settlement automatically.
+    ws.send(JSON.stringify({ balance: 1, subscribe: 1 }))
     // Subscribe to all POC updates (matches legacy behavior in over-under-store line 886).
     // If the OTP WS rejects this (requires contract_id), the per-contract subscription
     // in over-under-store's _setupNewSystemTradeHandler serves as fallback.
@@ -642,6 +642,8 @@ export async function createNewWebSocket() {
   ws.onclose = () => {
     console.log("[NEW WS] Closed. Reconnecting in 3s...")
     window._newSystemWSReady = false
+    // Reset so balance subscription is re-sent on the new connection
+    window._newSystemTopicsSubscribed = false
 
     // Reject all pending requests so they don't hang forever
     const err = { error: { code: 'DisconnectError', message: 'New system WS disconnected' } }
