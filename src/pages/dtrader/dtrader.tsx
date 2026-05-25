@@ -6,6 +6,7 @@ import { getMainAppActiveToken, getMainAppActiveLoginId } from '@/external/bot-s
 import { redirectToLogin } from '@/components/shared/utils/login/login';
 import { LocalStore } from '@/components/shared/utils/storage/storage';
 import { isNewLoggedIn } from '@/auth/NewDerivAuth';
+import NewDTrader from './NewDTrader';
 
 const getEffectiveToken = getMainAppActiveToken;
 const getEffectiveLoginId = getMainAppActiveLoginId;
@@ -15,12 +16,7 @@ const Dtrader = observer(() => {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
     if (isNewLoggedIn()) {
-        return (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-                <p>DTrader is not available for new accounts.</p>
-                <p style={{ fontSize: '13px', marginTop: '8px' }}>Use Bot Builder or Over/Under to trade.</p>
-            </div>
-        );
+        return <NewDTrader />;
     }
 
     const handleLogin = () => {

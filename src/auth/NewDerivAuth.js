@@ -1,3 +1,5 @@
+import Cookies from 'js-cookie';
+
 /**
  * Registry of message handlers for the new system (OTP) WebSocket.
  * Handlers survive reconnection: when a new WS is created, all registered
@@ -168,6 +170,18 @@ export function clearNewAuthStorage() {
   sessionStorage.removeItem(K.verifier);
   sessionStorage.removeItem(K.state);
   sessionStorage.removeItem(K.active);
+  // Clear legacy artifacts set by createNewWebSocket that trick isUserLoggedIn()
+  localStorage.removeItem('accountsList');
+  localStorage.removeItem('clientAccounts');
+  localStorage.removeItem('active_loginid');
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('client_account_details');
+  localStorage.removeItem('show_as_cr');
+  localStorage.removeItem('callback_token');
+  localStorage.removeItem('client.accounts');
+  localStorage.removeItem('client.country');
+  sessionStorage.removeItem('cached_balances');
+  try { Cookies.remove('logged_state', { path: '/', domain: window.location.hostname }); } catch {}
 }
 
 async function buildCodeChallenge(verifier) {

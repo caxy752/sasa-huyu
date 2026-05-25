@@ -104,8 +104,14 @@ export const AuthWrapper = () => {
     const { loginInfo, paramsToDelete } = URLUtils.getLoginInfoFromURL();
 
     React.useEffect(() => {
+        // Safety timeout: force auth complete after 30s even if api.authorize() hangs
+        const safetyTimer = setTimeout(() => {
+            setIsAuthComplete(true);
+        }, 30000);
+
         const initializeAuth = async () => {
             await setLocalStorageToken(loginInfo, paramsToDelete, setIsAuthComplete);
+            clearTimeout(safetyTimer);
             URLUtils.filterSearchParams(['lang']);
             setIsAuthComplete(true);
         };

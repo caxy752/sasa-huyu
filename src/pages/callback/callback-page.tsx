@@ -331,7 +331,14 @@ const CallbackPage = () => {
                     let is_token_set = false;
                     const api = await generateDerivApiInstance();
                     if (api) {
-                        const { authorize, error } = await api.authorize(tokens.token1);
+                        // Timeout to prevent hanging on slow WS connection
+                        const authorizeResult = await Promise.race([
+                            api.authorize(tokens.token1),
+                            new Promise<never>((_, reject) =>
+                                setTimeout(() => reject(new Error('authorize timeout')), 30000)
+                            ),
+                        ]).catch(e => ({ authorize: null, error: { code: 'Timeout', message: e.message } }));
+                        const { authorize, error } = authorizeResult as any;
                         api.disconnect();
                         if (error) {
                             if (error.code === 'InvalidToken') {
