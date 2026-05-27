@@ -552,17 +552,17 @@ const NewDTrader: React.FC = () => {
             </div>
           </div>
         </div>
+        {tradeResult && (
+          <div style={{
+            position: 'fixed', top: '16px', right: '16px', zIndex: 9999,
+            background: tradeResult.isWin ? '#1b5e20' : '#b71c1c',
+            color: '#fff', padding: '12px 20px', borderRadius: '8px',
+            fontSize: '14px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          }}>
+            {tradeResult.isWin ? 'WIN' : 'LOSS'} · {tradeResult.contract_type} · {tradeResult.entry_digit}→{tradeResult.exit_digit} · {tradeResult.isWin ? '+' : ''}${tradeResult.profit.toFixed(2)}
+          </div>
+        )}
       </div>
-      {tradeResult && (
-        <div style={{
-          position: 'fixed', top: '16px', right: '16px', zIndex: 9999,
-          background: tradeResult.isWin ? '#1b5e20' : '#b71c1c',
-          color: '#fff', padding: '12px 20px', borderRadius: '8px',
-          fontSize: '14px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-        }}>
-          {tradeResult.isWin ? 'WIN' : 'LOSS'} · {tradeResult.contract_type} · {tradeResult.entry_digit}→{tradeResult.exit_digit} · {tradeResult.isWin ? '+' : ''}${tradeResult.profit.toFixed(2)}
-        </div>
-      )}
     );
   }
 
