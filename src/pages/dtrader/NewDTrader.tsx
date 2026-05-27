@@ -438,8 +438,8 @@ const NewDTrader: React.FC = () => {
             </div>
             <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
               <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
-              <div style={{ position: 'absolute', bottom: '8px', insetInline: 0, display: 'flex', justifyContent: 'center', zIndex: 1, pointerEvents: 'none' }}>
-                <div style={{ display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '6px 10px', pointerEvents: 'auto' }}>
+              <div style={{ position: 'absolute', left: '50%', bottom: '8px', transform: 'translateX(-50%)', zIndex: 1 }}>
+                <div style={{ display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '6px 10px' }}>
                   {Array.from({ length: 10 }, (_, i) => {
                     const isCurrent = currentDigit === i;
                     const isHighlight = exitHighlight?.digit === i;
@@ -448,11 +448,11 @@ const NewDTrader: React.FC = () => {
                     return (
                       <div key={i} style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => setBarrier(String(i))}>
                         <div style={{
-                          width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center',
-                          justifyContent: 'center', margin: '0 auto',
+                          width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center',
+                          justifyContent: 'center',
                           background: isHighlight ? hlColor : (isCurrent ? '#ffeb3b' : (isBarrier ? '#4fc3f7' : 'rgba(255,255,255,0.15)')),
-                          color: (isCurrent || isBarrier) && !isHighlight ? '#000' : '#ddd',
-                          fontWeight: 'bold', fontSize: '12px',
+                          color: (isCurrent || isBarrier) && !isHighlight ? '#000' : '#fff',
+                          fontWeight: 'bold', fontSize: '14px',
                           boxShadow: isCurrent ? '0 0 6px rgba(255,235,59,0.5)' : (isBarrier ? '0 0 6px rgba(79,195,247,0.5)' : 'none'),
                         }}>{i}</div>
                       </div>
