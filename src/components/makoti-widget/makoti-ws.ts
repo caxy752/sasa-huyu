@@ -8,9 +8,9 @@ export const ALL_SYMBOLS = [
 ];
 
 export const SYMBOL_LABELS: Record<string, string> = {
-    R_10: 'V 10', R_25: 'V 25', R_50: 'V 50', R_75: 'V 75', R_100: 'V 100',
-    '1HZ10V': 'V 10 (1s)', '1HZ25V': 'V 25 (1s)', '1HZ50V': 'V 50 (1s)',
-    '1HZ75V': 'V 75 (1s)', '1HZ100V': 'V 100 (1s)',
+    R_10: 'Volatility 10', R_25: 'Volatility 25', R_50: 'Volatility 50', R_75: 'Volatility 75', R_100: 'Volatility 100',
+    '1HZ10V': 'Volatility 10 (1s)', '1HZ25V': 'Volatility 25 (1s)', '1HZ50V': 'Volatility 50 (1s)',
+    '1HZ75V': 'Volatility 75 (1s)', '1HZ100V': 'Volatility 100 (1s)',
 };
 
 export const PIP_SIZES: Record<string, number> = {

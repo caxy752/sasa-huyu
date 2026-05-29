@@ -224,16 +224,16 @@ const OverUnder = observer(() => {
     const totalTicks = tick_history.length || 1;
 
     const volatilityOptions = [
-        { label: 'V 10 Index', value: 'R_10' },
-        { label: 'V 25 Index', value: 'R_25' },
-        { label: 'V 50 Index', value: 'R_50' },
-        { label: 'V 75 Index', value: 'R_75' },
-        { label: 'V 100 Index', value: 'R_100' },
-        { label: 'V 10 (1s)', value: '1HZ10V' },
-        { label: 'V 25 (1s)', value: '1HZ25V' },
-        { label: 'V 50 (1s)', value: '1HZ50V' },
-        { label: 'V 75 (1s)', value: '1HZ75V' },
-        { label: 'V 100 (1s)', value: '1HZ100V' },
+        { label: 'Volatility 10 Index', value: 'R_10' },
+        { label: 'Volatility 25 Index', value: 'R_25' },
+        { label: 'Volatility 50 Index', value: 'R_50' },
+        { label: 'Volatility 75 Index', value: 'R_75' },
+        { label: 'Volatility 100 Index', value: 'R_100' },
+        { label: 'Volatility 10 (1s)', value: '1HZ10V' },
+        { label: 'Volatility 25 (1s)', value: '1HZ25V' },
+        { label: 'Volatility 50 (1s)', value: '1HZ50V' },
+        { label: 'Volatility 75 (1s)', value: '1HZ75V' },
+        { label: 'Volatility 100 (1s)', value: '1HZ100V' },
     ];
 
     const connState = is_authorizing ? 'pulse'
