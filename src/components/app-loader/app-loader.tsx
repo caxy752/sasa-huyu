@@ -10,68 +10,112 @@ interface AppLoaderProps {
     onLoadingComplete: () => void;
 }
 
+function playSiren(ctx: AudioContext, dst: AudioNode) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    gain.gain.value = 0.08;
+    osc.connect(gain);
+    gain.connect(dst);
+    osc.start();
+
+    // Siren: alternate between 800Hz and 1200Hz every 300ms
+    let low = true;
+    const freqInterval = setInterval(() => {
+        osc.frequency.value = low ? 800 : 1200;
+        low = !low;
+    }, 300);
+
+    // Fade out helper
+    const fadeOut = (cb: () => void) => {
+        clearInterval(freqInterval);
+        let vol = 0.08;
+        const fade = setInterval(() => {
+            vol -= 0.008;
+            if (vol <= 0) {
+                gain.gain.value = 0;
+                clearInterval(fade);
+                osc.stop();
+                cb();
+            } else {
+                gain.gain.value = vol;
+            }
+        }, 80);
+    };
+
+    return { fadeOut };
+}
+
+function playClang(ctx: AudioContext, dst: AudioNode) {
+    const now = ctx.currentTime;
+
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'square';
+    osc1.frequency.value = 1800;
+    gain1.gain.setValueAtTime(0.15, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    osc1.connect(gain1);
+    gain1.connect(dst);
+    osc1.start(now);
+    osc1.stop(now + 1.2);
+
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.value = 1200;
+    gain2.gain.setValueAtTime(0.1, now);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+    osc2.connect(gain2);
+    gain2.connect(dst);
+    osc2.start(now);
+    osc2.stop(now + 0.8);
+}
+
 const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete }) => {
     const [show, setShow] = useState(true);
     const [soundStarted, setSoundStarted] = useState(_audioUnlocked);
-    const clangSoundRef = useRef<HTMLAudioElement | null>(null);
-    const sirenSoundRef = useRef<HTMLAudioElement | null>(null);
+    const audioCtxRef = useRef<AudioContext | null>(null);
+    const sirenFadeRef = useRef<(() => void) | null>(null);
     const logoText = "MAKOTI TRADERS";
 
     useEffect(() => {
-        // --- SOUND INITIALIZATION ---
-        try {
-            sirenSoundRef.current = new Audio('/assets/media/siren.mp3');
-            sirenSoundRef.current.loop = true;
-            sirenSoundRef.current.volume = 0.2;
-        } catch (e) { 
-            console.error('Siren sound not found. Place it in /public/assets/media/siren.mp3');
-        }
-
-        try {
-            clangSoundRef.current = new Audio('/assets/media/clang.mp3');
-            clangSoundRef.current.volume = 0.6;
-        } catch (e) {
-            console.error('Clang sound not found. Place it in /public/assets/media/clang.mp3');
-        }
-
-        // If audio was already unlocked from a previous play click, auto-start
         if (_audioUnlocked) {
-            clangSoundRef.current?.play().catch(() => {});
-            sirenSoundRef.current?.play().catch(() => {});
+            // Auto-start if previously unlocked
+            startSiren();
         }
 
-        // --- SEQUENCE COMPLETION ---
         const sequenceTimer = setTimeout(() => {
             setShow(false);
-            // Fade out siren sound
-            if (sirenSoundRef.current) {
-                let vol = sirenSoundRef.current.volume;
-                const fadeOut = setInterval(() => {
-                    if (vol > 0.05) {
-                        vol -= 0.05;
-                        sirenSoundRef.current!.volume = vol;
-                    } else {
-                        sirenSoundRef.current?.pause();
-                        clearInterval(fadeOut);
-                    }
-                }, 100);
+            // Fade out siren
+            if (sirenFadeRef.current) {
+                sirenFadeRef.current();
+                sirenFadeRef.current = null;
+            } else if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+                audioCtxRef.current.close().catch(() => {});
             }
             onLoadingComplete();
         }, 4000);
 
         return () => {
             clearTimeout(sequenceTimer);
-            // Don't pause siren if it's still looping — let it fade out naturally
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [onLoadingComplete]);
+
+    function startSiren() {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioCtxRef.current = ctx;
+        playClang(ctx, ctx.destination);
+        const siren = playSiren(ctx, ctx.destination);
+        sirenFadeRef.current = siren.fadeOut;
+    }
 
     const handlePlaySound = () => {
         if (_audioUnlocked) return;
         _audioUnlocked = true;
         setSoundStarted(true);
-        // Play both sounds immediately (user gesture = allowed)
-        clangSoundRef.current?.play().catch(() => {});
-        sirenSoundRef.current?.play().catch(() => {});
+        startSiren();
     };
 
     if (!show) return null;
