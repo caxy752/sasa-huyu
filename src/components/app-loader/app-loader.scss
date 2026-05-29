@@ -218,6 +218,36 @@
     }
 }
 
+.sound-unlock-btn {
+    position: absolute;
+    bottom: 15%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    padding: 14px 36px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #0ff;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #0ff;
+    border-radius: 8px;
+    cursor: pointer;
+    animation: pulse-glow 1.5s ease-in-out infinite;
+    text-transform: uppercase;
+    letter-spacing: 0.15rem;
+    transition: all 0.2s;
+}
+.sound-unlock-btn:hover {
+    background: rgba(0, 255, 255, 0.15);
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.4);
+    transform: translateX(-50%) scale(1.05);
+}
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 255, 0.3); }
+    50% { box-shadow: 0 0 30px rgba(0, 255, 255, 0.7); }
+}
+
 .film-grain {
     position: absolute;
     top: 0;

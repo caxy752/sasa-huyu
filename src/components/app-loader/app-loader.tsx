@@ -2,12 +2,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './app-loader.scss';
 
+// Module-level flag: stays true once user clicks play, survives component remount
+let _audioUnlocked = false;
+export function isAudioUnlocked() { return _audioUnlocked; }
+
 interface AppLoaderProps {
     onLoadingComplete: () => void;
 }
 
 const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete }) => {
     const [show, setShow] = useState(true);
+    const [soundStarted, setSoundStarted] = useState(_audioUnlocked);
     const clangSoundRef = useRef<HTMLAudioElement | null>(null);
     const sirenSoundRef = useRef<HTMLAudioElement | null>(null);
     const logoText = "MAKOTI TRADERS";
@@ -29,14 +34,11 @@ const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete }) => {
             console.error('Clang sound not found. Place it in /public/assets/media/clang.mp3');
         }
 
-        // --- TIMED SOUND EVENTS ---
-        const clangTimer = setTimeout(() => {
-            clangSoundRef.current?.play().catch(e => console.warn('Clang sound blocked'));
-        }, 1500); // The "Black Out" Start
-
-        const sirenTimer = setTimeout(() => {
-            sirenSoundRef.current?.play().catch(e => console.warn('Siren sound autoplay blocked.'));
-        }, 1500);
+        // If audio was already unlocked from a previous play click, auto-start
+        if (_audioUnlocked) {
+            clangSoundRef.current?.play().catch(() => {});
+            sirenSoundRef.current?.play().catch(() => {});
+        }
 
         // --- SEQUENCE COMPLETION ---
         const sequenceTimer = setTimeout(() => {
@@ -55,17 +57,22 @@ const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete }) => {
                 }, 100);
             }
             onLoadingComplete();
-        }, 4000); // Total duration of the cinematic sequence (Reduced for performance and UX)
+        }, 4000);
 
-        // --- CLEANUP --- 
         return () => {
-            clearTimeout(clangTimer);
-            clearTimeout(sirenTimer);
             clearTimeout(sequenceTimer);
-            sirenSoundRef.current?.pause();
-            clangSoundRef.current?.pause();
+            // Don't pause siren if it's still looping — let it fade out naturally
         };
     }, [onLoadingComplete]);
+
+    const handlePlaySound = () => {
+        if (_audioUnlocked) return;
+        _audioUnlocked = true;
+        setSoundStarted(true);
+        // Play both sounds immediately (user gesture = allowed)
+        clangSoundRef.current?.play().catch(() => {});
+        sirenSoundRef.current?.play().catch(() => {});
+    };
 
     if (!show) return null;
 
@@ -86,6 +93,12 @@ const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete }) => {
             <p className='subtitle subtitle-3'>&gt; Activating AI Core: Version 2.0</p>
             <p className='subtitle subtitle-4'>&gt; Real-time Analytics & Reporting</p>
             <p className='subtitle subtitle-5'>&gt; Welcome, Trader.</p>
+
+            {!soundStarted && (
+                <button className='sound-unlock-btn' onClick={handlePlaySound}>
+                    🔊 PLAY SIREN
+                </button>
+            )}
 
             <div className='film-grain'></div>
             <div className='vignette'></div>
