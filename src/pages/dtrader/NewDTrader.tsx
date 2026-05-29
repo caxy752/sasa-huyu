@@ -98,6 +98,7 @@ const NewDTrader: React.FC = () => {
   const [chartStyle, setChartStyle] = useState<'line' | 'candle'>('line');
   const [timeframe, setTimeframe] = useState(60);
   const [showIndicators, setShowIndicators] = useState(false);
+  const [tickCounter, setTickCounter] = useState(0);
   const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>([]);
   const indicatorRef = useRef<IndicatorConfig[]>([]);
   const indicatorValues = useRef<Map<string, (number | null)[]>>(new Map());
@@ -234,17 +235,12 @@ const NewDTrader: React.FC = () => {
       return;
     }
 
+    const pOff = panPx.current;
     const visibleCount = Math.max(10, Math.floor(300 / zoomRef.current));
-    const visible = prices.slice(-visibleCount);
+    const sliceStart = Math.max(0, prices.length - visibleCount - pOff);
+    const visible = prices.slice(sliceStart, sliceStart + visibleCount);
     let minP = Math.min(...visible);
     let maxP = Math.max(...visible);
-    // Extend y-range to include accumulator barrier and entry price
-    const accuContracts = activeContractsRef.current.filter(c => !c.is_sold && (c.contract_type === 'ACCU' || tradeTypeRef.current === 'accumulator') && c.entry_tick > 0);
-    for (const ac of accuContracts) {
-      const barrier = ac.entry_tick * 2;
-      if (barrier > maxP) maxP = barrier;
-      if (ac.entry_tick < minP) minP = ac.entry_tick;
-    }
     const range = maxP - minP || 1;
     const padding = range * 0.08;
     const yMin = minP - padding;
@@ -332,8 +328,9 @@ const NewDTrader: React.FC = () => {
     const vals = indicatorValues.current;
     const prices = tickPrices.current;
     const pOff = panPx.current;
-    const sliceStart = Math.max(0, prices.length - 300 - pOff);
-    const visible = prices.slice(sliceStart);
+    const vc = Math.max(10, Math.floor(300 / zoomRef.current));
+    const sliceStart = Math.max(0, prices.length - vc - pOff);
+    const visible = prices.slice(sliceStart, sliceStart + vc);
     if (visible.length < 2) return;
     const minP = Math.min(...visible), maxP = Math.max(...visible);
     const range = maxP - minP || 1;
@@ -342,28 +339,38 @@ const NewDTrader: React.FC = () => {
     const yRange = yMax - yMin;
     const lToY = (v: number) => pad.top + chartH - ((v - yMin) / yRange) * chartH;
 
+    const lToX = (absIdx: number) => {
+      const relIdx = absIdx - sliceStart;
+      if (relIdx < 0 || relIdx >= visible.length) return -1;
+      return pad.left + (relIdx / (visible.length - 1)) * chartW;
+    };
+
     for (const ind of inds) {
       if (ind.pane !== 'overlay') continue;
       if (ind.id === 'sma') {
         const v = vals.get('sma'); if (!v) continue;
         ctx.strokeStyle = ind.color; ctx.lineWidth = 1.5;
         ctx.beginPath(); let started = false;
-        v.forEach((val, i) => {
-          if (val === null) { started = false; return; }
-          const x = toX(i), y = lToY(val);
+        for (let i = sliceStart; i < sliceStart + visible.length; i++) {
+          if (i >= v.length) break;
+          const val = v[i]; if (val === null) { started = false; continue; }
+          const x = lToX(i); if (x < 0) { started = false; continue; }
+          const y = lToY(val);
           if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
-        });
+        }
         ctx.stroke();
       }
       if (ind.id === 'ema') {
         const v = vals.get('ema'); if (!v) continue;
         ctx.strokeStyle = ind.color; ctx.lineWidth = 1.5;
         ctx.beginPath(); let started = false;
-        v.forEach((val, i) => {
-          if (val === null) { started = false; return; }
-          const x = toX(i), y = lToY(val);
+        for (let i = sliceStart; i < sliceStart + visible.length; i++) {
+          if (i >= v.length) break;
+          const val = v[i]; if (val === null) { started = false; continue; }
+          const x = lToX(i); if (x < 0) { started = false; continue; }
+          const y = lToY(val);
           if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
-        });
+        }
         ctx.stroke();
       }
       if (ind.id === 'bb') {
@@ -372,19 +379,34 @@ const NewDTrader: React.FC = () => {
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.strokeStyle = ind.color;
-        // Upper
         ctx.beginPath(); let s = false;
-        up.forEach((val, i) => { if (val === null) { s = false; return; } const x = toX(i), y = lToY(val); if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y); });
+        for (let i = sliceStart; i < sliceStart + visible.length; i++) {
+          if (i >= up.length) break;
+          const val = up[i]; if (val === null) { s = false; continue; }
+          const x = lToX(i); if (x < 0) { s = false; continue; }
+          const y = lToY(val);
+          if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y);
+        }
         ctx.stroke();
-        // Lower
         ctx.beginPath(); s = false;
-        low.forEach((val, i) => { if (val === null) { s = false; return; } const x = toX(i), y = lToY(val); if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y); });
+        for (let i = sliceStart; i < sliceStart + visible.length; i++) {
+          if (i >= low.length) break;
+          const val = low[i]; if (val === null) { s = false; continue; }
+          const x = lToX(i); if (x < 0) { s = false; continue; }
+          const y = lToY(val);
+          if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y);
+        }
         ctx.stroke();
         ctx.setLineDash([]);
-        // Middle
         ctx.strokeStyle = ind.color; ctx.lineWidth = 0.5;
         ctx.beginPath(); s = false;
-        mid.forEach((val, i) => { if (val === null) { s = false; return; } const x = toX(i), y = lToY(val); if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y); });
+        for (let i = sliceStart; i < sliceStart + visible.length; i++) {
+          if (i >= mid.length) break;
+          const val = mid[i]; if (val === null) { s = false; continue; }
+          const x = lToX(i); if (x < 0) { s = false; continue; }
+          const y = lToY(val);
+          if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y);
+        }
         ctx.stroke();
       }
     }
@@ -392,18 +414,30 @@ const NewDTrader: React.FC = () => {
 
   function drawBelowIndicators(ctx: CanvasRenderingContext2D, W: number, H: number, paneH: number, pad: any, chartW: number, chartH: number) {
     const inds = indicatorRef.current.filter(i => i.pane === 'below');
-    const paneTop = pad.top + chartH + 5;
-    const panePad = { top: 2, bottom: 2, left: pad.left, right: pad.right };
-    const paneChartH = paneH - panePad.top - panePad.bottom;
+    if (inds.length === 0) return;
     const prices = tickPrices.current;
-    const visible = prices.slice(-Math.max(10, Math.floor(300 / zoomRef.current)));
-
+    const pOff = panPx.current;
+    const vc = Math.max(10, Math.floor(300 / zoomRef.current));
+    const sliceStart = Math.max(0, prices.length - vc - pOff);
+    const visible = prices.slice(sliceStart, sliceStart + vc);
     if (visible.length < 2) return;
-    let pMin = Infinity, pMax = -Infinity;
-    visible.forEach(v => { pMin = Math.min(pMin, v); pMax = Math.max(pMax, v); });
-    const pRange = pMax - pMin || 1;
 
-    for (const ind of inds) {
+    const paneTop = pad.top + chartH + 5;
+    const panePad = { top: 6, bottom: 4, left: pad.left, right: pad.right };
+    const count = inds.length;
+    const totalPaneH = paneH - panePad.top - panePad.bottom;
+    const perPaneH = Math.max(30, Math.floor(totalPaneH / count));
+
+    const lToPaneX = (absIdx: number) => {
+      const relIdx = absIdx - sliceStart;
+      if (relIdx < 0 || relIdx >= visible.length) return -1;
+      return pad.left + (relIdx / (visible.length - 1)) * chartW;
+    };
+
+    inds.forEach((ind, idx) => {
+      const pTop = paneTop + idx * perPaneH;
+      const pHeight = perPaneH;
+
       let values: (number | null)[] | undefined;
       let extraValues: (number | null)[] | undefined;
       let extraValues2: (number | null)[] | undefined;
@@ -434,29 +468,21 @@ const NewDTrader: React.FC = () => {
         values?.forEach(v => { if (v !== null) { minVal = Math.min(minVal, v); maxVal = Math.max(maxVal, v); } });
         if (minVal === Infinity) { minVal = -100; maxVal = 100; }
       }
-      if (!values) continue;
 
       const tMin = minVal, tMax = maxVal, tRange = tMax - tMin || 1;
-      const toPaneY = (v: number) => paneTop + panePad.top + paneChartH - ((v - tMin) / tRange) * paneChartH;
-      const toPaneX = (i: number) => pad.left + (i / (visible.length - 1)) * chartW;
+      const toPaneY = (v: number) => pTop + pHeight - panePad.bottom - ((v - tMin) / tRange) * (pHeight - panePad.bottom - panePad.top);
 
       // Background
       ctx.fillStyle = '#1a1a1a';
-      ctx.fillRect(pad.left, paneTop + panePad.top, chartW, paneChartH);
-
-      // Grid
-      ctx.strokeStyle = '#2a2a2a';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(pad.left, paneTop + panePad.top);
-      ctx.lineTo(W - pad.right, paneTop + panePad.top);
-      ctx.stroke();
+      ctx.fillRect(pad.left, pTop, chartW, pHeight);
 
       // Label
       ctx.fillStyle = '#666';
       ctx.font = '9px sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(ind.label, pad.left + 2, paneTop + panePad.top + 10);
+      ctx.fillText(ind.label + (values ? '' : ' (waiting for data...)'), pad.left + 2, pTop + 10);
+
+      if (!values) return;
 
       // Reference lines (RSI 30/70, etc)
       if (ind.id === 'rsi') {
@@ -466,34 +492,38 @@ const NewDTrader: React.FC = () => {
       }
 
       // Draw MACD histogram
-      if (ind.id === 'macd' && values) {
+      if (ind.id === 'macd') {
         const zeroY = toPaneY(0);
-        values.forEach((v, i) => {
-          if (v === null) return;
-          const x = toPaneX(i);
+        for (let i = sliceStart; i < sliceStart + visible.length; i++) {
+          if (i >= values.length) break;
+          const v = values[i]; if (v === null) continue;
+          const x = lToPaneX(i); if (x < 0) continue;
           ctx.fillStyle = v >= 0 ? '#26a69a' : '#ef5350';
-          ctx.fillRect(x - 1, v >= 0 ? zeroY - v / tRange * paneChartH : zeroY, 3, Math.abs(v) / tRange * paneChartH);
-        });
-        // MACD line
+          const barH = Math.abs(v) / tRange * (pHeight - panePad.bottom - panePad.top);
+          ctx.fillRect(x - 1, v >= 0 ? zeroY - barH : zeroY, 3, Math.max(1, barH));
+        }
         if (extraValues) {
           ctx.strokeStyle = '#00bcd4'; ctx.lineWidth = 1;
           ctx.beginPath(); let s = false;
-          extraValues.forEach((v, i) => {
-            if (v === null) { s = false; return; }
-            const x = toPaneX(i), y = toPaneY(v);
+          for (let i = sliceStart; i < sliceStart + visible.length; i++) {
+            if (i >= extraValues.length) break;
+            const v = extraValues[i]; if (v === null) { s = false; continue; }
+            const x = lToPaneX(i); if (x < 0) { s = false; continue; }
+            const y = toPaneY(v);
             if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y);
-          });
+          }
           ctx.stroke();
         }
-        // Signal line
         if (extraValues2) {
           ctx.strokeStyle = '#ff7043'; ctx.lineWidth = 1;
           ctx.beginPath(); let s = false;
-          extraValues2.forEach((v, i) => {
-            if (v === null) { s = false; return; }
-            const x = toPaneX(i), y = toPaneY(v);
+          for (let i = sliceStart; i < sliceStart + visible.length; i++) {
+            if (i >= extraValues2.length) break;
+            const v = extraValues2[i]; if (v === null) { s = false; continue; }
+            const x = lToPaneX(i); if (x < 0) { s = false; continue; }
+            const y = toPaneY(v);
             if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y);
-          });
+          }
           ctx.stroke();
         }
         return;
@@ -502,30 +532,86 @@ const NewDTrader: React.FC = () => {
       // Draw line
       ctx.strokeStyle = ind.color; ctx.lineWidth = 1.5;
       ctx.beginPath(); let started = false;
-      values.forEach((v, i) => {
-        if (v === null) { started = false; return; }
-        const x = toPaneX(i), y = toPaneY(v);
+      for (let i = sliceStart; i < sliceStart + visible.length; i++) {
+        if (i >= values.length) break;
+        const v = values[i]; if (v === null) { started = false; continue; }
+        const x = lToPaneX(i); if (x < 0) { started = false; continue; }
+        const y = toPaneY(v);
         if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
-      });
+      }
       ctx.stroke();
 
       // Second line (for stoch)
       if (ind.id === 'stoch' && extraValues) {
         ctx.strokeStyle = '#ff9800'; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
         ctx.beginPath(); started = false;
-        extraValues.forEach((v, i) => {
-          if (v === null) { started = false; return; }
-          const x = toPaneX(i), y = toPaneY(v);
+        for (let i = sliceStart; i < sliceStart + visible.length; i++) {
+          if (i >= extraValues.length) break;
+          const v = extraValues[i]; if (v === null) { started = false; continue; }
+          const x = lToPaneX(i); if (x < 0) { started = false; continue; }
+          const y = toPaneY(v);
           if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
-        });
+        }
         ctx.stroke();
         ctx.setLineDash([]);
       }
+    });
+  }
+
+  function drawSingleAccuBarrier(ctx: CanvasRenderingContext2D, W: number, pad: any, chartW: number, chartH: number, toY: (v: number) => number, entryTick: number, entryIndex: number | undefined, isWin: boolean | undefined) {
+    const barrier = entryTick * 2;
+    const by = toY(barrier);
+    const barrierY = Math.max(pad.top, Math.min(pad.top + chartH, by));
+    const isWon = isWin === true;
+    const barrierColor = isWon ? '#4caf50' : (isWin === false ? '#f44336' : '#ff9800');
+    const isClippedAbove = barrierY !== by && by < pad.top;
+
+    let barrierStartX = pad.left;
+    if (entryIndex != null) {
+      const pOff = panPx.current;
+      const vc = Math.max(10, Math.floor(300 / zoomRef.current));
+      const prices = tickPrices.current;
+      const lastIdx = prices.length - 1;
+      const sliceStart = Math.max(0, Math.min(lastIdx, lastIdx - vc + 1 - pOff));
+      const actualVc = Math.max(2, Math.min(vc, prices.length - sliceStart));
+      const relPos = (entryIndex - sliceStart) / actualVc;
+      if (relPos >= 0 && relPos <= 1) {
+        barrierStartX = pad.left + relPos * chartW;
+      }
+    }
+
+    ctx.strokeStyle = barrierColor;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(barrierStartX, barrierY);
+    ctx.lineTo(W - pad.right, barrierY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = barrierColor;
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Barrier ${barrier.toFixed(2)}`, barrierStartX + 4, barrierY - 4);
+    if (isClippedAbove) {
+      ctx.fillText(`▲ ${barrier.toFixed(2)}`, barrierStartX + 4, pad.top + 10);
     }
   }
 
   function drawContractOverlays(ctx: CanvasRenderingContext2D, W: number, H: number, pad: any, chartW: number, chartH: number, toY: (v: number) => number) {
     const contracts = activeContractsRef.current;
+    const pOff = panPx.current;
+    const vc = Math.max(10, Math.floor(300 / zoomRef.current));
+    const prices = tickPrices.current;
+    const lastIdx = prices.length - 1;
+    const sliceStart = Math.max(0, Math.min(lastIdx, lastIdx - vc + 1 - pOff));
+    const actualVc = Math.max(2, Math.min(vc, prices.length - sliceStart));
+
+    // ── Historical accumulator barriers (always visible) ──
+    contractHistoryRef.current.forEach(c => {
+      if (c.contract_type !== 'ACCU' || !c.entry_tick || c.entry_tick <= 0) return;
+      drawSingleAccuBarrier(ctx, W, pad, chartW, chartH, toY, c.entry_tick, c.entry_index, c.is_win);
+    });
+
     if (contracts.length === 0) return;
 
     contracts.forEach(c => {
@@ -552,10 +638,8 @@ const NewDTrader: React.FC = () => {
       ctx.fillText(entryLabel, W - pad.right - 4, ey - 4);
 
       // Small circle at entry price on current visible edge
-      const lastIdx = tickPrices.current.length - 1;
-      const vc = Math.max(10, Math.floor(300 / zoomRef.current));
       if (c.entry_index != null) {
-        const relPos = (c.entry_index - Math.max(0, lastIdx - (vc - 1))) / (vc - 1);
+        const relPos = (c.entry_index - sliceStart) / actualVc;
         if (relPos >= 0 && relPos <= 1) {
           const ex = pad.left + relPos * chartW;
           ctx.beginPath();
@@ -600,49 +684,39 @@ const NewDTrader: React.FC = () => {
         ctx.textAlign = 'right';
       }
 
-      // Accumulator boundary lines
-      if ((c.contract_type === 'ACCU' || tradeTypeRef.current === 'accumulator') && c.entry_index != null && entryPrice > 0) {
-        const barrier = entryPrice * 2;
+      // Accumulator: barrier + growth curve + profit
+      if ((c.contract_type === 'ACCU' || tradeTypeRef.current === 'accumulator') && entryPrice > 0) {
         const rate = growthRateRef.current;
-        // Barrier line (red, horizontal)
-        const by = toY(barrier);
-        ctx.strokeStyle = '#f44336';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([6, 4]);
-        ctx.beginPath();
-        ctx.moveTo(pad.left, by);
-        ctx.lineTo(W - pad.right, by);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = '#f44336';
-        ctx.font = 'bold 9px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(`Barrier ${barrier.toFixed(2)}`, pad.left + 4, by - 4);
+        drawSingleAccuBarrier(ctx, W, pad, chartW, chartH, toY, entryPrice, c.entry_index, undefined);
 
-        // Growth curve (green dotted, from entry across visible range)
-        const lastIdx = tickPrices.current.length - 1;
-        const vc = Math.max(10, Math.floor(300 / zoomRef.current));
-        const visibleStart = Math.max(0, lastIdx - (vc - 1));
-        ctx.strokeStyle = '#4caf50';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 2]);
-        ctx.beginPath();
-        let started = false;
-        for (let i = Math.max(c.entry_index, visibleStart); i <= lastIdx; i++) {
-          const ticksSinceEntry = i - c.entry_index;
-          const growthVal = entryPrice * Math.pow(1 + rate, ticksSinceEntry);
-          const gx = pad.left + ((i - visibleStart) / (vc - 1)) * chartW;
-          const gy = toY(growthVal);
-          if (!started) { ctx.moveTo(gx, gy); started = true; } else ctx.lineTo(gx, gy);
+        // Growth curve (green, from entry to latest tick)
+        if (c.entry_index != null) {
+          ctx.strokeStyle = '#4caf50';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([2, 2]);
+          ctx.beginPath();
+          let started = false;
+          for (let i = Math.max(c.entry_index, sliceStart); i <= Math.min(lastIdx, sliceStart + actualVc - 1); i++) {
+            const ticksSinceEntry = i - c.entry_index;
+            const growthVal = entryPrice * Math.pow(1 + rate, ticksSinceEntry);
+            const gx = pad.left + ((i - sliceStart) / (actualVc - 1)) * chartW;
+            const gy = toY(growthVal);
+            const clampedGy = Math.max(pad.top, Math.min(pad.top + chartH, gy));
+            if (!started) { ctx.moveTo(gx, clampedGy); started = true; } else ctx.lineTo(gx, clampedGy);
+          }
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Current profit label (top-right of chart)
+          const latestGrowth = entryPrice * Math.pow(1 + rate, lastIdx - c.entry_index);
+          const currentProfit = latestGrowth - entryPrice;
+          const profitColor = currentProfit >= 0 ? '#4caf50' : '#f44336';
+          const profitSign = currentProfit >= 0 ? '+' : '';
+          ctx.fillStyle = profitColor;
+          ctx.font = 'bold 11px sans-serif';
+          ctx.textAlign = 'right';
+          ctx.fillText(`${profitSign}$${currentProfit.toFixed(2)}`, W - pad.right - 4, pad.top + 28);
         }
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Growth label
-        ctx.fillStyle = '#4caf50';
-        ctx.font = '9px sans-serif';
-        ctx.textAlign = 'right';
-        ctx.fillText('Growth', W - pad.right - 4, toY(entryPrice * (1 + rate)) - 4);
       }
     });
   }
@@ -820,6 +894,7 @@ const NewDTrader: React.FC = () => {
           tickEpochs.current = [...tickEpochs.current.slice(-MAX_TICKS + 1), tick.epoch || 0];
           priceRef.current = tick.quote; digitRef.current = digit;
           setCurrentPrice(tick.quote); setCurrentDigit(digit);
+          setTickCounter(n => n + 1);
           setTickHistory(prev => {
             const next = [...prev.slice(-MAX_TICKS + 1), digit];
             const counts = Array(10).fill(0) as number[];
@@ -915,7 +990,7 @@ const NewDTrader: React.FC = () => {
       }
     }
     indicatorValues.current = vals;
-  }, [activeIndicators, tickPrices.current.length, candleData.current.length]);
+  }, [activeIndicators, tickCounter, candleData.current.length]);
 
   useEffect(() => {
     const unsub = onNewSystemMessage((event: MessageEvent) => {
@@ -1044,12 +1119,11 @@ const NewDTrader: React.FC = () => {
       const res = await sendViaNewSystemWithPromise({ sell: 1, contract_id: contractId });
       if (res?.error) {
         console.error('Sell error:', res.error);
-        setIsTrading(false);
       }
     } catch (e) {
       console.error('Sell failed:', e);
-      setIsTrading(false);
     }
+    setIsTrading(false);
   };
 
   const requestProposal = async (ct: string) => {
