@@ -104,11 +104,13 @@ const NewDTrader: React.FC = () => {
   const isPanning = useRef(false);
   const panStartX = useRef(0);
   const panStartPx = useRef(0);
+  const zoomRef = useRef(1);
   const chartHeightPct = useRef(1);
   const isResizing = useRef(false);
   const resizeStartY = useRef(0);
   const resizeStartPct = useRef(1);
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const settledContractIds = useRef<Set<string>>(new Set());
 
   const isPhone = typeof window !== 'undefined' && window.innerWidth < 768;
   const contractTypes = TRADE_TYPES.find(t => t.value === tradeType)?.label || 'Rise/Fall';
@@ -148,7 +150,8 @@ const NewDTrader: React.FC = () => {
         ctx.fillText('Waiting for candles...', W / 2, H / 2);
         return;
       }
-      const vis = candles.slice(-80);
+      const candleCount = Math.max(5, Math.floor(80 / zoomRef.current));
+      const vis = candles.slice(-candleCount);
       let cMin = Infinity, cMax = -Infinity;
       vis.forEach(c => { cMin = Math.min(cMin, c.low); cMax = Math.max(cMax, c.high); });
       const cRange = cMax - cMin || 1;
@@ -228,7 +231,8 @@ const NewDTrader: React.FC = () => {
       return;
     }
 
-    const visible = prices.slice(-300);
+    const visibleCount = Math.max(10, Math.floor(300 / zoomRef.current));
+    const visible = prices.slice(-visibleCount);
     const minP = Math.min(...visible);
     const maxP = Math.max(...visible);
     const range = maxP - minP || 1;
@@ -382,7 +386,7 @@ const NewDTrader: React.FC = () => {
     const panePad = { top: 2, bottom: 2, left: pad.left, right: pad.right };
     const paneChartH = paneH - panePad.top - panePad.bottom;
     const prices = tickPrices.current;
-    const visible = prices.slice(-300);
+    const visible = prices.slice(-Math.max(10, Math.floor(300 / zoomRef.current)));
 
     if (visible.length < 2) return;
     let pMin = Infinity, pMax = -Infinity;
@@ -539,8 +543,9 @@ const NewDTrader: React.FC = () => {
 
       // Small circle at entry price on current visible edge
       const lastIdx = tickPrices.current.length - 1;
+      const vc = Math.max(10, Math.floor(300 / zoomRef.current));
       if (c.entry_index != null) {
-        const relPos = (c.entry_index - Math.max(0, lastIdx - 299)) / 299;
+        const relPos = (c.entry_index - Math.max(0, lastIdx - (vc - 1))) / (vc - 1);
         if (relPos >= 0 && relPos <= 1) {
           const ex = pad.left + relPos * chartW;
           ctx.beginPath();
@@ -611,6 +616,53 @@ const NewDTrader: React.FC = () => {
     ctx.fillText(exitLabel, pad.left + 4, ey - 4);
   }
 
+  function checkAutoSettle() {
+    const contracts = activeContractsRef.current;
+    if (contracts.length === 0) return;
+    const prices = tickPrices.current;
+    const toSettle: ContractInfo[] = [];
+
+    for (const c of contracts) {
+      if (c.is_sold || settledContractIds.current.has(c.id)) continue;
+      if (c.duration_unit === 't' && c.entry_index != null) {
+        const elapsed = prices.length - c.entry_index;
+        if (elapsed >= (c.duration || 1)) {
+          toSettle.push(c);
+        }
+      }
+    }
+
+    if (toSettle.length === 0) return;
+
+    for (const c of toSettle) {
+      settledContractIds.current.add(c.id);
+      const exitPrice = prices[prices.length - 1];
+      const exitD = extractDigit(exitPrice, pipSizeRef.current);
+
+      setExitHighlight({ digit: exitD, win: false });
+      setTimeout(() => setExitHighlight(null), 3000);
+      setTradeResult({
+        isWin: false, profit: 0,
+        contract_type: c.contract_type, entry_digit: c.entry_digit, exit_digit: exitD,
+      });
+
+      setActiveContracts(prev => {
+        activeContractsRef.current = prev.filter(p => p.id !== c.id);
+        return activeContractsRef.current;
+      });
+
+      setContractHistory(prev => {
+        if (prev.find(p => p.id === c.id)) return prev;
+        return [...prev, {
+          ...c,
+          exit_tick: exitPrice, exit_digit: exitD,
+          exit_epoch: tickEpochs.current[tickEpochs.current.length - 1],
+          profit: 0, is_sold: true, is_win: false,
+        }];
+      });
+    }
+  }
+
   useEffect(() => {
     if (!canvasRef.current) return;
     const ro = new ResizeObserver(() => drawChart());
@@ -645,14 +697,21 @@ const NewDTrader: React.FC = () => {
       const c = canvasRef.current;
       if (c) c.style.cursor = 'crosshair';
     };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      zoomRef.current = Math.max(0.2, Math.min(10, zoomRef.current * delta));
+    };
     canvas.addEventListener('mousedown', onDown);
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.style.cursor = 'crosshair';
     return () => {
       canvas.removeEventListener('mousedown', onDown);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      canvas.removeEventListener('wheel', onWheel);
     };
   }, []);
 
@@ -723,6 +782,8 @@ const NewDTrader: React.FC = () => {
               cd.push({ open: tick.quote, high: tick.quote, low: tick.quote, close: tick.quote, epoch: ce });
             }
           }
+          // Auto-settle tick-based contracts when countdown reaches 0
+          checkAutoSettle();
         } else if (data.msg_type === 'history' && data.history?.prices) {
           const prices: number[] = data.history.prices;
           const ps = getPipSize(sym);
@@ -1055,7 +1116,7 @@ const NewDTrader: React.FC = () => {
               </div>
             </div>
             <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
-              <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+              <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
             </div>
             {/* Resize handle */}
             <div onMouseDown={(e) => { isResizing.current = true; resizeStartY.current = e.clientY; resizeStartPct.current = chartHeightPct.current; e.preventDefault(); }}
@@ -1360,7 +1421,7 @@ const NewDTrader: React.FC = () => {
             <span style={{ color: '#666', fontSize: '8px' }}>{chartStyle === 'candle' ? GRANULARITIES.find(g => g.value === timeframe)?.label : ''}</span>
           </div>
           <div style={{ flex: '1 1 auto', position: 'relative', minHeight: 0, background: '#111' }}>
-            <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+            <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
           </div>
           {/* Resize handle */}
           <div onMouseDown={(e) => { isResizing.current = true; resizeStartY.current = e.clientY; resizeStartPct.current = chartHeightPct.current; e.preventDefault(); }}
