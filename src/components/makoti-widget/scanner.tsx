@@ -177,17 +177,30 @@ export const Scanner: React.FC = () => {
     const applySwitch = useCallback((sym: string) => {
         currentBestRef.current = sym;
         clearPending();
+        // Update runtime override (affects next purchase)
         try {
             window.DBot = window.DBot || {};
             (window.DBot as any).__force_symbol = sym;
         } catch (_) { }
+        // Update QuickStrategy form
         try {
             const rootStore = (window as any).__store_instance;
             if (rootStore?.quick_strategy) rootStore.quick_strategy.setValue('symbol', sym);
         } catch (_) { }
+        // Update Blockly workspace block so the UI dropdown reflects the change
+        try {
+            const workspace = (window as any).Blockly?.derivWorkspace;
+            if (workspace) {
+                const blocks = workspace.getAllBlocks();
+                const marketBlock = blocks.find((b: any) => b.type === 'trade_definition_market');
+                if (marketBlock) {
+                    marketBlock.setFieldValue(sym, 'SYMBOL_LIST');
+                }
+            }
+        } catch (_) { }
         (window as any).__makoti_lastTradeWon = false; // reset until next win
         showNotify(`Volatility Updated: ${SYMBOL_LABELS[sym]}`, 'success');
-    }, [showNotify]);
+    }, [showNotify, clearPending]);
 
     /* ── Perform a scan ────────────────────────────────────────────────── */
     const performScan = useCallback((isAuto = false) => {
@@ -355,18 +368,15 @@ export const Scanner: React.FC = () => {
             setAutoSwitcherActive(true);
             autoSwitchRef.current = true;
             startPocListener();
+            // Start first scan — finalizeRfV4 will schedule subsequent scans via setTimeout
             performScan(false);
-            const checkAndSchedule = setInterval(() => {
-                if (!autoSwitchRef.current) { clearInterval(checkAndSchedule); return; }
-                if (!scanning) { clearInterval(checkAndSchedule); performScan(true); }
-            }, 1000);
         } else {
             setAutoSwitcherActive(false);
             autoSwitchRef.current = false;
             stopPocListener();
             performScan(false);
         }
-    }, [bot, scanning, autoSwitch, performScan]);
+    }, [bot, scanning, autoSwitch, performScan, clearPending]);
 
     /* ── Toggle auto-switcher ───────────────────────────────────────────── */
     const toggleAutoSwitch = useCallback(() => {
