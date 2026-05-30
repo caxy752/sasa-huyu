@@ -333,8 +333,9 @@ export interface TradeSignal {
 
 /**
  * Core analysis function — v3 multi-strategy consensus.
- * Runs three independent strategies (momentum, mean reversion, pattern)
- * and requires all 3 to agree with score >= 3 each.
+ * Runs three independent strategies (momentum, mean reversion, pattern).
+ * Primary: all 3 agree (score >= 2) → strong signal.
+ * Fallback: 2/3 agree with score >= 2 and outvote the third.
  */
 export function analyzeSignal(ticks: number[], prices: number[]): TradeSignal | null {
     if (ticks.length < 30 || prices.length < 15) return null;
@@ -352,10 +353,10 @@ export function analyzeSignal(ticks: number[], prices: number[]): TradeSignal | 
     const bullReasons: string[] = [], bearReasons: string[] = [];
 
     strategies.forEach((s, i) => {
-        if (s.direction === 'bull' && s.score >= 3) {
+        if (s.direction === 'bull' && s.score >= 2) {
             bullCount++; totalBullScore += s.score; bullReasons.push(stratNames[i]);
         }
-        if (s.direction === 'bear' && s.score >= 3) {
+        if (s.direction === 'bear' && s.score >= 2) {
             bearCount++; totalBearScore += s.score; bearReasons.push(stratNames[i]);
         }
     });
@@ -364,24 +365,28 @@ export function analyzeSignal(ticks: number[], prices: number[]): TradeSignal | 
         `${stratNames[i]}:${s.direction === 'neutral' ? '—' : s.direction}(${s.score})`
     ).join(' ');
 
-    // Bull consensus: all 3 strategies agree, outvote bear
-    if (bullCount >= 3) {
-        const conf = Math.min(95, 75 + totalBullScore * 3 + (bullCount - 1) * 5);
+    // Bull consensus: all 3 agree OR 2/3 agree and outvote the third
+    if (bullCount >= 3 || (bullCount >= 2 && bullCount > bearCount)) {
+        const isUnanimous = bullCount >= 3;
+        const base = isUnanimous ? 78 : 70;
+        const conf = Math.min(95, base + totalBullScore * 3 + (bullCount - 1) * 4);
         return {
             contract_type: 'CALL', barrier: '',
             confidence: conf,
-            reason: `RISE — ${bullReasons.join(', ')} agree`,
+            reason: `RISE — ${bullReasons.join(', ')}${isUnanimous ? ' (unanimous)' : ''}`,
             indicators: consensusDisplay,
         };
     }
 
-    // Bear consensus: all 3 strategies agree
-    if (bearCount >= 3) {
-        const conf = Math.min(95, 75 + totalBearScore * 3 + (bearCount - 1) * 5);
+    // Bear consensus
+    if (bearCount >= 3 || (bearCount >= 2 && bearCount > bullCount)) {
+        const isUnanimous = bearCount >= 3;
+        const base = isUnanimous ? 78 : 70;
+        const conf = Math.min(95, base + totalBearScore * 3 + (bearCount - 1) * 4);
         return {
             contract_type: 'PUT', barrier: '',
             confidence: conf,
-            reason: `FALL — ${bearReasons.join(', ')} agree`,
+            reason: `FALL — ${bearReasons.join(', ')}${isUnanimous ? ' (unanimous)' : ''}`,
             indicators: consensusDisplay,
         };
     }
