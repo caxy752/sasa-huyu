@@ -661,6 +661,11 @@ $mw-radius:   10px;
         border: 1px solid rgba(34, 197, 94, 0.3);
         color: #22c55e;
     }
+    &--warn {
+        background: rgba(234, 179, 8, 0.15);
+        border: 1px solid rgba(234, 179, 8, 0.3);
+        color: #eab308;
+    }
 }
 
 @keyframes mw-notif-in {
@@ -690,6 +695,14 @@ $mw-radius:   10px;
     font-weight: 800;
     color: $mw-win;
     letter-spacing: 1px;
+    animation: mw-blink 0.8s ease-in-out infinite alternate;
+}
+
+.mw-switch-pending {
+    font-size: 9px;
+    font-weight: 800;
+    color: #eab308;
+    letter-spacing: 0.5px;
     animation: mw-blink 0.8s ease-in-out infinite alternate;
 }
 

@@ -37,20 +37,12 @@ function calcDigitPcts(digits: number[]): number[] {
     return counts.map(c => (c / total) * 100);
 }
 
-/* ── Deep choppiness analysis ──────────────────────────────────────────────
-   Uses 50 candles. Measures:
-     - Body-to-range ratio (small = doji = choppy)
-     - Direction changes (alternating = choppy)
-     - Trend strength via price correlation (low = choppy)
-     - Recent candle focus (last 3 candles weighted extra)
-   Returns a 0-100 score (higher = more choppy/undirectional).
-────────────────────────────────────────────────────────────────────────── */
+/* ── Deep choppiness analysis (50 candles, extra weight on recent) ──────── */
 function calcChoppiness(candles: any[]): SymbolDirectionResult {
     const totalCandles = candles.length;
     const lookback = Math.min(50, totalCandles);
     const recent = candles.slice(-lookback);
 
-    // 1. Body-to-range ratio per candle (0-1, lower = more doji-like)
     const bodyRatios = recent.map(c => {
         const range = Number(c.high) - Number(c.low);
         if (range <= 0) return 1;
@@ -58,18 +50,14 @@ function calcChoppiness(candles: any[]): SymbolDirectionResult {
     });
     const avgBodyRatio = bodyRatios.reduce((a, b) => a + b, 0) / bodyRatios.length;
 
-    // 2. Direction changes between consecutive candles
     let directionChanges = 0;
     for (let i = 1; i < recent.length; i++) {
         const prevDir = Number(recent[i - 1].close) - Number(recent[i - 1].open);
         const currDir = Number(recent[i].close) - Number(recent[i].open);
-        if ((prevDir > 0 && currDir < 0) || (prevDir < 0 && currDir > 0)) {
-            directionChanges++;
-        }
+        if ((prevDir > 0 && currDir < 0) || (prevDir < 0 && currDir > 0)) directionChanges++;
     }
     const dirChangeRatio = directionChanges / (recent.length - 1);
 
-    // 3. Trend strength via Pearson correlation (candle index vs close price)
     const closes = recent.map(c => Number(c.close));
     const indices = closes.map((_, i) => i);
     const n = indices.length;
@@ -82,7 +70,6 @@ function calcChoppiness(candles: any[]): SymbolDirectionResult {
     const correlation = denom === 0 ? 0 : (n * sumIC - sumI * sumC) / denom;
     const trendStrength = Math.abs(correlation);
 
-    // 4. Recent candle focus (last 3 candles get extra weight)
     const last3 = candles.slice(-3);
     const last3BodyRatios = last3.map(c => {
         const range = Number(c.high) - Number(c.low);
@@ -91,44 +78,58 @@ function calcChoppiness(candles: any[]): SymbolDirectionResult {
     });
     const avgRecentBodyRatio = last3BodyRatios.reduce((a, b) => a + b, 0) / last3BodyRatios.length;
 
-    // 5. Range narrowing check (contracting range = choppy)
     const ranges = recent.map(c => Number(c.high) - Number(c.low));
     const half = Math.floor(ranges.length / 2);
     const firstHalfAvg = ranges.slice(0, half).reduce((a, b) => a + b, 0) / half;
     const secondHalfAvg = ranges.slice(-half).reduce((a, b) => a + b, 0) / half;
     const rangeNarrowing = firstHalfAvg > 0 ? Math.min(1, secondHalfAvg / firstHalfAvg) : 1;
-    // rangeNarrowing < 1 means range is contracting = more choppy
 
-    // ── Composite choppiness score (0-100) ──
-    // Small bodies = choppy (up to 30 pts)
-    const bodyScore = (1 - avgBodyRatio) * 30;
-    // Many direction changes = choppy (up to 25 pts)
-    const changeScore = dirChangeRatio * 25;
-    // Low trend strength = choppy (up to 20 pts)
-    const trendScore = (1 - trendStrength) * 20;
-    // Recent small bodies = choppy (up to 15 pts, extra focus on current candle)
-    const recentBodyScore = (1 - avgRecentBodyRatio) * 15;
-    // Range contracting = choppy (up to 10 pts)
-    const rangeScore = (1 - rangeNarrowing) * 10;
-
-    const choppinessScore = Math.min(100, bodyScore + changeScore + trendScore + recentBodyScore + rangeScore);
-
-    // Qualifies if choppiness >= 55
-    const qualifies = choppinessScore >= 55;
+    const choppinessScore = Math.min(100,
+        (1 - avgBodyRatio) * 30 +
+        dirChangeRatio * 25 +
+        (1 - trendStrength) * 20 +
+        (1 - avgRecentBodyRatio) * 15 +
+        (1 - rangeNarrowing) * 10
+    );
 
     return {
-        symbol: '',
-        label: '',
+        symbol: '', label: '',
         choppinessScore: Math.round(choppinessScore),
         bodyRatio: Math.round(avgBodyRatio * 100),
         directionChanges,
         trendStrength: Math.round(trendStrength * 100),
         recentBodyRatio: Math.round(avgRecentBodyRatio * 100),
-        qualifies,
-        detail: `Choppy: ${Math.round(choppinessScore)}% | Body ${Math.round(avgBodyRatio * 100)}% | Changes ${directionChanges}/${lookback - 1} | Trend ${Math.round(trendStrength * 100)}%`,
+        qualifies: choppinessScore >= 55,
+        detail: `Choppy: ${Math.round(choppinessScore)}% | Body ${Math.round(avgBodyRatio * 100)}% | Δ ${directionChanges}/${lookback - 1} | Trend ${Math.round(trendStrength * 100)}%`,
     };
 }
 
+// ─── Global trade-result tracking via POC messages on the main OTP WS ─────
+// Initialised to true so first switch works immediately (no trades yet = OK to switch).
+(window as any).__makoti_lastTradeWon = true;
+
+function startPocListener() {
+    const ws = (window as any)._newSystemWS as WebSocket | undefined;
+    if (!ws || (ws as any).__makoti_pocAttached) return;
+    (ws as any).__makoti_pocAttached = true;
+    ws.addEventListener('message', (evt: MessageEvent) => {
+        try {
+            const data = JSON.parse(evt.data);
+            if (data.msg_type === 'proposal_open_contract' && data.proposal_open_contract?.is_sold) {
+                (window as any).__makoti_lastTradeWon = Number(data.proposal_open_contract.profit) >= 0;
+            }
+        } catch (_) {}
+    });
+}
+
+function stopPocListener() {
+    const ws = (window as any)._newSystemWS as WebSocket | undefined;
+    if (ws) (ws as any).__makoti_pocAttached = false;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Scanner Component
+═══════════════════════════════════════════════════════════════════════════ */
 export const Scanner: React.FC = () => {
     const [bot, setBot] = useState<BotId>('pvty_kill');
     const [scanning, setScanning] = useState(false);
@@ -137,7 +138,8 @@ export const Scanner: React.FC = () => {
     const [bestSymbols, setBestSymbols] = useState<string[]>([]);
     const [autoSwitch, setAutoSwitch] = useState(false);
     const [autoSwitcherActive, setAutoSwitcherActive] = useState(false);
-    const [notification, setNotification] = useState<{ msg: string; type: 'info' | 'success' } | null>(null);
+    const [pendingSymbol, setPendingSymbol] = useState('');
+    const [notification, setNotification] = useState<{ msg: string; type: 'info' | 'success' | 'warn' } | null>(null);
     const wsRef = useRef<MakotiWS | null>(null);
     const pendingRef = useRef<Set<string>>(new Set());
     const collectedRef = useRef<Map<string, any>>(new Map());
@@ -146,10 +148,9 @@ export const Scanner: React.FC = () => {
     const autoIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentBestRef = useRef<string>('');
 
-    // Show notification for 3s
-    const showNotify = useCallback((msg: string, type: 'info' | 'success' = 'info') => {
+    const showNotify = useCallback((msg: string, type: 'info' | 'success' | 'warn' = 'info') => {
         setNotification({ msg, type });
-        setTimeout(() => setNotification(null), 3000);
+        setTimeout(() => setNotification(null), 3500);
     }, []);
 
     const cleanup = useCallback(() => {
@@ -161,26 +162,36 @@ export const Scanner: React.FC = () => {
         wsRef.current = null;
     }, []);
 
-    /* ── Perform a scan (called manually or by auto-switcher) ──────────── */
+    /* ── Apply a pending or immediate switch ───────────────────────────── */
+    const applySwitch = useCallback((sym: string) => {
+        currentBestRef.current = sym;
+        setPendingSymbol('');
+        try {
+            window.DBot = window.DBot || {};
+            (window.DBot as any).__force_symbol = sym;
+        } catch (_) { }
+        try {
+            const rootStore = (window as any).__store_instance;
+            if (rootStore?.quick_strategy) rootStore.quick_strategy.setValue('symbol', sym);
+        } catch (_) { }
+        (window as any).__makoti_lastTradeWon = false; // reset until next win
+        showNotify(`Volatility Updated: ${SYMBOL_LABELS[sym]}`, 'success');
+    }, [showNotify]);
+
+    /* ── Perform a scan ────────────────────────────────────────────────── */
     const performScan = useCallback((isAuto = false) => {
         if (scanning && !isAuto) return;
         const currentBot = botRef.current;
-        if (currentBot === 'pvty_kill' && isAuto) return; // auto only for rf_v4
-        if (!isAuto) {
-            setScanning(true);
-        }
+        if (currentBot === 'pvty_kill' && isAuto) return;
+        if (!isAuto) setScanning(true);
         setProgress(isAuto ? 'Auto-scanning…' : 'Connecting to Deriv API…');
-        if (!isAuto) {
-            setResults([]);
-            setBestSymbols([]);
-        }
+        if (!isAuto) { setResults([]); setBestSymbols([]); }
         pendingRef.current = new Set(ALL_SYMBOLS);
         collectedRef.current = new Map();
         if (!isAuto) cleanup();
 
         const isTicks = currentBot === 'pvty_kill';
 
-        /* ── pvty_kill finalize ──────────────────────────────────────────── */
         const finalizePvty = () => {
             const scanResults: SymbolDigitResult[] = [];
             const best: string[] = [];
@@ -201,19 +212,15 @@ export const Scanner: React.FC = () => {
             setResults(scanResults);
             setBestSymbols(best);
             setScanning(false);
-            setProgress(
-                best.length > 0
-                    ? `Found ${best.length} volatility match${best.length > 1 ? 'es' : ''}`
-                    : 'No volatility matched all three criteria. Try again.'
-            );
+            setProgress(best.length > 0
+                ? `Found ${best.length} volatility match${best.length > 1 ? 'es' : ''}`
+                : 'No volatility matched all three criteria. Try again.');
             cleanup();
         };
 
-        /* ── rf_v4 finalize ───────────────────────────────────────────────── */
         const finalizeRfV4 = () => {
             const scanResults: SymbolDirectionResult[] = [];
             const best: string[] = [];
-
             collectedRef.current.forEach((candles: any[], sym) => {
                 if (!candles || candles.length < 5) return;
                 const analysis = calcChoppiness(candles);
@@ -230,39 +237,45 @@ export const Scanner: React.FC = () => {
 
             const bestSym = best.length > 0 ? best[0] : '';
             if (bestSym && bestSym !== currentBestRef.current && autoSwitchRef.current) {
-                // Auto-switch: update the bot builder symbol
-                currentBestRef.current = bestSym;
-                try {
-                    window.DBot = window.DBot || {};
-                    window.DBot.__force_symbol = bestSym;
-                } catch (_) { }
-                // Also try to update QuickStrategy store if accessible
-                try {
-                    const rootStore = (window as any).__store_instance;
-                    if (rootStore?.quick_strategy) {
-                        rootStore.quick_strategy.setValue('symbol', bestSym);
-                    }
-                } catch (_) {}
-                showNotify(`Volatility Updated: ${SYMBOL_LABELS[bestSym]}`, 'success');
+                const lastWon = (window as any).__makoti_lastTradeWon;
+                if (lastWon) {
+                    applySwitch(bestSym);
+                } else {
+                    // Store as pending — wait for a win
+                    setPendingSymbol(bestSym);
+                    showNotify(`Waiting for win before switching to ${SYMBOL_LABELS[bestSym]}…`, 'warn');
+                }
+            }
+
+            // Also check if we can apply a pending switch
+            const pending = pendingSymbol;
+            if (pending && (window as any).__makoti_lastTradeWon && autoSwitchRef.current) {
+                const bestNow = best.length > 0 ? best[0] : '';
+                if (bestNow === pending || (bestNow && best.indexOf(pending) >= 0)) {
+                    applySwitch(pending);
+                } else if (!bestNow) {
+                    setPendingSymbol('');
+                }
             }
 
             if (isAuto) {
-                setProgress(`Auto: ${bestSym ? SYMBOL_LABELS[bestSym] : 'no match'} | Choppy: ${best.length} found`);
-                // Schedule next auto-scan in 30 seconds
+                const status = pendingSymbol
+                    ? `Pending: ${SYMBOL_LABELS[pendingSymbol]} (waiting for win)`
+                    : bestSym
+                        ? `Active: ${SYMBOL_LABELS[bestSym]}`
+                        : 'No match';
+                setProgress(`Auto: ${status}`);
                 if (autoSwitchRef.current) {
                     autoIntervalRef.current = setTimeout(() => performScan(true), 30000);
                 }
             } else {
-                setProgress(
-                    best.length > 0
-                        ? `Found ${best.length} choppy match${best.length > 1 ? 'es' : ''}`
-                        : 'No clear sideways volatility found. Try again.'
-                );
+                setProgress(best.length > 0
+                    ? `Found ${best.length} choppy match${best.length > 1 ? 'es' : ''}`
+                    : 'No clear sideways volatility found. Try again.');
             }
             if (!isAuto) cleanup();
         };
 
-        /* ── Message handler ─────────────────────────────────────────────── */
         const handleMessage = (data: any) => {
             if (data.error) return;
 
@@ -288,14 +301,12 @@ export const Scanner: React.FC = () => {
             }
         };
 
-        /* ── Open WS ─────────────────────────────────────────────────────── */
         const mws = openMakotiWS(
             handleMessage,
             () => {
                 setProgress(isTicks
                     ? 'Fetching 1 000 ticks from all 10 volatilities…'
-                    : 'Fetching 50 candles from all 10 volatilities…'
-                );
+                    : 'Fetching 50 candles from all 10 volatilities…');
                 ALL_SYMBOLS.forEach(sym => {
                     if (isTicks) {
                         mws.send({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' });
@@ -313,7 +324,6 @@ export const Scanner: React.FC = () => {
         );
         wsRef.current = mws;
 
-        // Safety timeout
         setTimeout(() => {
             if (pendingRef.current.size > 0) {
                 if (!isAuto) setScanning(false);
@@ -321,7 +331,7 @@ export const Scanner: React.FC = () => {
                 if (!isAuto) cleanup();
             }
         }, 30000);
-    }, [bot, scanning, cleanup, showNotify]);
+    }, [bot, scanning, cleanup, showNotify, applySwitch]);
 
     /* ── Manual analyze button ──────────────────────────────────────────── */
     const analyze = useCallback(() => {
@@ -333,24 +343,19 @@ export const Scanner: React.FC = () => {
         }
         if (autoSwitch && bot === 'rf_v4') {
             currentBestRef.current = '';
+            setPendingSymbol('');
             setAutoSwitcherActive(true);
             autoSwitchRef.current = true;
+            startPocListener();
             performScan(false);
-            // After first manual scan completes, schedule auto-scans
-            // (setTimeout here as a fallback; finalizeRfV4 also schedules)
             const checkAndSchedule = setInterval(() => {
-                if (!autoSwitchRef.current) {
-                    clearInterval(checkAndSchedule);
-                    return;
-                }
-                if (!scanning) {
-                    clearInterval(checkAndSchedule);
-                    performScan(true);
-                }
+                if (!autoSwitchRef.current) { clearInterval(checkAndSchedule); return; }
+                if (!scanning) { clearInterval(checkAndSchedule); performScan(true); }
             }, 1000);
         } else {
             setAutoSwitcherActive(false);
             autoSwitchRef.current = false;
+            stopPocListener();
             performScan(false);
         }
     }, [bot, scanning, autoSwitch, performScan]);
@@ -360,10 +365,11 @@ export const Scanner: React.FC = () => {
         setAutoSwitch(prev => {
             const next = !prev;
             if (!next) {
-                // Turning off
                 setAutoSwitcherActive(false);
+                setPendingSymbol('');
                 autoSwitchRef.current = false;
                 currentBestRef.current = '';
+                stopPocListener();
                 if (autoIntervalRef.current) {
                     clearTimeout(autoIntervalRef.current);
                     autoIntervalRef.current = null;
@@ -373,10 +379,10 @@ export const Scanner: React.FC = () => {
         });
     }, []);
 
-    /* ── Cleanup on unmount ──────────────────────────────────────────────── */
     useEffect(() => {
         return () => {
             autoSwitchRef.current = false;
+            stopPocListener();
             if (autoIntervalRef.current) clearTimeout(autoIntervalRef.current);
             try { wsRef.current?.close(); } catch (_) { }
         };
@@ -384,7 +390,6 @@ export const Scanner: React.FC = () => {
 
     return (
         <div className='mw-scanner'>
-            {/* ── Notification toast ── */}
             {notification && (
                 <div className={`mw-scanner__notif mw-scanner__notif--${notification.type}`}>
                     {notification.msg}
@@ -394,12 +399,8 @@ export const Scanner: React.FC = () => {
             <div className='mw-scanner__controls'>
                 <div className='mw-field'>
                     <label className='mw-label'>Bot Selection</label>
-                    <select
-                        className='mw-select'
-                        value={bot}
-                        onChange={e => setBot(e.target.value as BotId)}
-                        disabled={scanning}
-                    >
+                    <select className='mw-select' value={bot}
+                        onChange={e => setBot(e.target.value as BotId)} disabled={scanning}>
                         <option value='pvty_kill'>Poverty Killer</option>
                         <option value='rf_v4'>Rise/Fall V4</option>
                     </select>
@@ -411,7 +412,6 @@ export const Scanner: React.FC = () => {
                         : 'Deep candle analysis (50 candles per volatility). Finds markets with choppy/undirectional action — no clear trend, small bodies, alternating direction.'}
                 </div>
 
-                {/* ── Auto Switcher (only for rf_v4) ── */}
                 {bot === 'rf_v4' && (
                     <label className='mw-switch-row'>
                         <span className='mw-switch-label'>Auto Switcher</span>
@@ -421,17 +421,14 @@ export const Scanner: React.FC = () => {
                             </div>
                         </div>
                         {autoSwitcherActive && <span className='mw-switch-active'>ACTIVE</span>}
+                        {pendingSymbol && <span className='mw-switch-pending'>⏳ WIN REQUIRED</span>}
                     </label>
                 )}
 
-                <button
-                    className={`mw-btn mw-btn--scan${scanning ? ' mw-btn--busy' : ''}`}
-                    onClick={analyze}
-                    disabled={scanning}
-                >
+                <button className={`mw-btn mw-btn--scan${scanning ? ' mw-btn--busy' : ''}`}
+                    onClick={analyze} disabled={scanning}>
                     {scanning ? <><span className='mw-spin' /> Analyzing…</> : 'Analyze'}
                 </button>
-
                 {progress && <div className='mw-scanner__progress'>{progress}</div>}
             </div>
 
@@ -454,10 +451,8 @@ export const Scanner: React.FC = () => {
 
                     <div className='mw-scanner__list'>
                         {results.map(r => (
-                            <div
-                                key={r.symbol}
-                                className={`mw-scanner__row${r.qualifies ? ' mw-scanner__row--match' : ''}`}
-                            >
+                            <div key={r.symbol}
+                                className={`mw-scanner__row${r.qualifies ? ' mw-scanner__row--match' : ''}`}>
                                 <div className='mw-scanner__row-head'>
                                     <span className='mw-scanner__sym'>{r.label}</span>
                                     <span className='mw-scanner__row-detail'>{r.detail}</span>
@@ -467,15 +462,11 @@ export const Scanner: React.FC = () => {
                                 {isDigitResult(r) && (
                                     <div className='mw-scanner__bars'>
                                         {r.pcts.map((p, i) => (
-                                            <div
-                                                key={i}
+                                            <div key={i}
                                                 className={`mw-scanner__bar-wrap${[7, 8, 9].includes(i) ? ' mw-scanner__bar-wrap--hi' : ''}`}
-                                                title={`Digit ${i}: ${p.toFixed(2)}%`}
-                                            >
-                                                <div
-                                                    className='mw-scanner__bar-fill'
-                                                    style={{ height: `${Math.min(100, p * 4)}%` }}
-                                                />
+                                                title={`Digit ${i}: ${p.toFixed(2)}%`}>
+                                                <div className='mw-scanner__bar-fill'
+                                                    style={{ height: `${Math.min(100, p * 4)}%` }} />
                                                 <span className='mw-scanner__bar-pct'>{p.toFixed(0)}%</span>
                                                 <span className='mw-scanner__bar-lbl'>{i}</span>
                                             </div>
@@ -487,8 +478,7 @@ export const Scanner: React.FC = () => {
                                     const dr = r as SymbolDirectionResult;
                                     return (
                                         <div className='mw-scanner__dir-bar'>
-                                            <div
-                                                className='mw-scanner__dir-fill'
+                                            <div className='mw-scanner__dir-fill'
                                                 style={{
                                                     width: `${dr.choppinessScore}%`,
                                                     background: dr.choppinessScore >= 70
@@ -496,8 +486,7 @@ export const Scanner: React.FC = () => {
                                                         : dr.choppinessScore >= 55
                                                             ? 'linear-gradient(90deg, #eab308, #ca8a04)'
                                                             : 'linear-gradient(90deg, #ef4444, #dc2626)',
-                                                }}
-                                            />
+                                                }} />
                                         </div>
                                     );
                                 })()}
