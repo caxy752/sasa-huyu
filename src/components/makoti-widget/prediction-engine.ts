@@ -1156,6 +1156,329 @@ const statisticalExtreme: StrategyModule = {
     },
 };
 
+// ── 23. N-Period Pattern Matching — correlation-based historical pattern matching ──
+const nPatternMatch: StrategyModule = {
+    name: 'NPattern',
+    run(prices) {
+        if (prices.length < 30) return null;
+        const patternLen = 10;
+        const pattern = prices.slice(-patternLen);
+        const patternDir = pattern[pattern.length - 1] - pattern[0];
+        if (Math.abs(patternDir) < 0.001) return null;
+
+        // Normalize pattern to 0-1 range for shape matching
+        const pMin = Math.min(...pattern);
+        const pMax = Math.max(...pattern);
+        const pRange = pMax - pMin || 1;
+        const norm = pattern.map(p => (p - pMin) / pRange);
+
+        // Search historical segments for best match (correlation)
+        let bestCorr = -1;
+        let bestNextDir = 0;
+        const searchEnd = prices.length - patternLen - 3;
+
+        for (let i = 0; i < searchEnd; i++) {
+            const seg = prices.slice(i, i + patternLen + 1);
+            const sMin = Math.min(...seg.slice(0, -1));
+            const sMax = Math.max(...seg.slice(0, -1));
+            const sRange = sMax - sMin || 1;
+            const sNorm = seg.slice(0, -1).map(p => (p - sMin) / sRange);
+
+            // Pearson correlation
+            let sumXY = 0, sumX = 0, sumY = 0, sumX2 = 0, sumY2 = 0;
+            for (let j = 0; j < patternLen; j++) {
+                sumX += norm[j]; sumY += sNorm[j];
+                sumX2 += norm[j] * norm[j];
+                sumY2 += sNorm[j] * sNorm[j];
+                sumXY += norm[j] * sNorm[j];
+            }
+            const n = patternLen;
+            const corr = (n * sumXY - sumX * sumY) / Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY) || 1);
+
+            if (corr > bestCorr) {
+                bestCorr = corr;
+                bestNextDir = seg[seg.length - 1] - seg[seg.length - 2];
+            }
+        }
+
+        if (bestCorr > 0.75 && Math.abs(bestNextDir) > 0) {
+            const conf = Math.min(84, 68 + Math.round(bestCorr * 20));
+            return {
+                type: bestNextDir > 0 ? 'CALL' : 'PUT',
+                score: 3,
+                confidence: conf,
+                weight: getStrategyWeight(this.name),
+                name: this.name,
+            };
+        }
+        return null;
+    },
+};
+
+// ── 24. Higher High / Lower Low Sequence (HH/HL/LH/LL) ─────────────────────
+const hlSequence: StrategyModule = {
+    name: 'HLSeq',
+    run(prices) {
+        if (prices.length < 20) return null;
+        const lookback = prices.slice(-20);
+        // Find swing highs and lows
+        const peaks: number[] = [], troughs: number[] = [];
+        for (let i = 2; i < lookback.length - 2; i++) {
+            if (lookback[i] > lookback[i - 1] && lookback[i] > lookback[i - 2] && lookback[i] > lookback[i + 1] && lookback[i] > lookback[i + 2]) {
+                peaks.push(i);
+            }
+            if (lookback[i] < lookback[i - 1] && lookback[i] < lookback[i - 2] && lookback[i] < lookback[i + 1] && lookback[i] < lookback[i + 2]) {
+                troughs.push(i);
+            }
+        }
+
+        if (peaks.length < 2 && troughs.length < 2) return null;
+
+        const last = lookback[lookback.length - 1];
+        const prev = lookback[lookback.length - 2];
+
+        // Higher High followed by Lower High → bearish reversal
+        if (peaks.length >= 2) {
+            const lastPeak = lookback[peaks[peaks.length - 1]];
+            const prevPeak = peaks.length >= 2 ? lookback[peaks[peaks.length - 2]] : lastPeak;
+            if (prevPeak < lastPeak && last < lastPeak && prev < last) {
+                const conf = Math.min(82, 68 + (lastPeak - prevPeak) * 500);
+                return { type: 'PUT', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+        }
+
+        // Lower Low followed by Higher Low → bullish reversal
+        if (troughs.length >= 2) {
+            const lastTrough = lookback[troughs[troughs.length - 1]];
+            const prevTrough = troughs.length >= 2 ? lookback[troughs[troughs.length - 2]] : lastTrough;
+            if (prevTrough > lastTrough && last > lastTrough && prev > last) {
+                const conf = Math.min(82, 68 + (prevTrough - lastTrough) * 500);
+                return { type: 'CALL', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+        }
+
+        // Sequence of HH → HL → LL (exhaustion)
+        if (peaks.length >= 1 && troughs.length >= 2) {
+            const lastP = lookback[peaks[peaks.length - 1]];
+            const lastT = lookback[troughs[troughs.length - 1]];
+            const prevT = lookback[troughs[troughs.length - 2]];
+            const recentHigh = Math.max(...lookback.slice(-5));
+            if (lastP >= recentHigh && lastT < prevT && prev < last) {
+                const conf = Math.min(80, 66 + (prevT - lastT) * 400);
+                return { type: 'PUT', score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+        }
+
+        return null;
+    },
+};
+
+// ── 25. Volatility Contraction / BB Squeeze Breakout ────────────────────────
+const volContraction: StrategyModule = {
+    name: 'VolContract',
+    run(prices) {
+        if (prices.length < 25) return null;
+        const slice = prices.slice(-25);
+        const per = 14;
+        const means: number[] = [];
+        const stds: number[] = [];
+
+        for (let i = per; i <= slice.length; i++) {
+            const s = slice.slice(i - per, i);
+            const m = s.reduce((a, b) => a + b, 0) / per;
+            means.push(m);
+            const v = s.reduce((a, b) => a + (b - m) ** 2, 0) / per;
+            stds.push(Math.sqrt(v));
+        }
+
+        if (stds.length < 3) return null;
+        // BB width
+        const widths = stds.map(s => s * 4);
+        const recentWidths = widths.slice(-5);
+        const priorWidths = widths.slice(-10, -5);
+
+        const avgRecent = recentWidths.reduce((a, b) => a + b, 0) / recentWidths.length;
+        const avgPrior = priorWidths.reduce((a, b) => a + b, 0) / priorWidths.length;
+
+        if (avgPrior > 0 && avgRecent < avgPrior * 0.7) {
+            // Squeeze detected → breakout likely
+            const last = slice[slice.length - 1];
+            const lastMean = means[means.length - 1];
+            const lastStd = stds[stds.length - 1];
+
+            // Direction determined by recent momentum
+            const mom = last - slice[slice.length - 4];
+            const conf = Math.min(80, 65 + Math.round((1 - avgRecent / avgPrior) * 30));
+            if (mom > 0) {
+                return { type: 'CALL', score: 2, confidence: Math.round(conf + 3), weight: getStrategyWeight(this.name), name: this.name };
+            } else {
+                return { type: 'PUT', score: 2, confidence: Math.round(conf + 3), weight: getStrategyWeight(this.name), name: this.name };
+            }
+        }
+
+        // Expansion: BB width expanding → trend continuation
+        if (avgPrior > 0 && avgRecent > avgPrior * 1.4) {
+            const last3 = slice.slice(-3);
+            const dir = last3[2] - last3[0];
+            if (Math.abs(dir) > 0) {
+                const conf = Math.min(78, 62 + Math.round((avgRecent / avgPrior - 1) * 20));
+                return {
+                    type: dir > 0 ? 'CALL' : 'PUT',
+                    score: 2,
+                    confidence: Math.round(conf),
+                    weight: getStrategyWeight(this.name),
+                    name: this.name,
+                };
+            }
+        }
+
+        return null;
+    },
+};
+
+// ── 26. Multi-Timeframe Trend Alignment ─────────────────────────────────────
+const mtfAlignment: StrategyModule = {
+    name: 'MTFAlign',
+    run(prices) {
+        if (prices.length < 25) return null;
+
+        // Compute slopes at different windows
+        function slope(vals: number[]): number {
+            if (vals.length < 2) return 0;
+            return (vals[vals.length - 1] - vals[0]) / vals.length;
+        }
+
+        const s5 = slope(prices.slice(-5));
+        const s10 = slope(prices.slice(-10));
+        const s20 = slope(prices.slice(-20));
+
+        // Count aligned timeframes
+        let bullish = 0, bearish = 0;
+        [s5, s10, s20].forEach(s => {
+            if (s > 0.0005) bullish++;
+            else if (s < -0.0005) bearish++;
+        });
+
+        // All bullish → strong continuation up
+        if (bullish === 3) {
+            const strength = (s5 + s10 + s20) / 3;
+            const conf = Math.min(86, 70 + Math.round(Math.abs(strength) * 2000));
+            return { type: 'CALL', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+        // All bearish → strong continuation down
+        if (bearish === 3) {
+            const strength = (s5 + s10 + s20) / 3;
+            const conf = Math.min(86, 70 + Math.round(Math.abs(strength) * 2000));
+            return { type: 'PUT', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+
+        // 2/3 aligned → moderate signal
+        if (bullish === 2 && bearish === 0) {
+            return { type: 'CALL', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (bearish === 2 && bullish === 0) {
+            return { type: 'PUT', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
+        }
+
+        // Conflict check (5-tick opposes 20-tick) → ranging, no signal
+        if (Math.abs(s5) > 0.001 && s5 * s20 < 0) {
+            return null;
+        }
+
+        return null;
+    },
+};
+
+// ── 27. Sequential Bar Pattern — 3-bar and 4-bar patterns ───────────────────
+const barPatternSeq: StrategyModule = {
+    name: 'BarSeq',
+    run(prices) {
+        if (prices.length < 8) return null;
+        const b = prices.slice(-8);
+
+        // Build 1-tick candles
+        const candles: { o: number; c: number; h: number; l: number; bullish: boolean }[] = [];
+        for (let i = 1; i < b.length; i++) {
+            candles.push({
+                o: b[i - 1], c: b[i],
+                h: Math.max(b[i - 1], b[i]),
+                l: Math.min(b[i - 1], b[i]),
+                bullish: b[i] > b[i - 1],
+            });
+        }
+        if (candles.length < 4) return null;
+
+        const last2 = candles.slice(-2);
+        const last3 = candles.slice(-3);
+        const last4 = candles.slice(-4);
+
+        // Inside bar: range of current < range of previous
+        const isInside = (c: typeof candles[0], p: typeof candles[0]) =>
+            c.h <= p.h && c.l >= p.l && (c.h < p.h || c.l > p.l);
+
+        // Outside bar: range of current > range of previous
+        const isOutside = (c: typeof candles[0], p: typeof candles[0]) =>
+            c.h > p.h && c.l < p.l;
+
+        // Bullish Harami: bearish candle followed by smaller bullish inside bar
+        if (last3.length >= 2 && !last3[0].bullish && last3[1].bullish && isInside(last3[1], last3[0])) {
+            const conf = 76;
+            return { type: 'CALL', score: 2, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        // Bearish Harami: bullish candle followed by smaller bearish inside bar
+        if (last3.length >= 2 && last3[0].bullish && !last3[1].bullish && isInside(last3[1], last3[0])) {
+            const conf = 76;
+            return { type: 'PUT', score: 2, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
+        }
+
+        // Bullish outside bar (engulfing): bearish candle followed by larger bullish
+        if (last3.length >= 2 && !last3[0].bullish && last3[1].bullish && isOutside(last3[1], last3[0])) {
+            const conf = 80;
+            return { type: 'CALL', score: 3, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        // Bearish outside bar: bullish followed by larger bearish
+        if (last3.length >= 2 && last3[0].bullish && !last3[1].bullish && isOutside(last3[1], last3[0])) {
+            const conf = 80;
+            return { type: 'PUT', score: 3, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
+        }
+
+        // 3-bar pattern: morning star (bear, doji/small, bull)
+        if (last3.length >= 3) {
+            if (!last3[0].bullish && last3[2].bullish) {
+                const body0 = Math.abs(last3[0].c - last3[0].o);
+                const body1 = Math.abs(last3[1].c - last3[1].o);
+                const body2 = Math.abs(last3[2].c - last3[2].o);
+                if (body1 < body0 * 0.5 && body2 > body0 * 0.6) {
+                    return { type: 'CALL', score: 3, confidence: 82, weight: getStrategyWeight(this.name), name: this.name };
+                }
+            }
+            if (last3[0].bullish && !last3[2].bullish) {
+                const body0 = Math.abs(last3[0].c - last3[0].o);
+                const body1 = Math.abs(last3[1].c - last3[1].o);
+                const body2 = Math.abs(last3[2].c - last3[2].o);
+                if (body1 < body0 * 0.5 && body2 > body0 * 0.6) {
+                    return { type: 'PUT', score: 3, confidence: 82, weight: getStrategyWeight(this.name), name: this.name };
+                }
+            }
+        }
+
+        // 4-bar: three soldiers (3 consecutive bullish) → trend continuation
+        if (last4.length >= 3) {
+            const b3 = last4.slice(-3);
+            if (b3[0].bullish && b3[1].bullish && b3[2].bullish) {
+                const conf = Math.min(80, 68 + (b3[2].c - b3[0].o) * 500);
+                return { type: 'CALL', score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+            if (!b3[0].bullish && !b3[1].bullish && !b3[2].bullish) {
+                const conf = Math.min(80, 68 + (b3[0].o - b3[2].c) * 500);
+                return { type: 'PUT', score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+        }
+
+        return null;
+    },
+};
+
 const riseFallStrategies: StrategyModule[] = [
     microTiming, rsiDivergence, macdStrategy, bbStrategy,
     stochasticStrategy, atrBreakout, priceAction, maCross,
@@ -1163,6 +1486,7 @@ const riseFallStrategies: StrategyModule[] = [
     rocStrategy, fractalEfficiency, digitPsychology, candleReversal,
     doubleTopBottom, exhaustionRev, pivotReversal, tickVelocity,
     fibonacciRetrace, statisticalExtreme,
+    nPatternMatch, hlSequence, volContraction, mtfAlignment, barPatternSeq,
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -1510,9 +1834,123 @@ const barrierOptimizer: StrategyModule = {
     },
 };
 
+// ── 9. Digit Transition Matrix — Markov chain on digit movements ────────────
+const digitTransition: StrategyModule = {
+    name: 'DigitTransition',
+    run(_prices, ticks) {
+        if (ticks.length < 40) return null;
+        // Build 10×10 transition matrix: P(digit_i → digit_j)
+        const trans: number[][] = Array.from({ length: 10 }, () => Array(10).fill(0));
+        const counts = Array(10).fill(0);
+
+        for (let i = 1; i < ticks.length; i++) {
+            const from = ticks[i - 1];
+            const to = ticks[i];
+            if (from >= 0 && from <= 9 && to >= 0 && to <= 9) {
+                trans[from][to]++;
+                counts[from]++;
+            }
+        }
+
+        const lastDigit = ticks[ticks.length - 1];
+        if (counts[lastDigit] < 3) return null;
+
+        // Compute transition probabilities from current digit
+        const probs = trans[lastDigit].map(c => c / counts[lastDigit]);
+
+        // Score Over barriers based on probability of landing above barrier
+        let bestOver = -1, bestOverScore = 0;
+        for (const b of OVER_BARRIERS) {
+            const above = probs.slice(b + 1).reduce((a, v) => a + v, 0);
+            if (above > bestOverScore) { bestOverScore = above; bestOver = b; }
+        }
+
+        let bestUnder = -1, bestUnderScore = 0;
+        for (const b of UNDER_BARRIERS) {
+            const below = probs.slice(0, b).reduce((a, v) => a + v, 0);
+            if (below > bestUnderScore) { bestUnderScore = below; bestUnder = b; }
+        }
+
+        // Transition matrix confidence: higher when distribution is skewed
+        const entropy = -probs.reduce((a, v) => a + (v > 0 ? v * Math.log2(v) : 0), 0);
+        const maxEntropy = Math.log2(10);
+        const predictability = 1 - entropy / maxEntropy; // 0=random, 1=perfectly predictable
+
+        if (bestOverScore >= bestUnderScore && bestOver >= 0 && bestOverScore > 0.35) {
+            const conf = Math.min(86, 65 + Math.round(bestOverScore * 40 + predictability * 15));
+            return { type: 'DIGITOVER', barrier: String(bestOver), score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (bestUnder >= 0 && bestUnderScore > 0.35) {
+            const conf = Math.min(86, 65 + Math.round(bestUnderScore * 40 + predictability * 15));
+            return { type: 'DIGITUNDER', barrier: String(bestUnder), score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+
+        return null;
+    },
+};
+
+// ── 10. Digit Entropy Analysis — predictability-based barrier selection ─────
+const digitEntropy: StrategyModule = {
+    name: 'DigitEntropy',
+    run(_prices, ticks) {
+        if (ticks.length < 30) return null;
+        const short = digitPcts(ticks, 20);
+        const long = digitPcts(ticks, 60);
+
+        // Entropy of distributions
+        function calcEntropy(pcts: number[]): number {
+            const total = pcts.reduce((a, v) => a + v, 0) || 1;
+            return -pcts.reduce((a, v) => a + (v / total > 0 ? (v / total) * Math.log2(v / total) : 0), 0);
+        }
+
+        const eShort = calcEntropy(short);
+        const eLong = calcEntropy(long);
+        const maxE = Math.log2(10);
+
+        // Low entropy = concentrated distribution = more predictable
+        // High entropy = uniform distribution = random
+        const predictability = (1 - eShort / maxE) * 100;
+
+        if (predictability < 25) return null; // too random
+
+        // Find barrier with highest probability in short-term that's also above random
+        let bestOver = -1, bestOverScore = 0;
+        for (const b of OVER_BARRIERS) {
+            const prob = short.slice(b + 1).reduce((a, v) => a + v, 0);
+            const longProb = long.slice(b + 1).reduce((a, v) => a + v, 0);
+            if (prob > longProb * 0.9 && prob > bestOverScore) {
+                bestOverScore = prob;
+                bestOver = b;
+            }
+        }
+
+        let bestUnder = -1, bestUnderScore = 0;
+        for (const b of UNDER_BARRIERS) {
+            const prob = short.slice(0, b).reduce((a, v) => a + v, 0);
+            const longProb = long.slice(0, b).reduce((a, v) => a + v, 0);
+            if (prob > longProb * 0.9 && prob > bestUnderScore) {
+                bestUnderScore = prob;
+                bestUnder = b;
+            }
+        }
+
+        if (bestOverScore >= bestUnderScore && bestOver >= 0 && bestOverScore > 50) {
+            const conf = Math.min(84, 60 + Math.round(bestOverScore * 0.3 + predictability * 0.3));
+            return { type: 'DIGITOVER', barrier: String(bestOver), score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (bestUnder >= 0 && bestUnderScore > 50) {
+            const conf = Math.min(84, 60 + Math.round(bestUnderScore * 0.3 + predictability * 0.3));
+            return { type: 'DIGITUNDER', barrier: String(bestUnder), score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+
+        return null;
+    },
+};
+
 const overUnderStrategies: StrategyModule[] = [
     digitDistBarrier, stdDevBarrier, priceLevelDensity, digitMomentum,
     rangeFrequencyShift, consecutiveRun, trendAlignedBarrier, barrierOptimizer,
+    digitTransition, digitEntropy,
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -1744,9 +2182,132 @@ const bayesianParity: StrategyModule = {
     },
 };
 
+// ── 7. Run-Length Encoded Parity Analysis ────────────────────────────────────
+const runLengthParity: StrategyModule = {
+    name: 'RunLength',
+    run(_prices, ticks) {
+        if (ticks.length < 20) return null;
+        const recentParity = ticks.slice(-30).map(d => d % 2);
+
+        // Run-length encode the parity sequence
+        const runs: { parity: number; len: number }[] = [];
+        for (const p of recentParity) {
+            if (runs.length > 0 && runs[runs.length - 1].parity === p) {
+                runs[runs.length - 1].len++;
+            } else {
+                runs.push({ parity: p, len: 1 });
+            }
+        }
+
+        if (runs.length < 2) return null;
+        const lastRun = runs[runs.length - 1];
+        const prevRun = runs[runs.length - 2];
+
+        // Long run of same parity → reversal likely
+        if (lastRun.len >= 5) {
+            const confidence = Math.min(84, 68 + lastRun.len * 3);
+            return {
+                type: lastRun.parity === 0 ? 'DIGITODD' : 'DIGITEVEN',
+                score: 2,
+                confidence: Math.round(confidence),
+                weight: getStrategyWeight(this.name),
+                name: this.name,
+            };
+        }
+
+        // Alternating pattern (1,1,1,2,2,2 alternating) 
+        if (runs.length >= 4) {
+            const last4 = runs.slice(-4);
+            const altPattern = last4.every(r => r.len >= 1 && r.len <= 3);
+            if (altPattern && lastRun.len >= 2) {
+                // continuation of alternation
+                const nextParity = lastRun.parity === 0 ? 1 : 0;
+                return {
+                    type: nextParity === 0 ? 'DIGITEVEN' : 'DIGITODD',
+                    score: 1,
+                    confidence: 66,
+                    weight: getStrategyWeight(this.name),
+                    name: this.name,
+                };
+            }
+        }
+
+        // Run length ratio: if current run is much longer than average → reversal
+        const avgRunLen = runs.slice(0, -1).reduce((a, r) => a + r.len, 0) / (runs.length - 1 || 1);
+        if (avgRunLen > 1 && lastRun.len > avgRunLen * 2.5) {
+            const conf = Math.min(82, 65 + Math.round((lastRun.len / avgRunLen) * 8));
+            return {
+                type: lastRun.parity === 0 ? 'DIGITODD' : 'DIGITEVEN',
+                score: 2,
+                confidence: Math.round(conf),
+                weight: getStrategyWeight(this.name),
+                name: this.name,
+            };
+        }
+
+        return null;
+    },
+};
+
+// ── 8. Consecutive Digit Pair Parity ─────────────────────────────────────────
+const pairParity: StrategyModule = {
+    name: 'PairParity',
+    run(_prices, ticks) {
+        if (ticks.length < 30) return null;
+        // Build transition matrix: digit value → parity of next digit
+        const trans: Record<number, { even: number; odd: number; total: number }> = {};
+        for (let d = 0; d <= 9; d++) trans[d] = { even: 0, odd: 0, total: 0 };
+
+        for (let i = 1; i < ticks.length; i++) {
+            const from = ticks[i - 1];
+            const toParity = ticks[i] % 2;
+            if (from >= 0 && from <= 9 && trans[from]) {
+                if (toParity === 0) trans[from].even++;
+                else trans[from].odd++;
+                trans[from].total++;
+            }
+        }
+
+        const lastDigit = ticks[ticks.length - 1];
+        if (lastDigit < 0 || lastDigit > 9 || trans[lastDigit].total < 3) return null;
+
+        const t = trans[lastDigit];
+        const evenProb = t.even / t.total;
+        const oddProb = t.odd / t.total;
+
+        // Calculate confidence based on skew and sample size
+        const skew = Math.abs(evenProb - oddProb);
+        const sizeBonus = Math.min(8, t.total * 0.3);
+
+        // Also check if this aligns with digit psychology
+        const isEvenDigit = lastDigit % 2 === 0;
+        const ecoCluster = lastDigit >= 4 && lastDigit <= 6;
+
+        if (evenProb > 0.65) {
+            const conf = Math.min(84, 66 + Math.round(skew * 30 + sizeBonus) + (ecoCluster ? 4 : 0));
+            return { type: 'DIGITEVEN', score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (oddProb > 0.65) {
+            const conf = Math.min(84, 66 + Math.round(skew * 30 + sizeBonus) + (ecoCluster ? 4 : 0));
+            return { type: 'DIGITODD', score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+
+        // Moderate signal if current digit parity aligns with strong transition
+        if (evenProb > 0.58 && isEvenDigit) {
+            return { type: 'DIGITEVEN', score: 1, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (oddProb > 0.58 && !isEvenDigit) {
+            return { type: 'DIGITODD', score: 1, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+        }
+
+        return null;
+    },
+};
+
 const evenOddStrategies: StrategyModule[] = [
     parityStreak, parityDistribution, markovParity,
     rsiDigit, cyclicalParity, bayesianParity,
+    runLengthParity, pairParity,
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════════
