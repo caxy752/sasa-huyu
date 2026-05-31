@@ -79,7 +79,7 @@ export const MarketKiller: React.FC = () => {
     const cooldownTicksRef     = useRef(0);
     const signalHistoryRef     = useRef<{ sym: string; type: string; conf: number }[]>([]);
     const durationStatsRef   = useRef<Record<number, { wins: number; losses: number }>>({ 1: {w:0,l:0}, 2: {w:0,l:0}, 3: {w:0,l:0}, 4: {w:0,l:0}, 5: {w:0,l:0} });
-    const bestDurationRef    = useRef(1);
+    const nextTestDurationRef = useRef(1);
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
     useEffect(() => { saveLogs(logs); }, [logs]);
@@ -201,16 +201,23 @@ export const MarketKiller: React.FC = () => {
     }, [addLog]);
 
     /* ── Auto-detect best tick duration (1-5) based on recent win rates ──── */
+    const MIN_TRADES_PER_DURATION = 3;
     const pickBestDuration = useCallback((): number => {
         const stats = durationStatsRef.current;
+        let allTested = true;
         let bestD = 1, bestRate = 0;
         for (let d = 1; d <= 5; d++) {
-            const s = stats[d];
-            const total = s.w + s.l;
-            if (total >= 3) {
-                const rate = s.w / total;
+            const total = stats[d].w + stats[d].l;
+            if (total < MIN_TRADES_PER_DURATION) allTested = false;
+            if (total >= MIN_TRADES_PER_DURATION) {
+                const rate = stats[d].w / total;
                 if (rate > bestRate) { bestRate = rate; bestD = d; }
             }
+        }
+        if (!allTested) {
+            const d = nextTestDurationRef.current;
+            nextTestDurationRef.current = (d % 5) + 1;
+            return d;
         }
         return bestD;
     }, []);
@@ -334,6 +341,17 @@ export const MarketKiller: React.FC = () => {
                     if ((bestSig.contract_type === 'CALL' && allUp) || (bestSig.contract_type === 'PUT' && allDown)) {
                         return; // market too extended in predicted direction, skip
                     }
+                }
+                // Signal alignment: at least 2 of the 3 confirmation ticks must have moved in predicted direction
+                if (prices && prices.length >= 4) {
+                    const pDir = prices.slice(-4);
+                    let aligned = 0;
+                    if (bestSig.contract_type === 'CALL') {
+                        for (let i = 0; i < 3; i++) { if (pDir[i] < pDir[i+1]) aligned++; }
+                    } else {
+                        for (let i = 0; i < 3; i++) { if (pDir[i] > pDir[i+1]) aligned++; }
+                    }
+                    if (aligned < 2) return; // not enough ticks confirmed the direction
                 }
                 executeTrade(bestSym, bestSig).catch(() => {});
             }
