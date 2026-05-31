@@ -40,8 +40,8 @@ export const MakotiWidget: React.FC = () => {
 
         const w = window.innerWidth;
         const h = window.innerHeight;
-        const winW = Math.min(400, w - PAD * 2);
-        const winH = Math.min(620, h - 80);
+        const winW = Math.min(300, w - PAD * 2);
+        const winH = Math.min(420, h - 80);
 
         const applyDrag = () => {
             rafId.current = null;
@@ -116,8 +116,8 @@ export const MakotiWidget: React.FC = () => {
         if (winRef.current && open) {
             const w = window.innerWidth;
             const h = window.innerHeight;
-            const defX = Math.max(PAD, w - Math.min(400, w - PAD * 2) - PAD);
-            const defY = Math.max(PAD, h - 640);
+            const defX = Math.max(PAD, w - Math.min(300, w - PAD * 2) - PAD);
+            const defY = Math.max(PAD, h - 460);
             winRef.current.style.left = (w <= 600 ? PAD : defX) + 'px';
             winRef.current.style.top  = (w <= 600 ? PAD : defY) + 'px';
         }

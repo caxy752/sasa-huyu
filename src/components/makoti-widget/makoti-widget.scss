@@ -76,9 +76,9 @@ $mw-radius:   10px;
 .mw-window {
     position: fixed;
     z-index: 99998;
-    width: 400px;
+    width: 300px;
     max-width: calc(100vw - 16px);
-    max-height: min(620px, calc(100vh - 80px));
+    max-height: min(420px, calc(100vh - 80px));
     background: $mw-bg;
     border: 1px solid $mw-border;
     border-radius: $mw-radius;
