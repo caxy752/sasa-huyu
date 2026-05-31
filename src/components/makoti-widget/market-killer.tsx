@@ -200,7 +200,7 @@ export const MarketKiller: React.FC = () => {
         const sd = symbolDataRef.current[sym];
         if (!sd) return;
 
-        // Micro-trend entry gate
+        // Micro-trend entry gate: don't trade against the trend
         if (signal.contract_type === 'CALL' || signal.contract_type === 'PUT') {
             const last3 = sd.prices.slice(-3);
             if (last3.length === 3) {
@@ -301,6 +301,16 @@ export const MarketKiller: React.FC = () => {
             const confirmed = last3.length === 3 && last3.every(s => s.sym === bestSym && s.type === bestSig.contract_type);
             if (confirmed) {
                 signalHistoryRef.current = []; // clear after confirmed trade
+                // Streak guard: if all 3 confirmation ticks moved in the predicted direction, skip (too extended)
+                const prices = symbolDataRef.current[bestSym]?.prices;
+                if (prices && prices.length >= 4) {
+                    const last4 = prices.slice(-4);
+                    const allUp   = last4[0] < last4[1] && last4[1] < last4[2] && last4[2] < last4[3];
+                    const allDown = last4[0] > last4[1] && last4[1] > last4[2] && last4[2] > last4[3];
+                    if ((bestSig.contract_type === 'CALL' && allUp) || (bestSig.contract_type === 'PUT' && allDown)) {
+                        return; // market too extended in predicted direction, skip
+                    }
+                }
                 executeTrade(bestSym, bestSig).catch(() => {});
             }
         }
