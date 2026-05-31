@@ -80,6 +80,10 @@ export const MarketKiller: React.FC = () => {
     const consecutiveLossesRef = useRef(0);
     const cooldownTicksRef     = useRef(0);
 
+    // Ref for onTickReceived to avoid stale closure in WS handler
+    const onTickRef = useRef(onTickReceived);
+    onTickRef.current = onTickReceived;
+
     /* ── Persist ──────────────────────────────────────────────────────────── */
     useEffect(() => { saveLogs(logs); }, [logs]);
 
@@ -382,7 +386,7 @@ export const MarketKiller: React.FC = () => {
                     sd.prices = [...sd.prices.slice(-(MAX_TICKS - 1)), price];
                     sd.ready  = sd.ticks.length >= MIN_TICKS_BEFORE_TRADE;
 
-                    onTickReceived();
+                    onTickRef.current();
                     break;
                 }
 
@@ -516,7 +520,7 @@ export const MarketKiller: React.FC = () => {
             {/* ── Running notice ── */}
             {running && (
                 <div className='mw-killer__mode-note'>
-                    Auto (RF + OU + EO) — 40-strategy ensemble engine
+                    Auto (RF + OU + EO) — 47-strategy ensemble engine
                     {activeContracts > 0 && <span className='mw-killer__active-dot'> ● TRADE LIVE</span>}
                 </div>
             )}

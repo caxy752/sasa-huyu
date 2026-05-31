@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-//  MAKOTI PREDICTION ENGINE v2
+//  MAKOTI PREDICTION ENGINE v3
 //  Multi-strategy ensemble with market state detection, dynamic weighting,
 //  and contract-type-aware signal generation for Rise/Fall, Over/Under,
-//  Even/Odd, and Digits.
+//  Even/Odd, and Digits. 47 strategies total (36 RF, 5 OU, 6 EO).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /* ── Exports ───────────────────────────────────────────────────────────────── */
@@ -1479,6 +1479,302 @@ const barPatternSeq: StrategyModule = {
     },
 };
 
+// ── 28. Multi-window Tick Pressure (3/5/8 tick up/down ratio) ────────────────
+const tickPressure: StrategyModule = {
+    name: 'TickPressure',
+    run(prices) {
+        if (prices.length < 10) return null;
+        function bias(vals: number[], w: number): number {
+            if (vals.length < w + 1) return 0;
+            const s = vals.slice(-w - 1);
+            let u = 0, d = 0;
+            for (let i = 1; i < s.length; i++) {
+                if (s[i] > s[i - 1]) u++;
+                else if (s[i] < s[i - 1]) d++;
+            }
+            return u - d;
+        }
+        const b3 = bias(prices, 3);
+        const b5 = bias(prices, 5);
+        const b8 = bias(prices, 8);
+        if (b3 >= 2 && b5 >= 2 && b8 >= 2) {
+            const conf = Math.min(86, 72 + b3 * 3);
+            return { type: 'CALL', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (b3 <= -2 && b5 <= -2 && b8 <= -2) {
+            const conf = Math.min(86, 72 + Math.abs(b3) * 3);
+            return { type: 'PUT', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if ((b3 > 0 && b5 > 0 && b3 + b5 >= 3) || (b3 > 0 && b8 > 0 && b3 + b8 >= 3) || (b5 > 0 && b8 > 0 && b5 + b8 >= 3)) {
+            return { type: 'CALL', score: 2, confidence: 76, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if ((b3 < 0 && b5 < 0 && Math.abs(b3 + b5) >= 3) || (b3 < 0 && b8 < 0 && Math.abs(b3 + b8) >= 3) || (b5 < 0 && b8 < 0 && Math.abs(b5 + b8) >= 3)) {
+            return { type: 'PUT', score: 2, confidence: 76, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        return null;
+    },
+};
+
+// ── 29. Tick Acceleration/Deceleration ────────────────────────────────────────
+const accelMomentum: StrategyModule = {
+    name: 'Accel',
+    run(prices) {
+        if (prices.length < 6) return null;
+        const v: number[] = [];
+        for (let i = 1; i < 7 && i < prices.length; i++) {
+            v.push(prices[prices.length - i] - prices[prices.length - i - 1]);
+        }
+        const vRecent = v.slice(0, 2);
+        const vPrior = v.slice(2, 5);
+        if (vPrior.length < 2 || vRecent.length < 2) return null;
+        const sumRecent = vRecent.reduce((a, b) => a + b, 0);
+        const sumPrior = vPrior.reduce((a, b) => a + b, 0);
+        const absRecent = Math.abs(sumRecent);
+        const absPrior = Math.abs(sumPrior);
+        if (sumRecent > 0 && sumPrior > 0 && absRecent > absPrior * 1.3) {
+            const conf = Math.min(84, 70 + Math.round((absRecent / (absPrior || 0.0001)) * 10));
+            return { type: 'CALL', score: 3, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (sumRecent < 0 && sumPrior < 0 && absRecent > absPrior * 1.3) {
+            const conf = Math.min(84, 70 + Math.round((absRecent / (absPrior || 0.0001)) * 10));
+            return { type: 'PUT', score: 3, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (sumPrior > 0 && sumRecent < 0 && absPrior > 0.001) {
+            const ratio = absRecent / absPrior;
+            if (ratio > 0.5) return { type: 'PUT', score: 2, confidence: 74, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (sumPrior < 0 && sumRecent > 0 && absPrior > 0.001) {
+            const ratio = absRecent / absPrior;
+            if (ratio > 0.5) return { type: 'CALL', score: 2, confidence: 74, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        return null;
+    },
+};
+
+// ── 30. Micro-Trend Strength (% directional consistency, ADX-like for ticks) ──
+const microTrendStrength: StrategyModule = {
+    name: 'MicroTrend',
+    run(prices) {
+        if (prices.length < 10) return null;
+        const recent = prices.slice(-10);
+        let upMoves = 0, downMoves = 0, upSum = 0, downSum = 0;
+        for (let i = 1; i < recent.length; i++) {
+            const diff = recent[i] - recent[i - 1];
+            if (diff > 0) { upMoves++; upSum += diff; }
+            else if (diff < 0) { downMoves++; downSum += Math.abs(diff); }
+        }
+        const totalMov = upMoves + downMoves;
+        if (totalMov < 6) return null;
+        const upPct = upMoves / totalMov;
+        const downPct = downMoves / totalMov;
+        const directionalConsistency = Math.max(upPct, downPct) * 100;
+        if (directionalConsistency >= 70) {
+            if (upPct > downPct && upSum > downSum) {
+                const bonus = upSum > downSum * 1.3 ? 4 : 0;
+                const conf = Math.min(84, 66 + Math.round((directionalConsistency - 60) * 0.8) + bonus);
+                return { type: 'CALL', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+            if (downPct > upPct && downSum > upSum) {
+                const bonus = downSum > upSum * 1.3 ? 4 : 0;
+                const conf = Math.min(84, 66 + Math.round((directionalConsistency - 60) * 0.8) + bonus);
+                return { type: 'PUT', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+        }
+        if (directionalConsistency >= 62 && upPct !== downPct) {
+            if (upPct > downPct) return { type: 'CALL', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
+            else return { type: 'PUT', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        return null;
+    },
+};
+
+// ── 31. Micro Support/Resistance Bounce ───────────────────────────────────────
+const supportBounce: StrategyModule = {
+    name: 'SupportBounce',
+    run(prices) {
+        if (prices.length < 12) return null;
+        const recent = prices.slice(-12);
+        const last = recent[recent.length - 1];
+        const prev = recent[recent.length - 2];
+        const highs: number[] = [], lows: number[] = [];
+        for (let i = 2; i < recent.length - 2; i++) {
+            if (recent[i] > recent[i - 1] && recent[i] > recent[i + 1]) highs.push(recent[i]);
+            if (recent[i] < recent[i - 1] && recent[i] < recent[i + 1]) lows.push(recent[i]);
+        }
+        const avgPrice = recent.reduce((a, b) => a + b, 0) / recent.length;
+        if (lows.length > 0) {
+            const nearestSupport = lows.reduce((best, l) => Math.abs(last - l) < Math.abs(last - best) ? l : best, lows[0]);
+            const pctDist = avgPrice > 0 ? Math.abs(last - nearestSupport) / avgPrice * 100 : 0;
+            if (pctDist < 0.05 && last > prev && last >= nearestSupport) {
+                const conf = Math.min(80, 68 + Math.round((0.05 - pctDist) * 200));
+                return { type: 'CALL', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+        }
+        if (highs.length > 0) {
+            const nearestResist = highs.reduce((best, h) => Math.abs(last - h) < Math.abs(last - best) ? h : best, highs[0]);
+            const pctDist = avgPrice > 0 ? Math.abs(last - nearestResist) / avgPrice * 100 : 0;
+            if (pctDist < 0.05 && last < prev && last <= nearestResist) {
+                const conf = Math.min(80, 68 + Math.round((0.05 - pctDist) * 200));
+                return { type: 'PUT', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+        }
+        return null;
+    },
+};
+
+// ── 32. Tick Pressure Divergence — price extreme but pressure weakening ──────
+const tickDivergence: StrategyModule = {
+    name: 'TickDiverge',
+    run(prices) {
+        if (prices.length < 14) return null;
+        const recent = prices.slice(-14);
+        const last = recent[recent.length - 1];
+        const prev = recent[recent.length - 2];
+        const highest = Math.max(...recent);
+        const lowest = Math.min(...recent);
+        function pressure(vals: number[]): number {
+            let u = 0, d = 0;
+            for (let i = 1; i < vals.length; i++) {
+                if (vals[i] > vals[i - 1]) u++;
+                else if (vals[i] < vals[i - 1]) d++;
+            }
+            return u - d;
+        }
+        const pRecent = pressure(recent.slice(-5));
+        const pPrior = pressure(recent.slice(-10, -5));
+        const range = highest - lowest || 1;
+        if (last >= highest - range * 0.05 && pRecent < pPrior && pRecent < 0) {
+            return { type: 'PUT', score: 3, confidence: 76, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (last <= lowest + range * 0.05 && pRecent > pPrior && pRecent > 0) {
+            return { type: 'CALL', score: 3, confidence: 76, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (last > prev && pRecent <= 0 && pPrior > 0) {
+            return { type: 'PUT', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (last < prev && pRecent >= 0 && pPrior < 0) {
+            return { type: 'CALL', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        return null;
+    },
+};
+
+// ── 33. Consecutive Gap Expansion — each successive tick gap grows ───────────
+const consecGap: StrategyModule = {
+    name: 'ConsecGap',
+    run(prices) {
+        if (prices.length < 5) return null;
+        const last3Gaps: number[] = [];
+        for (let i = 0; i < 3 && i + 1 < prices.length; i++) {
+            last3Gaps.push(prices[prices.length - 1 - i] - prices[prices.length - 2 - i]);
+        }
+        if (last3Gaps.length < 3) return null;
+        const dir = last3Gaps[0] > 0 ? 1 : last3Gaps[0] < 0 ? -1 : 0;
+        if (dir === 0) return null;
+        const allSameDir = last3Gaps.every(g => (g > 0 ? 1 : g < 0 ? -1 : 0) === dir);
+        if (!allSameDir) return null;
+        const absGaps = last3Gaps.map(g => Math.abs(g));
+        const expanding = absGaps[0] > absGaps[1] && absGaps[1] > absGaps[2];
+        if (!expanding) return null;
+        const conf = Math.min(86, 72 + Math.round((absGaps[0] / (absGaps[2] || 0.0001)) * 5));
+        return { type: dir > 0 ? 'CALL' : 'PUT', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+    },
+};
+
+// ── 34. Triple MA Alignment (SMA3, SMA5, SMA8) ───────────────────────────────
+const tripleMA: StrategyModule = {
+    name: 'TripleMA',
+    run(prices) {
+        if (prices.length < 15) return null;
+        const last = prices[prices.length - 1];
+        const sma3 = sma(prices, 3);
+        const sma5 = sma(prices, 5);
+        const sma8 = sma(prices, 8);
+        if (sma3.length < 1 || sma5.length < 1 || sma8.length < 1) return null;
+        const s3 = sma3.at(-1)!, s5 = sma5.at(-1)!, s8 = sma8.at(-1)!;
+        if (last > s3 && s3 > s5 && s5 > s8) {
+            const conf = Math.min(84, 70 + Math.round((last - s8) / (s8 || 0.0001) * 500));
+            return { type: 'CALL', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (last < s3 && s3 < s5 && s5 < s8) {
+            const conf = Math.min(84, 70 + Math.round((s8 - last) / (s8 || 0.0001) * 500));
+            return { type: 'PUT', score: 3, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (last > s3 && s3 > s5) {
+            return { type: 'CALL', score: 2, confidence: 74, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (last < s3 && s3 < s5) {
+            return { type: 'PUT', score: 2, confidence: 74, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        return null;
+    },
+};
+
+// ── 35. Micro 3-Tick Pattern Recognition ──────────────────────────────────────
+const microPattern3: StrategyModule = {
+    name: 'Micro3Pat',
+    run(prices) {
+        if (prices.length < 6) return null;
+        const p4 = prices[prices.length - 4];
+        const p3 = prices[prices.length - 3];
+        const p2 = prices[prices.length - 2];
+        const p1 = prices[prices.length - 1];
+        const d1 = p1 > p2 ? 1 : p1 < p2 ? -1 : 0;
+        const d2 = p2 > p3 ? 1 : p2 < p3 ? -1 : 0;
+        const d3 = p3 > p4 ? 1 : p3 < p4 ? -1 : 0;
+        if (d1 === 0) return null;
+        // All same direction → continuation
+        if (d1 === d2 && d2 === d3) {
+            return { type: d1 > 0 ? 'CALL' : 'PUT', score: 3, confidence: 78, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        // Pullback pattern (d1 same as d3, d2 opposite) → continuation after pullback
+        if (d1 === d3 && d2 === -d1 && d2 !== 0) {
+            return { type: d1 > 0 ? 'CALL' : 'PUT', score: 2, confidence: 76, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        // Reversal pattern (d2 same as d3, opposite to d1) → new trend
+        if (d2 === d3 && d2 !== d1 && d2 !== 0) {
+            return { type: d2 > 0 ? 'CALL' : 'PUT', score: 2, confidence: 74, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        return null;
+    },
+};
+
+// ── 36. Tick Entropy — low entropy = trending → follow trend ─────────────────
+const tickEntropy: StrategyModule = {
+    name: 'TickEntropy',
+    run(prices) {
+        if (prices.length < 12) return null;
+        const recent = prices.slice(-12);
+        let upCount = 0, downCount = 0;
+        for (let i = 1; i < recent.length; i++) {
+            if (recent[i] > recent[i - 1]) upCount++;
+            else if (recent[i] < recent[i - 1]) downCount++;
+        }
+        const total = upCount + downCount;
+        if (total < 8) return null;
+        const pUp = upCount / total;
+        const pDown = downCount / total;
+        if (pUp === 0 || pDown === 0) return null;
+        // Shannon entropy H = -sum(p * log2(p))
+        const entropy = -(pUp * Math.log2(pUp) + pDown * Math.log2(pDown));
+        // Max entropy = 1.0 (for binary). Lower = more directional.
+        // Entropy < 0.85 means at least 65% in one direction
+        if (entropy < 0.85) {
+            const last = recent[recent.length - 1];
+            const prev = recent[recent.length - 2];
+            if (pUp > pDown && last > prev) {
+                const conf = Math.min(82, 70 + Math.round((0.85 - entropy) * 60));
+                return { type: 'CALL', score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+            if (pDown > pUp && last < prev) {
+                const conf = Math.min(82, 70 + Math.round((0.85 - entropy) * 60));
+                return { type: 'PUT', score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+            }
+        }
+        return null;
+    },
+};
+
 const riseFallStrategies: StrategyModule[] = [
     microTiming, rsiDivergence, macdStrategy, bbStrategy,
     stochasticStrategy, atrBreakout, priceAction, maCross,
@@ -1487,6 +1783,8 @@ const riseFallStrategies: StrategyModule[] = [
     doubleTopBottom, exhaustionRev, pivotReversal, tickVelocity,
     fibonacciRetrace, statisticalExtreme,
     nPatternMatch, hlSequence, volContraction, mtfAlignment, barPatternSeq,
+    tickPressure, accelMomentum, microTrendStrength, supportBounce,
+    tickDivergence, consecGap, tripleMA, microPattern3, tickEntropy,
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -1822,359 +2120,148 @@ const overUnderStrategies: StrategyModule[] = [
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    EVEN/ODD STRATEGIES (DIGITEVEN / DIGITODD)
+   All strategies have confidence capped at 72 (parity prediction is ~50/50).
+   Only fire on extreme, statistically significant deviations.
 ═══════════════════════════════════════════════════════════════════════════════ */
 
-// ── 19. Parity streak exhaustion ────────────────────────────────────────────
-const parityStreak: StrategyModule = {
-    name: 'ParityStreak',
+// ── EO1. Extreme parity streak exhaustion — streaks 6+ ─────────────────────
+const extremeParityStreak: StrategyModule = {
+    name: 'ExtremeParityStreak',
     run(_prices, ticks) {
-        if (ticks.length < 10) return null;
-        const recent = ticks.slice(-20);
-
-        // Streak of same parity
-        const lastParity = recent[recent.length - 1] % 2; // 0=even, 1=odd
+        if (ticks.length < 15) return null;
+        const recent = ticks.slice(-25);
+        const lastParity = recent[recent.length - 1] % 2;
         let streakLen = 0;
         for (let i = recent.length - 1; i >= 0; i--) {
             if (recent[i] % 2 === lastParity) streakLen++;
             else break;
         }
-
-        // Long streaks increase reversal probability
-        if (streakLen >= 6) {
-            const conf = Math.min(80, 55 + streakLen * 4);
-            if (lastParity === 0) { // even streak
-                return { type: 'DIGITODD', score: 3, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
-            } else {
-                return { type: 'DIGITEVEN', score: 3, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
-            }
-        }
-        if (streakLen >= 4) {
-            const conf = Math.min(72, 55 + streakLen * 3);
-            if (lastParity === 0) {
-                return { type: 'DIGITODD', score: 2, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
-            } else {
-                return { type: 'DIGITEVEN', score: 2, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
-            }
-        }
-
-        return null;
-    },
-};
-
-// ── 20. Parity distribution bias ────────────────────────────────────────────
-const parityDistribution: StrategyModule = {
-    name: 'ParityDist',
-    run(_prices, ticks) {
-        if (ticks.length < 30) return null;
-        const short = ticks.slice(-20);
-        const long = ticks.slice(-50);
-
-        const shortEven = short.filter(d => d % 2 === 0).length;
-        const longEven = long.filter(d => d % 2 === 0).length;
-        const shortPct = (shortEven / short.length) * 100;
-        const longPct = (longEven / long.length) * 100;
-
-        // Strong bias divergence between short and long
-        if (shortPct > 62 && longPct < 55) {
-            return { type: 'DIGITODD', score: 2, confidence: 68, weight: getStrategyWeight(this.name), name: this.name };
-        }
-        if (shortPct < 38 && longPct > 45) {
-            return { type: 'DIGITEVEN', score: 2, confidence: 68, weight: getStrategyWeight(this.name), name: this.name };
-        }
-
-        // Sustained bias
-        if (shortPct > 60 && longPct > 58) {
-            return { type: 'DIGITEVEN', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
-        }
-        if (shortPct < 40 && longPct < 42) {
-            return { type: 'DIGITODD', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
-        }
-
-        return null;
-    },
-};
-
-// ── 21. Markov chain transition probabilities ──────────────────────────────
-const markovParity: StrategyModule = {
-    name: 'Markov',
-    run(_prices, ticks) {
-        if (ticks.length < 30) return null;
-        const recent = ticks.slice(-40);
-        const trans: Record<string, number> = {
-            '00': 0, '01': 0, '10': 0, '11': 0,
+        if (streakLen < 6) return null;
+        const conf = Math.min(72, 58 + streakLen * 3);
+        return {
+            type: lastParity === 0 ? 'DIGITODD' : 'DIGITEVEN',
+            score: 2, confidence: Math.round(conf),
+            weight: getStrategyWeight(this.name), name: this.name,
         };
+    },
+};
 
+// ── EO2. Strong distribution bias (>68% in 68 and 100-tick windows) ────────
+const strongParityBias: StrategyModule = {
+    name: 'StrongParityBias',
+    run(_prices, ticks) {
+        if (ticks.length < 100) return null;
+        const pcts68 = digitPcts(ticks, 68);
+        const pcts100 = digitPcts(ticks, 100);
+        const even68 = pcts68.filter((_, i) => i % 2 === 0).reduce((a, v) => a + v, 0);
+        const odd68 = pcts68.filter((_, i) => i % 2 === 1).reduce((a, v) => a + v, 0);
+        const even100 = pcts100.filter((_, i) => i % 2 === 0).reduce((a, v) => a + v, 0);
+        const odd100 = pcts100.filter((_, i) => i % 2 === 1).reduce((a, v) => a + v, 0);
+        if (even68 > 68 && even100 > 68) {
+            return { type: 'DIGITEVEN', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (odd68 > 68 && odd100 > 68) {
+            return { type: 'DIGITODD', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        return null;
+    },
+};
+
+// ── EO3. Markov transition >70% with min 10 samples ────────────────────────
+const highConvictionMarkov: StrategyModule = {
+    name: 'HighConvictionMarkov',
+    run(_prices, ticks) {
+        if (ticks.length < 40) return null;
+        const recent = ticks.slice(-50);
+        let e2e = 0, e2o = 0, o2e = 0, o2o = 0;
         for (let i = 1; i < recent.length; i++) {
-            const from = recent[i - 1] % 2;
-            const to = recent[i] % 2;
-            trans[`${from}${to}`]++;
+            const prev = recent[i - 1] % 2, curr = recent[i] % 2;
+            if (prev === 0 && curr === 0) e2e++;
+            else if (prev === 0 && curr === 1) e2o++;
+            else if (prev === 1 && curr === 0) o2e++;
+            else o2o++;
         }
-
-        const totalFrom0 = trans['00'] + trans['01'];
-        const totalFrom1 = trans['10'] + trans['11'];
-        const prob0to1 = totalFrom0 > 0 ? trans['01'] / totalFrom0 : 0.5;
-        const prob1to0 = totalFrom1 > 0 ? trans['10'] / totalFrom1 : 0.5;
-
-        const lastParity = recent[recent.length - 1] % 2;
-
-        // Strong transition probability
-        if (lastParity === 0 && prob0to1 > 0.65) {
-            return { type: 'DIGITODD', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
-        }
-        if (lastParity === 1 && prob1to0 > 0.65) {
-            return { type: 'DIGITEVEN', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
-        }
-
-        // Mean reversion in transitions
-        if (lastParity === 0 && prob0to1 < 0.35) {
-            return { type: 'DIGITEVEN', score: 1, confidence: 62, weight: getStrategyWeight(this.name), name: this.name };
-        }
-        if (lastParity === 1 && prob1to0 < 0.35) {
-            return { type: 'DIGITODD', score: 1, confidence: 62, weight: getStrategyWeight(this.name), name: this.name };
-        }
-
-        return null;
-    },
-};
-
-// ── 22. RSI on digit values ─────────────────────────────────────────────────
-const rsiDigit: StrategyModule = {
-    name: 'RSI_Digit',
-    run(_prices, ticks) {
-        if (ticks.length < 14) return null;
-        const digitValues = ticks.map(d => d);
-        const rsiVal = rsi(digitValues, 7);
-
-        if (rsiVal < 25) {
-            // Digit value very low (mostly 0-3) → next likely higher → more odd (1,3,5,7,9)
-            return { type: 'DIGITODD', score: 2, confidence: 64, weight: getStrategyWeight(this.name), name: this.name };
-        }
-        if (rsiVal > 75) {
-            // Digit value very high (mostly 6-9) → next likely lower → more even (0,2,4,6,8)
-            return { type: 'DIGITEVEN', score: 2, confidence: 64, weight: getStrategyWeight(this.name), name: this.name };
-        }
-
-        return null;
-    },
-};
-
-// ── 23. Cyclical parity pattern ─────────────────────────────────────────────
-const cyclicalParity: StrategyModule = {
-    name: 'Cyclical',
-    run(_prices, ticks) {
-        if (ticks.length < 30) return null;
-        const recent = ticks.slice(-30);
-        const parities = recent.map(d => d % 2);
-
-        // Check for periodicity: autocorrelation at lag 1,2,3
-        const lag1 = autocorr(parities, 1);
-        const lag2 = autocorr(parities, 2);
-        const lag3 = autocorr(parities, 3);
-
-        if (lag1 !== null && lag1 > 0.3) {
-            // Strong positive serial correlation → parity likely to follow previous
-            const lastP = parities[parities.length - 1];
-            if (lastP === 0) {
-                return { type: 'DIGITEVEN', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
-            } else {
-                return { type: 'DIGITODD', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+        const last = recent[recent.length - 1] % 2;
+        if (last === 0) {
+            const total = e2e + e2o;
+            if (total >= 10 && e2o / total > 0.70) {
+                return { type: 'DIGITODD', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
+            }
+        } else {
+            const total = o2e + o2o;
+            if (total >= 10 && o2e / total > 0.70) {
+                return { type: 'DIGITEVEN', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
             }
         }
-
-        if (lag1 !== null && lag1 < -0.2) {
-            // Negative serial correlation → parity alternates → opposite of last
-            const lastP = parities[parities.length - 1];
-            if (lastP === 0) {
-                return { type: 'DIGITODD', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
-            } else {
-                return { type: 'DIGITEVEN', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
-            }
-        }
-
-        // Check 2-period cycle
-        if (lag2 !== null && lag2 > 0.4) {
-            return { type: parities[parities.length - 2] % 2 === 0 ? 'DIGITEVEN' : 'DIGITODD', score: 1, confidence: 62, weight: getStrategyWeight(this.name), name: this.name };
-        }
-
         return null;
     },
 };
 
-function autocorr(values: number[], lag: number): number | null {
-    if (values.length <= lag * 2) return null;
-    const n = values.length;
-    const mean = values.reduce((a, b) => a + b, 0) / n;
-    let num = 0, den = 0;
-    for (let i = 0; i < n - lag; i++) {
-        num += (values[i] - mean) * (values[i + lag] - mean);
-    }
-    for (let i = 0; i < n; i++) {
-        den += (values[i] - mean) ** 2;
-    }
-    if (den === 0) return null;
-    return num / den;
-}
-
-// ── 24. Bayesian parity probability ─────────────────────────────────────────
-const bayesianParity: StrategyModule = {
-    name: 'Bayesian',
+// ── EO4. Extreme RSI(7) <15 or >85 on digit values ─────────────────────────
+const extremeRSI: StrategyModule = {
+    name: 'ExtremeRSI',
     run(_prices, ticks) {
         if (ticks.length < 20) return null;
-        const recent = ticks.slice(-20);
-        const evens = recent.filter(d => d % 2 === 0).length;
-        const total = recent.length;
-        const pEven = evens / total;
-
-        // Laplace smoothing: P(even) = (evens + 1) / (total + 2)
-        const laplaceEven = (evens + 1) / (total + 2);
-        const laplaceOdd = 1 - laplaceEven;
-
-        // Strong conviction
-        if (laplaceEven > 0.72) {
-            return { type: 'DIGITEVEN', score: 2, confidence: 68, weight: getStrategyWeight(this.name), name: this.name };
+        const rsiVal = rsi(ticks, 7);
+        if (rsiVal < 15) {
+            return { type: 'DIGITODD', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
         }
-        if (laplaceOdd > 0.72) {
-            return { type: 'DIGITODD', score: 2, confidence: 68, weight: getStrategyWeight(this.name), name: this.name };
+        if (rsiVal > 85) {
+            return { type: 'DIGITEVEN', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
         }
-
-        // Moderate conviction
-        if (laplaceEven > 0.62) {
-            return { type: 'DIGITEVEN', score: 1, confidence: 62, weight: getStrategyWeight(this.name), name: this.name };
-        }
-        if (laplaceOdd > 0.62) {
-            return { type: 'DIGITODD', score: 1, confidence: 62, weight: getStrategyWeight(this.name), name: this.name };
-        }
-
         return null;
     },
 };
 
-// ── 7. Run-Length Encoded Parity Analysis ────────────────────────────────────
-const runLengthParity: StrategyModule = {
-    name: 'RunLength',
+// ── EO5. Pair transitions >72% with 8+ samples ─────────────────────────────
+const strongPairParity: StrategyModule = {
+    name: 'StrongPairParity',
     run(_prices, ticks) {
-        if (ticks.length < 20) return null;
-        const recentParity = ticks.slice(-30).map(d => d % 2);
-
-        // Run-length encode the parity sequence
-        const runs: { parity: number; len: number }[] = [];
-        for (const p of recentParity) {
-            if (runs.length > 0 && runs[runs.length - 1].parity === p) {
-                runs[runs.length - 1].len++;
-            } else {
-                runs.push({ parity: p, len: 1 });
-            }
-        }
-
-        if (runs.length < 2) return null;
-        const lastRun = runs[runs.length - 1];
-        const prevRun = runs[runs.length - 2];
-
-        // Long run of same parity → reversal likely
-        if (lastRun.len >= 5) {
-            const confidence = Math.min(84, 68 + lastRun.len * 3);
-            return {
-                type: lastRun.parity === 0 ? 'DIGITODD' : 'DIGITEVEN',
-                score: 2,
-                confidence: Math.round(confidence),
-                weight: getStrategyWeight(this.name),
-                name: this.name,
-            };
-        }
-
-        // Alternating pattern (1,1,1,2,2,2 alternating) 
-        if (runs.length >= 4) {
-            const last4 = runs.slice(-4);
-            const altPattern = last4.every(r => r.len >= 1 && r.len <= 3);
-            if (altPattern && lastRun.len >= 2) {
-                // continuation of alternation
-                const nextParity = lastRun.parity === 0 ? 1 : 0;
-                return {
-                    type: nextParity === 0 ? 'DIGITEVEN' : 'DIGITODD',
-                    score: 1,
-                    confidence: 66,
-                    weight: getStrategyWeight(this.name),
-                    name: this.name,
-                };
-            }
-        }
-
-        // Run length ratio: if current run is much longer than average → reversal
-        const avgRunLen = runs.slice(0, -1).reduce((a, r) => a + r.len, 0) / (runs.length - 1 || 1);
-        if (avgRunLen > 1 && lastRun.len > avgRunLen * 2.5) {
-            const conf = Math.min(82, 65 + Math.round((lastRun.len / avgRunLen) * 8));
-            return {
-                type: lastRun.parity === 0 ? 'DIGITODD' : 'DIGITEVEN',
-                score: 2,
-                confidence: Math.round(conf),
-                weight: getStrategyWeight(this.name),
-                name: this.name,
-            };
-        }
-
-        return null;
-    },
-};
-
-// ── 8. Consecutive Digit Pair Parity ─────────────────────────────────────────
-const pairParity: StrategyModule = {
-    name: 'PairParity',
-    run(_prices, ticks) {
-        if (ticks.length < 30) return null;
-        // Build transition matrix: digit value → parity of next digit
-        const trans: Record<number, { even: number; odd: number; total: number }> = {};
-        for (let d = 0; d <= 9; d++) trans[d] = { even: 0, odd: 0, total: 0 };
-
+        if (ticks.length < 40) return null;
+        const lastDigit = ticks[ticks.length - 1];
+        const trans: Record<number, { even: number; odd: number }> = {};
         for (let i = 1; i < ticks.length; i++) {
             const from = ticks[i - 1];
-            const toParity = ticks[i] % 2;
-            if (from >= 0 && from <= 9 && trans[from]) {
-                if (toParity === 0) trans[from].even++;
-                else trans[from].odd++;
-                trans[from].total++;
-            }
+            if (!trans[from]) trans[from] = { even: 0, odd: 0 };
+            if (ticks[i] % 2 === 0) trans[from].even++;
+            else trans[from].odd++;
         }
-
-        const lastDigit = ticks[ticks.length - 1];
-        if (lastDigit < 0 || lastDigit > 9 || trans[lastDigit].total < 3) return null;
-
         const t = trans[lastDigit];
-        const evenProb = t.even / t.total;
-        const oddProb = t.odd / t.total;
-
-        // Calculate confidence based on skew and sample size
-        const skew = Math.abs(evenProb - oddProb);
-        const sizeBonus = Math.min(8, t.total * 0.3);
-
-        // Also check if this aligns with digit psychology
-        const isEvenDigit = lastDigit % 2 === 0;
-        const ecoCluster = lastDigit >= 4 && lastDigit <= 6;
-
-        if (evenProb > 0.65) {
-            const conf = Math.min(84, 66 + Math.round(skew * 30 + sizeBonus) + (ecoCluster ? 4 : 0));
-            return { type: 'DIGITEVEN', score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        if (!t || t.even + t.odd < 8) return null;
+        const total = t.even + t.odd;
+        const evenPct = (t.even / total) * 100;
+        if (evenPct > 72) {
+            return { type: 'DIGITEVEN', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
         }
-        if (oddProb > 0.65) {
-            const conf = Math.min(84, 66 + Math.round(skew * 30 + sizeBonus) + (ecoCluster ? 4 : 0));
-            return { type: 'DIGITODD', score: 2, confidence: Math.round(conf), weight: getStrategyWeight(this.name), name: this.name };
+        if (100 - evenPct > 72) {
+            return { type: 'DIGITODD', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
         }
+        return null;
+    },
+};
 
-        // Moderate signal if current digit parity aligns with strong transition
-        if (evenProb > 0.58 && isEvenDigit) {
-            return { type: 'DIGITEVEN', score: 1, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+// ── EO6. Bayesian Laplace >72% (50-tick window) ────────────────────────────
+const highBarBayesian: StrategyModule = {
+    name: 'HighBarBayesian',
+    run(_prices, ticks) {
+        if (ticks.length < 50) return null;
+        const recent = ticks.slice(-50);
+        const evens = recent.filter(d => d % 2 === 0).length;
+        const total = recent.length;
+        const laplaceEven = (evens + 1) / (total + 2);
+        if (laplaceEven > 0.72) {
+            return { type: 'DIGITEVEN', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
         }
-        if (oddProb > 0.58 && !isEvenDigit) {
-            return { type: 'DIGITODD', score: 1, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+        if ((1 - laplaceEven) > 0.72) {
+            return { type: 'DIGITODD', score: 2, confidence: 72, weight: getStrategyWeight(this.name), name: this.name };
         }
-
         return null;
     },
 };
 
 const evenOddStrategies: StrategyModule[] = [
-    parityStreak, parityDistribution, markovParity,
-    rsiDigit, cyclicalParity, bayesianParity,
-    runLengthParity, pairParity,
+    extremeParityStreak, strongParityBias, highConvictionMarkov,
+    extremeRSI, strongPairParity, highBarBayesian,
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════════
