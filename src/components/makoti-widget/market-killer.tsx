@@ -77,6 +77,7 @@ export const MarketKiller: React.FC = () => {
     const contractMapRef     = useRef<Map<string, { symbol: string; stake: number; strategyNames: string[] }>>(new Map());
     const consecutiveLossesRef = useRef(0);
     const cooldownTicksRef     = useRef(0);
+    const signalHistoryRef     = useRef<{ sym: string; type: string; conf: number }[]>([]);
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
     useEffect(() => { saveLogs(logs); }, [logs]);
@@ -293,7 +294,15 @@ export const MarketKiller: React.FC = () => {
             }
         });
 
-        if (bestSym && bestSig) executeTrade(bestSym, bestSig).catch(() => {});
+        if (bestSym && bestSig) {
+            // Signal confirmation: require same direction on 2 of last 3 ticks
+            signalHistoryRef.current.push({ sym: bestSym, type: bestSig.contract_type, conf: bestSig.confidence });
+            if (signalHistoryRef.current.length > 3) signalHistoryRef.current.shift();
+            const matches = signalHistoryRef.current.filter(s => s.sym === bestSym && s.type === bestSig.contract_type).length;
+            if (matches >= 2) {
+                executeTrade(bestSym, bestSig).catch(() => {});
+            }
+        }
     }, [executeTrade]);
 
     // Ref for onTickReceived to avoid stale closure in WS handler
@@ -530,6 +539,7 @@ export const MarketKiller: React.FC = () => {
                         <span>Trades: {totalTrades}</span>
                         <span>W/L: {totalWins}/{totalLosses}</span>
                         <span>Win rate: {winRate}%</span>
+                        <span>Stake: ${globalStakeRef.current.toFixed(2)}</span>
                     </div>
                 </div>
             )}

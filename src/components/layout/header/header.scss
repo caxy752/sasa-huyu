@@ -639,13 +639,17 @@ body.theme--dark .app-header .powered-by-deriv-header {
 
     @include mobile-or-tablet-screen {
         margin-inline-end: 0.3rem;
-        font-size: 9px !important;
         padding: 1px 4px !important;
         min-height: 20px !important;
         height: auto !important;
         white-space: nowrap;
         flex-shrink: 1;
         min-width: 0;
+        font-size: 9px !important;
+
+        .dc-btn__text {
+            font-size: 9px !important;
+        }
     }
 }
 
