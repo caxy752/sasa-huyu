@@ -22,14 +22,16 @@ export const MakotiWidget: React.FC = () => {
     /* ── Drag state (refs, never cause re-renders) ─────────── */
     const btnDragging  = useRef(false);
     const winDragging  = useRef(false);
+    const miniDragging = useRef(false);
     const btnMoved     = useRef(false);
     const winMoved     = useRef(false);
     const startClient  = useRef({ x: 0, y: 0 });
     const startElem    = useRef({ x: 0, y: 0 });
     const rafId        = useRef<number | null>(null);
 
-    const btnRef = useRef<HTMLButtonElement>(null);
-    const winRef = useRef<HTMLDivElement>(null);
+    const btnRef  = useRef<HTMLButtonElement>(null);
+    const winRef  = useRef<HTMLDivElement>(null);
+    const miniRef = useRef<HTMLButtonElement>(null);
 
     /* ── Shared global pointer handlers (RAF-based for smooth drag) ── */
     useEffect(() => {
@@ -57,11 +59,18 @@ export const MakotiWidget: React.FC = () => {
                 winRef.current.style.top  = ny + 'px';
                 winPosRef.current = { x: nx, y: ny };
             }
+            if (miniDragging.current && miniRef.current) {
+                const nx = Math.max(PAD, Math.min(w - 44 - PAD, startElem.current.x + pendingDx));
+                const ny = Math.max(PAD, Math.min(h - 44 - PAD, startElem.current.y + pendingDy));
+                miniRef.current.style.left = nx + 'px';
+                miniRef.current.style.top  = ny + 'px';
+                winPosRef.current = { x: nx, y: ny };
+            }
             hasPending = false;
         };
 
         const onMove = (e: PointerEvent) => {
-            if (!btnDragging.current && !winDragging.current) return;
+            if (!btnDragging.current && !winDragging.current && !miniDragging.current) return;
             const dx = e.clientX - startClient.current.x;
             const dy = e.clientY - startClient.current.y;
             if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
@@ -77,8 +86,9 @@ export const MakotiWidget: React.FC = () => {
         };
 
         const onUp = () => {
-            btnDragging.current = false;
-            winDragging.current = false;
+            btnDragging.current  = false;
+            winDragging.current  = false;
+            miniDragging.current = false;
             if (rafId.current !== null) {
                 cancelAnimationFrame(rafId.current);
                 rafId.current = null;
@@ -177,55 +187,83 @@ export const MakotiWidget: React.FC = () => {
 
             {/* ── Floating window (draggable, same on all devices) ── */}
             {open && (
-                <div
-                    ref={winRef}
-                    className={`mw-window${minimized ? ' mw-window--min' : ''}`}
-                    style={{ position: 'fixed', left: initWinStyle.left + 'px', top: initWinStyle.top + 'px' }}
-                    onPointerDown={onWinPointerDown}
-                >
-                    <div className='mw-win-header'>
-                        <div className='mw-win-title'>
-                            <span className='mw-win-logo'>⚔</span>
-                            <span>MAKOTI</span>
+                <>
+                    <div
+                        ref={winRef}
+                        className={`mw-window${minimized ? ' mw-window--hidden' : ''}`}
+                        style={{ position: 'fixed', left: initWinStyle.left + 'px', top: initWinStyle.top + 'px' }}
+                        onPointerDown={onWinPointerDown}
+                    >
+                        <div className='mw-win-header'>
+                            <div className='mw-win-title'>
+                                <span className='mw-win-logo'>⚔</span>
+                                <span>MAKOTI</span>
+                            </div>
+                            <div className='mw-win-actions'>
+                                <button
+                                    className='mw-win-action'
+                                    onClick={() => setMinimized(m => !m)}
+                                    title='Minimize'
+                                >
+                                    ▼
+                                </button>
+                                <button
+                                    className='mw-win-action mw-win-action--close'
+                                    onClick={() => setOpen(false)}
+                                    title='Close'
+                                >
+                                    ×
+                                </button>
+                            </div>
                         </div>
-                        <div className='mw-win-actions'>
+
+                        <div className='mw-tabs'>
                             <button
-                                className='mw-win-action'
-                                onClick={() => setMinimized(m => !m)}
-                                title={minimized ? 'Expand' : 'Minimize'}
+                                className={`mw-tab${tab === 'scanner' ? ' mw-tab--active' : ''}`}
+                                onClick={() => setTab('scanner')}
                             >
-                                {minimized ? '▲' : '▼'}
+                                Scanner
                             </button>
                             <button
-                                className='mw-win-action mw-win-action--close'
-                                onClick={() => setOpen(false)}
-                                title='Close'
+                                className={`mw-tab${tab === 'market_killer' ? ' mw-tab--active' : ''}`}
+                                onClick={() => setTab('market_killer')}
                             >
-                                ×
+                                Market Killer
                             </button>
+                        </div>
+
+                        <div className='mw-win-body'>
+                            {tab === 'scanner' ? <Scanner /> : <MarketKiller />}
                         </div>
                     </div>
 
-                    {/* Content always mounted (keeps WS/interval alive), just hidden when minimized */}
-                    <div className='mw-tabs' style={minimized ? { display: 'none' } : undefined}>
+                    {minimized && (
                         <button
-                            className={`mw-tab${tab === 'scanner' ? ' mw-tab--active' : ''}`}
-                            onClick={() => setTab('scanner')}
+                            ref={miniRef}
+                            className='mw-mini'
+                            style={{
+                                position: 'fixed',
+                                left: winPosRef.current.x,
+                                top: winPosRef.current.y,
+                                zIndex: 99998,
+                            }}
+                            onPointerDown={(e) => {
+                                miniDragging.current = true;
+                                winMoved.current = false;
+                                startClient.current = { x: e.clientX, y: e.clientY };
+                                startElem.current = { ...winPosRef.current };
+                                (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                                e.preventDefault();
+                            }}
+                            onClick={() => {
+                                if (winMoved.current) { winMoved.current = false; return; }
+                                setMinimized(false);
+                            }}
                         >
-                            Scanner
+                            ⚔
                         </button>
-                        <button
-                            className={`mw-tab${tab === 'market_killer' ? ' mw-tab--active' : ''}`}
-                            onClick={() => setTab('market_killer')}
-                        >
-                            Market Killer
-                        </button>
-                    </div>
-
-                    <div className='mw-win-body' style={minimized ? { display: 'none' } : undefined}>
-                        {tab === 'scanner' ? <Scanner /> : <MarketKiller />}
-                    </div>
-                </div>
+                    )}
+                </>
             )}
         </>
     );

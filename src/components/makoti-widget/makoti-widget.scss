@@ -87,22 +87,51 @@ $mw-radius:   10px;
     flex-direction: column;
     overflow: hidden;
     user-select: none;
+    touch-action: none;
 
-    &--min {
-        max-height: 44px;
-        overflow: hidden;
+    &--hidden {
+        display: none !important;
     }
+}
+
+// ─── MINIMIZED CIRCLE ──────────────────────────────────────────────────────
+
+.mw-mini {
+    position: fixed;
+    z-index: 99998;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+    border: 2px solid rgba(255,255,255,0.15);
+    box-shadow: 0 0 0 4px rgba(249,115,22,0.15), 0 8px 32px rgba(0,0,0,0.5);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    user-select: none;
+    touch-action: none;
+    transition: box-shadow 0.2s, transform 0.15s;
+    padding: 0;
+    line-height: 1;
+    color: #fff;
+
+    &:hover { box-shadow: 0 0 0 6px rgba(249,115,22,0.25), 0 12px 40px rgba(0,0,0,0.6); }
+    &:active { transform: scale(0.95); }
 }
 
 .mw-win-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
+    padding: 12px 14px;
+    min-height: 44px;
     background: linear-gradient(90deg, rgba(249,115,22,0.12) 0%, rgba(239,68,68,0.06) 100%);
     border-bottom: 1px solid $mw-border;
     cursor: grab;
     flex-shrink: 0;
+    touch-action: none;
 
     &:active { cursor: grabbing; }
 }
