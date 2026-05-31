@@ -1787,6 +1787,14 @@ const riseFallStrategies: StrategyModule[] = [
     tickDivergence, consecGap, tripleMA, microPattern3, tickEntropy,
 ];
 
+// Strategies specifically effective for 1-tick-ahead prediction.
+// Most multi-tick strategies (MA cross, MACD, BB, etc.) add noise at 1-tick.
+// These focus on immediate micro-structure, reversals, and momentum exhaustion.
+const riseFall1TickStrategies: StrategyModule[] = [
+    microTiming, candleReversal, exhaustionRev,
+    tickVelocity, consecGap, microPattern3, priceAction,
+];
+
 /* ═══════════════════════════════════════════════════════════════════════════════
    OVER/UNDER STRATEGIES
    Uses 100/200-tick digit percentages (like Deriv's Over/Under tab).
@@ -2307,6 +2315,7 @@ export function analyzeSignals(
     ticks: number[],
     prices: number[],
     contractTypes: ContractType[],
+    oneTick = false,
 ): TradeSignal | null {
     if (prices.length < MIN_TICK_FOR_ANALYSIS) return null;
 
@@ -2317,13 +2326,16 @@ export function analyzeSignals(
     const isOverUnder = contractTypes.some(t => t === 'DIGITOVER' || t === 'DIGITUNDER');
     const isEvenOdd = contractTypes.some(t => t === 'DIGITEVEN' || t === 'DIGITODD');
 
+    // For 1-tick prediction, use only micro-strategies (multi-tick strategies add noise)
+    const rfStrategies = oneTick ? riseFall1TickStrategies : riseFallStrategies;
+
     const votes: StrategyVote[] = [];
     const usedStrategyNames = new Set<string>();
 
     for (const strat of ALL_STRATEGIES) {
         // Skip strategies not relevant to requested types
         const name = strat.name;
-        const isRiseFallStrat = riseFallStrategies.includes(strat);
+        const isRiseFallStrat = rfStrategies.includes(strat);
         const isOverUnderStrat = overUnderStrategies.includes(strat);
         const isEvenOddStrat = evenOddStrategies.includes(strat);
 
@@ -2339,6 +2351,23 @@ export function analyzeSignals(
     }
 
     if (votes.length === 0) return null;
+
+    // Anti-streak for 1-tick: after 3+ same-direction ticks, penalize continuation, boost reversal
+    if (oneTick && prices.length >= 3) {
+        const streak = priceStreak(prices);
+        if (Math.abs(streak) >= 3) {
+            for (const v of votes) {
+                const isContinuation = (streak > 0 && v.type === 'CALL') || (streak < 0 && v.type === 'PUT');
+                if (isContinuation) {
+                    v.confidence = Math.max(CONFIDENCE_FLOOR, v.confidence - 15);
+                    v.score = Math.max(1, v.score - 1);
+                } else {
+                    v.confidence = Math.min(CONFIDENCE_CEILING, v.confidence + 10);
+                    v.score += 1;
+                }
+            }
+        }
+    }
 
     // Group votes by contract type
     const groups = new Map<string, { totalWeight: number; weightedConf: number; reasons: string[]; scores: number[]; barriers: string[] }>();

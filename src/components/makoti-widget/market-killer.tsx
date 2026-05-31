@@ -284,7 +284,7 @@ export const MarketKiller: React.FC = () => {
             if (!sd || sd.ticks.length < MIN_TICKS_BEFORE_TRADE) return;
             // Run each contract family separately so they compete fairly
             for (const family of CONTRACT_FAMILIES) {
-                const sig = analyzeSignals(sd.ticks, sd.prices, family.types);
+                const sig = analyzeSignals(sd.ticks, sd.prices, family.types, true);
                 if (sig && sig.confidence > bestConf) {
                     bestConf = sig.confidence;
                     bestSym  = s;
