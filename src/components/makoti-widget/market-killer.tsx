@@ -4,8 +4,6 @@ import { analyzeSignals, recordOutcome, ContractType } from './prediction-engine
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
-type ContractMode = 'RISE_FALL' | 'OVER_UNDER' | 'EVEN_ODD';
-
 interface SymbolState {
     ticks: number[];
     prices: number[];
@@ -25,19 +23,10 @@ interface LogEntry {
 const MAX_TICKS              = 1000;
 const MIN_TICKS_BEFORE_TRADE = 30;
 const CONFIDENCE_THRESHOLD   = 78;
+const ALL_CONTRACT_TYPES: ContractType[] = ['CALL', 'PUT', 'DIGITOVER', 'DIGITUNDER', 'DIGITEVEN', 'DIGITODD'];
+
 const LS_LOGS_KEY            = 'mw_mk_logs';
-const LS_CONTRACT_MODE_KEY   = 'mw_mk_contract_mode';
 const MAX_SAVED_LOGS         = 80;
-
-const CONTRACT_OPTIONS: { id: ContractMode; label: string; types: ContractType[] }[] = [
-    { id: 'RISE_FALL',  label: 'Rise/Fall',            types: ['CALL', 'PUT'] },
-    { id: 'OVER_UNDER', label: 'Over/Under (Digits)',   types: ['DIGITOVER', 'DIGITUNDER'] },
-    { id: 'EVEN_ODD',   label: 'Even/Odd (Digits)',     types: ['DIGITEVEN', 'DIGITODD'] },
-];
-
-function getContractTypes(mode: ContractMode): ContractType[] {
-    return CONTRACT_OPTIONS.find(o => o.id === mode)?.types ?? ['CALL', 'PUT'];
-}
 
 function loadSavedLogs(): LogEntry[] {
     try {
@@ -66,9 +55,6 @@ export const MarketKiller: React.FC = () => {
     const [pnl,         setPnl]         = useState(0);
     const [logs,        setLogs]        = useState<LogEntry[]>(loadSavedLogs);
     const [activeContracts, setActiveContracts] = useState(0);
-    const [contractMode, setContractMode] = useState<ContractMode>(
-        () => (localStorage.getItem(LS_CONTRACT_MODE_KEY) as ContractMode) || 'RISE_FALL'
-    );
     const [symbolDisplay, setSymbolDisplay] = useState<
         Record<string, { lastSignal: string; wins: number; losses: number; stake: number }>
     >({});
@@ -82,7 +68,6 @@ export const MarketKiller: React.FC = () => {
     const martingaleParsed = useRef(2);
     const tpRef            = useRef(10);
     const slRef            = useRef(5);
-    const contractModeRef  = useRef<ContractMode>('RISE_FALL');
 
     const globalLock         = useRef(false);
     const activeContractsRef = useRef(0);
@@ -93,7 +78,6 @@ export const MarketKiller: React.FC = () => {
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
     useEffect(() => { saveLogs(logs); }, [logs]);
-    useEffect(() => { localStorage.setItem(LS_CONTRACT_MODE_KEY, contractMode); }, [contractMode]);
 
     /* ── POC listener on the OTP new system WS ────────────────────────────── */
     useEffect(() => {
@@ -213,12 +197,11 @@ export const MarketKiller: React.FC = () => {
         const sd = symbolDataRef.current[sym];
         if (!sd || sd.ticks.length < MIN_TICKS_BEFORE_TRADE) return;
 
-        const contractTypes = getContractTypes(contractModeRef.current);
-        const signal = analyzeSignals(sd.ticks, sd.prices, contractTypes);
+        const signal = analyzeSignals(sd.ticks, sd.prices, ALL_CONTRACT_TYPES);
         if (!signal || signal.confidence < CONFIDENCE_THRESHOLD) return;
 
-        // Micro-trend entry gate (only for Rise/Fall)
-        if (contractModeRef.current === 'RISE_FALL') {
+        // Micro-trend entry gate (only for Rise/Fall contract types)
+        if (signal.contract_type === 'CALL' || signal.contract_type === 'PUT') {
             const last3 = sd.prices.slice(-3);
             if (last3.length === 3) {
                 const rising = last3[0] < last3[1] && last3[1] < last3[2];
@@ -294,14 +277,13 @@ export const MarketKiller: React.FC = () => {
         if (globalLock.current)  return;
         if (cooldownTicksRef.current > 0) { cooldownTicksRef.current--; return; }
 
-        const contractTypes = getContractTypes(contractModeRef.current);
         let bestSym  = '';
         let bestConf = CONFIDENCE_THRESHOLD - 1;
 
         ALL_SYMBOLS.forEach(s => {
             const sd = symbolDataRef.current[s];
             if (!sd || sd.ticks.length < MIN_TICKS_BEFORE_TRADE) return;
-            const sig = analyzeSignals(sd.ticks, sd.prices, contractTypes);
+            const sig = analyzeSignals(sd.ticks, sd.prices, ALL_CONTRACT_TYPES);
             if (sig && sig.confidence > bestConf) {
                 bestConf = sig.confidence;
                 bestSym  = s;
@@ -328,7 +310,6 @@ export const MarketKiller: React.FC = () => {
         globalStakeRef.current   = stakeVal;
         consecutiveLossesRef.current = 0;
         cooldownTicksRef.current     = 0;
-        contractModeRef.current  = contractMode;
 
         setPnl(0);
         setActiveContracts(0);
@@ -346,8 +327,7 @@ export const MarketKiller: React.FC = () => {
         runningRef.current = true;
         setRunning(true);
 
-        const modeLabel = CONTRACT_OPTIONS.find(o => o.id === contractMode)?.label ?? 'Rise/Fall';
-        addLog(`⚔ Kill Market — ${modeLabel} | stake $${stakeVal}  MG ×${mgVal}  TP $${tpVal}  SL $${slVal}`, 'info');
+        addLog(`⚔ Kill Market — Auto (Rise/Fall + Digits) | stake $${stakeVal}  MG ×${mgVal}  TP $${tpVal}  SL $${slVal}`, 'info');
         addLog('Connecting to Deriv API…', 'info');
 
         if (wsRef.current) { try { wsRef.current.close(); } catch (_) {} wsRef.current = null; }
@@ -481,7 +461,7 @@ export const MarketKiller: React.FC = () => {
             }
         );
         wsRef.current = mws;
-    }, [stake, martingale, takeProfit, stopLoss, contractMode, addLog, flushDisplay, checkLimits, stopKiller, onTickReceived]);
+    }, [stake, martingale, takeProfit, stopLoss, addLog, flushDisplay, checkLimits, stopKiller, onTickReceived]);
 
     /* ── Derived display values ──────────────────────────────────────────── */
     const totalWins   = Object.values(symbolDisplay).reduce((a, b) => a + b.wins,  0);
@@ -515,20 +495,6 @@ export const MarketKiller: React.FC = () => {
                 </div>
             </div>
 
-            {/* ── Contract type selector ── */}
-            <div className='mw-field'>
-                <label className='mw-label'>Contract Type</label>
-                <select className='mw-select'
-                    value={contractMode}
-                    onChange={e => setContractMode(e.target.value as ContractMode)}
-                    disabled={running}
-                >
-                    {CONTRACT_OPTIONS.map(o => (
-                        <option key={o.id} value={o.id}>{o.label}</option>
-                    ))}
-                </select>
-            </div>
-
             {/* ── Kill Market button ── */}
             <button
                 className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
@@ -542,8 +508,7 @@ export const MarketKiller: React.FC = () => {
             {/* ── Running notice ── */}
             {running && (
                 <div className='mw-killer__mode-note'>
-                    {CONTRACT_OPTIONS.find(o => o.id === contractMode)?.label ?? 'Rise/Fall'}
-                    {' — '}24-strategy ensemble engine
+                    Auto (Rise/Fall + Digits) — 24-strategy ensemble engine
                     {activeContracts > 0 && <span className='mw-killer__active-dot'> ● TRADE LIVE</span>}
                 </div>
             )}
