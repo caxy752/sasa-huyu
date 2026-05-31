@@ -219,6 +219,7 @@ export const MarketKiller: React.FC = () => {
 
         const { contract_type, barrier, reason, confidence, details } = signal;
         const tradeStake = Number(globalStakeRef.current.toFixed(2));
+        addLog(`Trade stake: $${tradeStake.toFixed(2)} (base: $${stakeParsed.current.toFixed(2)}, mg: ${martingaleParsed.current}x)`, 'trade');
 
         // Extract strategy names from details for outcome tracking
         const strategyMatch = details.match(/Strategies: (.+)/);
@@ -295,11 +296,13 @@ export const MarketKiller: React.FC = () => {
         });
 
         if (bestSym && bestSig) {
-            // Signal confirmation: require same direction on 2 of last 3 ticks
+            // Signal confirmation: require same direction on 3 consecutive ticks
             signalHistoryRef.current.push({ sym: bestSym, type: bestSig.contract_type, conf: bestSig.confidence });
             if (signalHistoryRef.current.length > 3) signalHistoryRef.current.shift();
-            const matches = signalHistoryRef.current.filter(s => s.sym === bestSym && s.type === bestSig.contract_type).length;
-            if (matches >= 2) {
+            const last3 = signalHistoryRef.current;
+            const confirmed = last3.length === 3 && last3.every(s => s.sym === bestSym && s.type === bestSig.contract_type);
+            if (confirmed) {
+                signalHistoryRef.current = []; // clear after confirmed trade
                 executeTrade(bestSym, bestSig).catch(() => {});
             }
         }
