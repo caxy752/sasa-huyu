@@ -119,7 +119,7 @@
             }
 
             &__list {
-                background: linear-gradient(135deg, #f97316 0%, #ef4444 100%) !important;
+                background: transparent !important;
                 justify-content: flex-start;
                 border-bottom: none !important;
                 padding: 0.3rem 0.5rem;
@@ -135,6 +135,7 @@
                     transition: background-color 0.2s ease !important;
                     color: #ffffff !important;
                     border: none !important;
+                    background: rgba(249,115,22,0.2) !important;
 
                     &:last-child {
                         border-right: none !important; // No boundary on the last tab

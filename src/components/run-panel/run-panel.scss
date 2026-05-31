@@ -175,7 +175,7 @@
 
         .dc-tabs {
             &__list {
-                background: linear-gradient(135deg, #f97316 0%, #ef4444 100%) !important;
+                background: transparent !important;
                 gap: 0.5rem;
                 padding: 0.3rem 0.5rem;
                 border: none !important;
@@ -185,7 +185,7 @@
                 overflow: hidden;
                 text-overflow: ellipsis;
                 padding: 0.4rem 0.8rem;
-                background-color: transparent !important;
+                background: rgba(249,115,22,0.2) !important;
                 border: none !important;
                 border-radius: 6px !important;
 
