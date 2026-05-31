@@ -25,8 +25,6 @@ const MIN_TICKS_BEFORE_TRADE = 30;
 const CONFIDENCE_THRESHOLD   = 68;
 const CONTRACT_FAMILIES: { label: string; types: ContractType[] }[] = [
     { label: 'Rise/Fall', types: ['CALL', 'PUT'] },
-    { label: 'Over/Under', types: ['DIGITOVER', 'DIGITUNDER'] },
-    { label: 'Even/Odd', types: ['DIGITEVEN', 'DIGITODD'] },
 ];
 
 const LS_LOGS_KEY            = 'mw_mk_logs';
@@ -203,7 +201,7 @@ export const MarketKiller: React.FC = () => {
         const sd = symbolDataRef.current[sym];
         if (!sd) return;
 
-        // Micro-trend entry gate (only for Rise/Fall contract types)
+        // Micro-trend entry gate
         if (signal.contract_type === 'CALL' || signal.contract_type === 'PUT') {
             const last3 = sd.prices.slice(-3);
             if (last3.length === 3) {
@@ -234,10 +232,7 @@ export const MarketKiller: React.FC = () => {
         };
         if (barrier) params.barrier = barrier;
 
-        const label = contract_type === 'CALL' ? 'RISE'
-            : contract_type === 'PUT' ? 'FALL'
-            : contract_type.startsWith('DIGIT') ? `${contract_type.replace('DIGIT', '')}${barrier ? ' ' + barrier : ''}`
-            : `${contract_type}${barrier ? ' ' + barrier : ''}`;
+        const label = contract_type === 'CALL' ? 'RISE' : 'FALL';
 
         if (window._newSystemWS?.readyState === WebSocket.OPEN) {
             try {
