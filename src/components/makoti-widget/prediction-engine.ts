@@ -1494,7 +1494,7 @@ const riseFallStrategies: StrategyModule[] = [
    All strategies analyze barriers 0-4 for Over and 1-6 for Under.
 ═══════════════════════════════════════════════════════════════════════════════ */
 
-const OVER_BARRIERS = [0, 1, 2, 3, 4] as const;
+const OVER_BARRIERS = [0, 2, 3, 4] as const;
 const UNDER_BARRIERS = [1, 2, 3, 4, 5, 6] as const;
 
 // Helper: score every Over barrier and return best if above threshold

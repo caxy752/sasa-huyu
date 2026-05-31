@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
-import { analyzeSignals, recordOutcome, ContractType } from './prediction-engine';
+import { analyzeSignals, recordOutcome, ContractType, TradeSignal } from './prediction-engine';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
@@ -23,7 +23,11 @@ interface LogEntry {
 const MAX_TICKS              = 1000;
 const MIN_TICKS_BEFORE_TRADE = 30;
 const CONFIDENCE_THRESHOLD   = 72;
-const ALL_CONTRACT_TYPES: ContractType[] = ['CALL', 'PUT', 'DIGITOVER', 'DIGITUNDER', 'DIGITEVEN', 'DIGITODD'];
+const CONTRACT_FAMILIES: { label: string; types: ContractType[] }[] = [
+    { label: 'Rise/Fall', types: ['CALL', 'PUT'] },
+    { label: 'Over/Under', types: ['DIGITOVER', 'DIGITUNDER'] },
+    { label: 'Even/Odd', types: ['DIGITEVEN', 'DIGITODD'] },
+];
 
 const LS_LOGS_KEY            = 'mw_mk_logs';
 const MAX_SAVED_LOGS         = 80;
@@ -192,13 +196,12 @@ export const MarketKiller: React.FC = () => {
     }, [addLog]);
 
     /* ── Execute ONE trade using the global stake ────────────────────────── */
-    const executeTrade = useCallback(async (sym: string) => {
+    const executeTrade = useCallback(async (sym: string, signal: TradeSignal) => {
         if (!runningRef.current) return;
-        const sd = symbolDataRef.current[sym];
-        if (!sd || sd.ticks.length < MIN_TICKS_BEFORE_TRADE) return;
-
-        const signal = analyzeSignals(sd.ticks, sd.prices, ALL_CONTRACT_TYPES);
         if (!signal || signal.confidence < CONFIDENCE_THRESHOLD) return;
+
+        const sd = symbolDataRef.current[sym];
+        if (!sd) return;
 
         // Micro-trend entry gate (only for Rise/Fall contract types)
         if (signal.contract_type === 'CALL' || signal.contract_type === 'PUT') {
@@ -278,19 +281,24 @@ export const MarketKiller: React.FC = () => {
         if (cooldownTicksRef.current > 0) { cooldownTicksRef.current--; return; }
 
         let bestSym  = '';
+        let bestSig: TradeSignal | null = null;
         let bestConf = CONFIDENCE_THRESHOLD - 1;
 
         ALL_SYMBOLS.forEach(s => {
             const sd = symbolDataRef.current[s];
             if (!sd || sd.ticks.length < MIN_TICKS_BEFORE_TRADE) return;
-            const sig = analyzeSignals(sd.ticks, sd.prices, ALL_CONTRACT_TYPES);
-            if (sig && sig.confidence > bestConf) {
-                bestConf = sig.confidence;
-                bestSym  = s;
+            // Run each contract family separately so they compete fairly
+            for (const family of CONTRACT_FAMILIES) {
+                const sig = analyzeSignals(sd.ticks, sd.prices, family.types);
+                if (sig && sig.confidence > bestConf) {
+                    bestConf = sig.confidence;
+                    bestSym  = s;
+                    bestSig  = sig;
+                }
             }
         });
 
-        if (bestSym) executeTrade(bestSym).catch(() => {});
+        if (bestSym && bestSig) executeTrade(bestSym, bestSig).catch(() => {});
     }, [executeTrade]);
 
     /* ── Start ───────────────────────────────────────────────────────────── */
@@ -508,7 +516,7 @@ export const MarketKiller: React.FC = () => {
             {/* ── Running notice ── */}
             {running && (
                 <div className='mw-killer__mode-note'>
-                    Auto (Rise/Fall + Digits) — 24-strategy ensemble engine
+                    Auto (RF + OU + EO) — 45-strategy ensemble engine
                     {activeContracts > 0 && <span className='mw-killer__active-dot'> ● TRADE LIVE</span>}
                 </div>
             )}
