@@ -8,6 +8,7 @@ import { transaction_elements } from '../constants/transactions';
 import { getStoredItemsByKey, getStoredItemsByUser, setStoredItemsByKey } from '../utils/session-storage';
 import { getBalanceSwapState, transformTransactionIdForAdmin, transformTransactionIdForSpecialCR } from '../utils/balance-swap-utils';
 import { isSpecialCRAccount } from '../utils/special-accounts-config';
+import { getMarketName } from '../components/shared/utils/helpers/market-underlying';
 import RootStore from './root-store';
 
 type TTransaction = {
@@ -196,11 +197,12 @@ export default class TransactionsStore {
             );
             const statistics = trxs.reduce(
                 (stats: any, { data }: any) => {
-                    const { profit = 0, is_completed = false, buy_price = 0, payout, bid_price } = data as TContractInfo;
+                    const c = data as any;
+                    const { profit = 0, is_completed = false, buy_price = 0, payout, bid_price, sell_price } = c;
                     if (is_completed) {
                         if (profit > 0) {
                             stats.won_contracts += 1;
-                            stats.total_payout += payout ?? bid_price ?? 0;
+                            stats.total_payout += payout ?? bid_price ?? sell_price ?? 0;
                         } else {
                             stats.lost_contracts += 1;
                         }
@@ -346,6 +348,7 @@ export default class TransactionsStore {
             },
             is_completed,
             run_id,
+            display_name: data.display_name || getMarketName(data.underlying) || data.underlying || '',
             date_start: data.date_start ? formatDate(data.date_start, 'YYYY-M-D HH:mm:ss [GMT]') : undefined,
             entry_tick: data.entry_tick_display_value || data.entry_tick || data.entry_spot_display_value || data.entry_spot || '',
             entry_tick_time: data.entry_tick_time ? formatDate(data.entry_tick_time, 'YYYY-M-D HH:mm:ss [GMT]') : undefined,

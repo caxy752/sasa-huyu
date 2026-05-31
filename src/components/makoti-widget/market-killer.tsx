@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
 import { analyzeSignals, findBestDuration, recordOutcome, ContractType, TradeSignal } from './prediction-engine';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
+import { useStore } from '@/hooks/useStore';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 interface SymbolState {
@@ -49,6 +50,8 @@ function saveLogs(logs: LogEntry[]) {
    MarketKiller
 ═══════════════════════════════════════════════════════════════════════════ */
 export const MarketKiller: React.FC = () => {
+    const { transactions, run_panel } = useStore();
+
     const [stake,       setStake]       = useState('0.35');
     const [martingale,  setMartingale]  = useState('2');
     const [takeProfit,  setTakeProfit]  = useState('10');
@@ -250,6 +253,20 @@ export const MarketKiller: React.FC = () => {
                     addLog(`🎯 [${confidence.toFixed(0)}%] ${SYMBOL_LABELS[sym]}: ${label} D${duration} @ $${tradeStake} — ${reason}`, 'trade');
                     addLog(`Contract ${contractId} open on ${SYMBOL_LABELS[sym]}`, 'info');
                     flushDisplay(sym);
+                    try {
+                        transactions.onBotContractEvent({
+                            contract_id: contractId,
+                            transaction_ids: { buy: response?.buy?.transaction_id },
+                            buy_price: tradeStake,
+                            currency: 'USD',
+                            contract_type,
+                            underlying: sym,
+                            display_name: SYMBOL_LABELS[sym],
+                            date_start: Math.floor(Date.now() / 1000),
+                            status: 'open',
+                        } as any);
+                        run_panel.setHasOpenContract(true);
+                    } catch (_) {}
                 } else {
                     addLog(`Buy ok but no contract_id: ${JSON.stringify(response).slice(0, 100)}`, 'info');
                     globalLock.current = false;
@@ -268,6 +285,19 @@ export const MarketKiller: React.FC = () => {
             addLog(`🎯 [${confidence.toFixed(0)}%] ${SYMBOL_LABELS[sym]}: ${label} D${duration} @ $${tradeStake} — ${reason}`, 'trade');
             contractMapRef.current.set(sym + Date.now(), { symbol: sym, stake: tradeStake, strategyNames, duration });
             flushDisplay(sym);
+            try {
+                transactions.onBotContractEvent({
+                    contract_id: sym + Date.now(),
+                    buy_price: tradeStake,
+                    currency: 'USD',
+                    contract_type,
+                    underlying: sym,
+                    display_name: SYMBOL_LABELS[sym],
+                    date_start: Math.floor(Date.now() / 1000),
+                    status: 'open',
+                } as any);
+                run_panel.setHasOpenContract(true);
+            } catch (_) {}
         } else {
             globalLock.current = false;
             activeContractsRef.current = 0;
@@ -456,6 +486,12 @@ export const MarketKiller: React.FC = () => {
 
                     pnlRef.current += profit;
                     setPnl(pnlRef.current);
+
+                    try {
+                        const pocWithDisplay = !(c as any).display_name ? { ...c, display_name: SYMBOL_LABELS[sym] } : c;
+                        transactions.onBotContractEvent(pocWithDisplay);
+                        run_panel.setHasOpenContract(false);
+                    } catch (_) {}
 
                     if (won) {
                         sd.wins++;
