@@ -228,16 +228,6 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                             );
                         })()}
                     <AccountSwitcher activeAccount={activeAccount} />
-                    <Button
-                        className='deposit-button'
-                        style={{ fontSize: '11px', whiteSpace: 'nowrap' }}
-                        onClick={() => {
-                            window.open('https://dp2p.deriv.com/?lang=en', '_blank');
-                        }}
-                        primary
-                    >
-                        {localize('Deposit or withdraw')}
-                    </Button>
                 </>
             );
         } else {

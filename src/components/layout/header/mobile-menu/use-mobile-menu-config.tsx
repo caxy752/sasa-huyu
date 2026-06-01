@@ -120,6 +120,12 @@ const useMobileMenuConfig = (client?: RootStore['client']) => {
                 },
                 {
                     as: 'button',
+                    label: localize('Deposit or withdraw'),
+                    LeftComponent: LegacyCashierIcon,
+                    onClick: () => window.open('https://dp2p.deriv.com/?lang=en', '_blank'),
+                },
+                {
+                    as: 'button',
                     label: localize('Dark theme'),
                     LeftComponent: LegacyTheme1pxIcon,
                     RightComponent: <ToggleSwitch value={is_dark_mode_on} onChange={toggleTheme} />,
