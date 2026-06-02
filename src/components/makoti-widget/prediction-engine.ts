@@ -1775,6 +1775,67 @@ const tickEntropy: StrategyModule = {
     },
 };
 
+// ── RSI Direction Filter (RSI 7) ──────────────────────────────────────────────
+// PUT when RSI > 60 (overbought), CALL when RSI < 40 (oversold)
+const rsiDirection: StrategyModule = {
+    name: 'rsiDirection',
+    run(prices) {
+        if (prices.length < 30) return null;
+        const rsiVal = rsi(prices, 7);
+        if (rsiVal > 60) {
+            const conf = Math.min(78, 64 + Math.round((rsiVal - 60) * 0.7));
+            return { type: 'PUT', score: 2, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (rsiVal < 40) {
+            const conf = Math.min(78, 64 + Math.round((40 - rsiVal) * 0.7));
+            return { type: 'CALL', score: 2, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        return null;
+    },
+};
+
+// ── Bollinger Band Touch Filter ────────────────────────────────────────────────
+// PUT when price near/above upper band (pos > 0.8), CALL when near/below lower band (pos < 0.2)
+const bbTouch: StrategyModule = {
+    name: 'bbTouch',
+    run(prices) {
+        if (prices.length < 14) return null;
+        const pos = bbPosition(prices, 14, 2);
+        if (pos > 0.8) {
+            const conf = Math.min(76, 64 + Math.round((pos - 0.8) * 40));
+            return { type: 'PUT', score: 2, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (pos < 0.2) {
+            const conf = Math.min(76, 64 + Math.round((0.2 - pos) * 40));
+            return { type: 'CALL', score: 2, confidence: conf, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        return null;
+    },
+};
+
+// ── EMA 5/10 Crossover Filter ──────────────────────────────────────────────────
+// CALL when EMA5 crosses above EMA10, PUT when EMA5 crosses below EMA10
+const emaCross5_10: StrategyModule = {
+    name: 'emaCross',
+    run(prices) {
+        if (prices.length < 20) return null;
+        const e5 = ema(prices, 5);
+        const e10 = ema(prices, 10);
+        if (e5.length < 2 || e10.length < 2) return null;
+        const le5 = e5[e5.length - 1], le10 = e10[e10.length - 1];
+        const pe5 = e5[e5.length - 2], pe10 = e10[e10.length - 2];
+        const above = le5 > le10;
+        const prevAbove = pe5 > pe10;
+        if (above && !prevAbove) {
+            return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        if (!above && prevAbove) {
+            return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+        }
+        return null;
+    },
+};
+
 const riseFallStrategies: StrategyModule[] = [
     microTiming, rsiDivergence, macdStrategy, bbStrategy,
     stochasticStrategy, atrBreakout, priceAction, maCross,
@@ -1785,6 +1846,7 @@ const riseFallStrategies: StrategyModule[] = [
     nPatternMatch, hlSequence, volContraction, mtfAlignment, barPatternSeq,
     tickPressure, accelMomentum, microTrendStrength, supportBounce,
     tickDivergence, consecGap, tripleMA, microPattern3, tickEntropy,
+    rsiDirection, bbTouch, emaCross5_10,
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════════
