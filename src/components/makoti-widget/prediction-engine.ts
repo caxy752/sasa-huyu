@@ -2378,7 +2378,67 @@ export function findBestDuration(
 ): number {
     if (prices.length < 10) return 1;
 
-    // Use up to 40 ticks of recent data, adjust lookback based on duration
+    // ── Indicator-based duration bonuses ───────────────────────────────
+    // RSI(7): oversold/overbought suggests quick reversal → shorter durations
+    let rsiDurationBonus: number[] = [0, 0, 0, 0, 0, 0];                  // index = duration
+    const rsiVal = prices.length >= 30 ? rsi(prices, 7) : 50;
+    if (direction === 'CALL' && rsiVal < 40) {
+        const strength = (40 - rsiVal) / 40;                              // 0..1
+        if (rsiVal < 25)      { rsiDurationBonus[1] = 7 * strength; rsiDurationBonus[2] = 5 * strength; }
+        else if (rsiVal < 33) { rsiDurationBonus[2] = 5 * strength; rsiDurationBonus[3] = 3 * strength; }
+        else                  { rsiDurationBonus[3] = 3 * strength; }
+    }
+    if (direction === 'PUT' && rsiVal > 60) {
+        const strength = (rsiVal - 60) / 40;                              // 0..1
+        if (rsiVal > 75)      { rsiDurationBonus[1] = 7 * strength; rsiDurationBonus[2] = 5 * strength; }
+        else if (rsiVal > 67) { rsiDurationBonus[2] = 5 * strength; rsiDurationBonus[3] = 3 * strength; }
+        else                  { rsiDurationBonus[3] = 3 * strength; }
+    }
+
+    // Bollinger Bands: price stretched near bands → reversal expected → shorter durations
+    let bbDurationBonus: number[] = [0, 0, 0, 0, 0, 0];
+    const bbPos = prices.length >= 14 ? bbPosition(prices, 14, 2) : 0.5;
+    if (direction === 'CALL' && bbPos < 0.3) {
+        const distFromMid = (0.5 - bbPos) / 0.5;
+        if (bbPos < 0.1)      { bbDurationBonus[1] = 6 * distFromMid; bbDurationBonus[2] = 4 * distFromMid; }
+        else if (bbPos < 0.2) { bbDurationBonus[2] = 4 * distFromMid; bbDurationBonus[3] = 2 * distFromMid; }
+        else                  { bbDurationBonus[3] = 2 * distFromMid; }
+    }
+    if (direction === 'PUT' && bbPos > 0.7) {
+        const distFromMid = (bbPos - 0.5) / 0.5;
+        if (bbPos > 0.9)      { bbDurationBonus[1] = 6 * distFromMid; bbDurationBonus[2] = 4 * distFromMid; }
+        else if (bbPos > 0.8) { bbDurationBonus[2] = 4 * distFromMid; bbDurationBonus[3] = 2 * distFromMid; }
+        else                  { bbDurationBonus[3] = 2 * distFromMid; }
+    }
+
+    // EMA 5/10 crossover: trending alignment → longer durations; flat → shorter
+    let emaDurationBonus: number[] = [0, 0, 0, 0, 0, 0];
+    if (prices.length >= 20) {
+        const e5 = ema(prices, 5);
+        const e10 = ema(prices, 10);
+        if (e5.length > 0 && e10.length > 0) {
+            const le5 = e5[e5.length - 1], le10 = e10[e10.length - 1];
+            const gap = ((le5 - le10) / le10) * 100;                     // % gap between EMAs
+            const absGap = Math.abs(gap);
+            if (direction === 'CALL' && gap > 0) {
+                if (absGap > 0.2) { emaDurationBonus[4] = 5; emaDurationBonus[5] = 4; }
+                else if (absGap > 0.1) { emaDurationBonus[3] = 4; emaDurationBonus[4] = 3; }
+                else { emaDurationBonus[2] = 3; emaDurationBonus[3] = 2; }
+            }
+            if (direction === 'PUT' && gap < 0) {
+                if (absGap > 0.2) { emaDurationBonus[4] = 5; emaDurationBonus[5] = 4; }
+                else if (absGap > 0.1) { emaDurationBonus[3] = 4; emaDurationBonus[4] = 3; }
+                else { emaDurationBonus[2] = 3; emaDurationBonus[3] = 2; }
+            }
+            // Narrow gap (crossing soon): shorter durations to catch early move
+            if (absGap < 0.05) {
+                emaDurationBonus[1] = Math.max(emaDurationBonus[1], 4);
+                emaDurationBonus[2] = Math.max(emaDurationBonus[2], 3);
+            }
+        }
+    }
+
+    // ── Blend historical accuracy with indicator bonuses ───────────────
     let bestD = 1;
     let bestScore = -Infinity;
 
@@ -2388,7 +2448,6 @@ export function findBestDuration(
         if (maxSamples < 3) continue;
 
         let correct = 0, total = 0;
-        // Walk backwards through prices checking D-tick intervals
         for (let i = prices.length - 1; i >= step && total < maxSamples; i -= step) {
             const actualUp = prices[i] > prices[i - step];
             if ((direction === 'CALL' && actualUp) || (direction === 'PUT' && !actualUp)) {
@@ -2400,8 +2459,8 @@ export function findBestDuration(
         if (total === 0) continue;
         const accuracy = correct / total;
 
-        // Score = accuracy% + small bonus for shorter durations (less exposure)
-        const score = accuracy * 100 + (maxDuration - d) * 0.5;
+        const indicatorBonus = rsiDurationBonus[d] + bbDurationBonus[d] + emaDurationBonus[d];
+        const score = accuracy * 100 + (maxDuration - d) * 0.5 + indicatorBonus;
 
         if (score > bestScore) {
             bestScore = score;
