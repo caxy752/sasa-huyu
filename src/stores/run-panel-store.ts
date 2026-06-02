@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable, reaction, runInAction } from 'mobx';
+﻿import { action, computed, makeObservable, observable, reaction, runInAction } from 'mobx';
 import { botNotification } from '@/components/bot-notification/bot-notification';
 import { notification_message } from '@/components/bot-notification/bot-notification-utils';
 import { isSafari, mobileOSDetect, standalone_routes } from '@/components/shared';
@@ -316,6 +316,11 @@ export default class RunPanelStore {
     }
 
     onRunButtonClick = async () => {
+        if (!navigator.onLine) {
+            botNotification(localize('❌ Cannot start bot while offline. Connect to the internet first.'));
+            return;
+        }
+
         // CRITICAL: Prevent multiple simultaneous runs (especially on desktop double-clicks)
         if (this.is_running || this.is_contracy_buying_in_progress) {
             console.warn('[Run Panel] ⚠️ Bot is already running, ignoring duplicate run request');

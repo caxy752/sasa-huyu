@@ -21,6 +21,7 @@ import initHotjar from '@/utils/hotjar';
 import { setSmartChartsPublicPath } from '@deriv/deriv-charts';
 import { ThemeProvider } from '@deriv-com/quill-ui';
 import { localize } from '@deriv-com/translations';
+import OfflineBanner from '@/components/offline-banner/offline-banner';
 import Audio from '../components/audio';
 import BlocklyLoading from '../components/blockly-loading';
 import BotStopped from '../components/bot-stopped';
@@ -212,6 +213,7 @@ const AppContent = observer(() => {
             <ThemeProvider theme={is_dark_mode_on ? 'dark' : 'light'}>
                 <BlocklyLoading />
                 <div className='bot-dashboard bot' data-testid='dt_bot_dashboard'>
+                    <OfflineBanner />
                     <Audio />
                     
                     {/* REMOVED MULTI-TAB SWITCHER */}

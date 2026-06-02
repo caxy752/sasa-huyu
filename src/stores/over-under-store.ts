@@ -1921,6 +1921,11 @@ export default class OverUnderStore {
     }
 
     executeTrade(contract_type: string, barrier: string, symbol?: string, stake?: number, is_fast_recovery = false, duration?: number) {
+        if (!navigator.onLine) {
+            this.addLog('❌ Cannot trade while offline. Please connect to the internet.');
+            return;
+        }
+
         const tradeSymbol = symbol || this.selected_symbol;
 
         if (!is_fast_recovery && this.symbol_locks[tradeSymbol]) {
