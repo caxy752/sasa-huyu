@@ -96,6 +96,7 @@ export const MarketKiller: React.FC = () => {
         ticksElapsed: number;
         stake: number;
         startTime: number;
+        buyId: string;
     } | null>(null);
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
@@ -250,6 +251,7 @@ export const MarketKiller: React.FC = () => {
             const duration = getBestDuration(sd.prices, signal.contract_type);
             const entryPrice = sd.prices[sd.prices.length - 1];
             const vhStake = globalStakeRef.current;
+            const vhBuyId = `vh_${sym}_${Date.now()}`;
             virtualTradeRef.current = {
                 symbol: sym,
                 entryPrice,
@@ -258,14 +260,14 @@ export const MarketKiller: React.FC = () => {
                 ticksElapsed: 0,
                 stake: vhStake,
                 startTime: Math.floor(Date.now() / 1000),
+                buyId: vhBuyId,
             };
             const label = signal.contract_type === 'CALL' ? 'RISE' : 'FALL';
             addLog(`🤖 [VIRTUAL HOOK] 🔍 Virtual ${label} D${duration} on ${SYMBOL_LABELS[sym]} @ $${entryPrice.toFixed(4)} — tracking ${duration} ticks`, 'info');
-            const vhId = `vh_${sym}_${Date.now()}`;
             try {
                 transactions.onBotContractEvent({
-                    transaction_ids: { buy: vhId },
-                    contract_id: vhId,
+                    transaction_ids: { buy: vhBuyId },
+                    contract_id: vhBuyId,
                     buy_price: vhStake,
                     currency: 'USD',
                     contract_type: signal.contract_type,
@@ -400,19 +402,19 @@ export const MarketKiller: React.FC = () => {
                     const label = vt.direction === 'CALL' ? 'RISE' : 'FALL';
                     const vhProfit = won ? vt.stake * 0.95 : -vt.stake;
                     const sellPrice = won ? vt.stake * 1.95 : 0;
-                    const vhResolveId = `vh_${vt.symbol}_${Date.now()}`;
                     try {
-                        const entrySpotStr = vt.entryPrice.toFixed(sd.prices.length > 0 ? (PIP_SIZES[vt.symbol] || 2) : 2);
-                        const exitSpotStr = currentPrice.toFixed(sd.prices.length > 0 ? (PIP_SIZES[vt.symbol] || 2) : 2);
+                        const entrySpotStr = vt.entryPrice.toFixed(PIP_SIZES[vt.symbol] || 2);
+                        const exitSpotStr = currentPrice.toFixed(PIP_SIZES[vt.symbol] || 2);
+                        const vhDisplayName = won ? 'Virtual Win' : 'Virtual Loss';
                         transactions.onBotContractEvent({
-                            transaction_ids: { buy: vhResolveId },
-                            contract_id: vhResolveId,
+                            transaction_ids: { buy: vt.buyId },
+                            contract_id: vt.buyId,
                             buy_price: vt.stake,
                             sell_price: sellPrice,
                             currency: 'USD',
                             contract_type: vt.direction,
                             underlying: vt.symbol,
-                            display_name: SYMBOL_LABELS[vt.symbol],
+                            display_name: vhDisplayName,
                             date_start: vt.startTime,
                             date_expiry: Math.floor(Date.now() / 1000),
                             entry_tick: entrySpotStr,
