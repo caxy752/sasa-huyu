@@ -1003,7 +1003,11 @@ const NewDTrader: React.FC = () => {
         }
         if (data.msg_type === 'buy') {
           setIsTrading(false);
-          if (!data.error && data.buy?.contract_id) {
+          if (data.error) {
+            console.error('Buy error:', data.error);
+            return;
+          }
+          if (data.buy?.contract_id) {
             const cid = String(data.buy.contract_id);
             const entryPrice = data.buy.entry_tick || priceRef.current || 0;
             const entryEpoch = data.buy.entry_tick_time || tickEpochs.current[tickEpochs.current.length - 1] || 0;
@@ -1081,7 +1085,7 @@ const NewDTrader: React.FC = () => {
     return unsub;
   }, []);
 
-  const handleBuyContract = async (ct: string) => {
+  const handleBuyContract = (ct: string) => {
     if (isTrading) return;
     setIsTrading(true);
     const isAccu = tradeType === 'accumulator';
@@ -1101,15 +1105,7 @@ const NewDTrader: React.FC = () => {
     if (ct === 'DIGITOVER' || ct === 'DIGITUNDER' || ct === 'DIGITMATCH' || ct === 'DIGITDIFF') {
       params.barrier = barrier;
     }
-    try {
-      const res = await sendViaNewSystemWithPromise({ buy: 1, price: stake, parameters: params });
-      if (res?.error) {
-        console.error('Buy error:', res.error);
-      }
-    } catch (e) {
-      console.error('Buy failed:', e);
-    }
-    setIsTrading(false);
+    sendViaNewSystem({ buy: 1, price: stake, parameters: params });
   };
 
   const handleSellContract = async (contractId: string) => {
