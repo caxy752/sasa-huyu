@@ -455,7 +455,7 @@ export const Scanner: React.FC = () => {
                                         {r.pcts.map((p, i) => (
                                             <div key={i} className={`mw-scanner__bar-wrap${[7, 8, 9].includes(i) ? ' mw-scanner__bar-wrap--hi' : ''}`} title={`Digit ${i}: ${p.toFixed(2)}%`}>
                                                 <div className='mw-scanner__bar-fill' style={{ height: `${Math.min(100, p * 4)}%` }} />
-                                                <span className='mw-scanner__bar-pct'>{p.toFixed(0)}%</span>
+                                                <span className='mw-scanner__bar-pct'>{p.toFixed(1)}%</span>
                                                 <span className='mw-scanner__bar-lbl'>{i}</span>
                                             </div>
                                         ))}
