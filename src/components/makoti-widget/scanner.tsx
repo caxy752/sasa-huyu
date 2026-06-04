@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { ALL_SYMBOLS, SYMBOL_LABELS, openMakotiWS, MakotiWS } from './makoti-ws';
+import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
 import { onNewSystemMessage } from '@/auth/NewDerivAuth';
 
 type BotId = 'pvty_kill' | 'rf_v4';
@@ -268,7 +268,8 @@ export const Scanner: React.FC = () => {
                 const scanResults: SymbolDigitResult[] = [];
                 collectedRef.current.forEach((prices: number[], sym) => {
                     if (!prices || prices.length < 100) return;
-                    const digits = prices.map(p => Math.floor(Math.abs(p)) % 10);
+                    const pipSize = PIP_SIZES[sym] || 2;
+                    const digits = prices.map(p => Number(Number(p).toFixed(pipSize).slice(-1)));
                     const pcts = calcDigitPcts(digits);
                     const qualifies = pcts[7] > 10 && pcts[8] > 10 && pcts[9] > 10;
                     scanResults.push({
