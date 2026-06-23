@@ -279,16 +279,6 @@ export const MarketKiller: React.FC = () => {
             }
             return;
         }
-                    consecutiveLossesRef.current = 0;
-                    addLog(`⏳ ACCURATE: blocked ${accurateBlockRef.current} times — resetting threshold to ${CONFIDENCE_THRESHOLD}%`, 'info');
-                } else {
-                    addLog(`⏳ ACCURATE: ${signal.confidence.toFixed(0)}% < ${getConfidenceThreshold()}% threshold — waiting for higher confidence`, 'info');
-                }
-            }
-            return;
-        }
-        accurateBlockRef.current = 0;
-
 
         const sd = symbolDataRef.current[sym];
         if (!sd) return;
