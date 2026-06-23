@@ -23,5 +23,5 @@
     "theme_color": "#0e0e0e",
     "categories": ["finance", "trading", "productivity"],
     "lang": "en",
-    "orientation": "any"
+    "orientation": "portrait"
 }
