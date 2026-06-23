@@ -89,7 +89,6 @@ export const MarketKiller: React.FC = () => {
     const vhEnabledRef = useRef(false);
     const vhThresholdRef = useRef(1);
     const accurateRef = useRef(false);
-    const accurateBlockRef = useRef(0);
     const recoveryRef = useRef<{ active: boolean; pending: number; stake: number; martingale: number } | null>(null);
     const recoveryPnlRef = useRef(0);
     const lastTickSymRef = useRef('');
@@ -276,18 +275,10 @@ export const MarketKiller: React.FC = () => {
         if (!runningRef.current) return;
         if (!signal || signal.confidence < getConfidenceThreshold()) {
             if (accurateRef.current && signal) {
-                accurateBlockRef.current++;
-                if (accurateBlockRef.current >= 25) {
-                    accurateBlockRef.current = 0;
-                    consecutiveLossesRef.current = 0;
-                    addLog(`⏳ ACCURATE: waited 25 ticks — resetting threshold to ${CONFIDENCE_THRESHOLD}%`, 'info');
-                } else {
-                    addLog(`⏳ ACCURATE: ${signal.confidence.toFixed(0)}% < ${getConfidenceThreshold()}% threshold — waiting for higher confidence`, 'info');
-                }
+                addLog(`⏳ ACCURATE: ${signal.confidence.toFixed(0)}% < ${getConfidenceThreshold()}% threshold — waiting for higher confidence`, 'info');
             }
             return;
         }
-        accurateBlockRef.current = 0;
                     consecutiveLossesRef.current = 0;
                     addLog(`⏳ ACCURATE: blocked ${accurateBlockRef.current} times — resetting threshold to ${CONFIDENCE_THRESHOLD}%`, 'info');
                 } else {

@@ -4247,15 +4247,14 @@ export function analyzeSignals(
         if (v.barrier) g.barriers.push(v.barrier);
     }
 
-    // Pick the best group — use weighted average confidence as primary metric
+    // Pick the best group — use max confidence as primary metric
     let bestGroup: { key: string; data: typeof groups extends Map<string, infer V> ? V : never } | null = null;
     let bestScore = 0;
 
     for (const [key, data] of groups) {
-        const avgConf = data.totalWeight > 0 ? data.weightedConf / data.totalWeight : 0;
+        const maxConf = Math.max(...votes.filter(v => v.type === key).map(v => v.confidence));
         const voterCount = data.scores.length;
-        // Use avgConf as primary score, small bonus for multi-strategy consensus
-        const groupScore = avgConf + Math.min(3, voterCount * 0.5);
+        const groupScore = maxConf + Math.min(3, voterCount * 0.5);
 
         if (groupScore > bestScore) {
             bestScore = groupScore;
@@ -4266,7 +4265,7 @@ export function analyzeSignals(
     if (!bestGroup) return null;
 
     const { key, data } = bestGroup;
-    const avgConf = data.totalWeight > 0 ? data.weightedConf / data.totalWeight : 0;
+    const bestConf = Math.max(...votes.filter(v => v.type === key).map(v => v.confidence));
     let barrier = data.barriers.length > 0
         ? data.barriers.sort((a, b) => {
             const freqA = data.barriers.filter(x => x === a).length;
@@ -4289,7 +4288,7 @@ export function analyzeSignals(
     if (regime === 'CHOPPY' && (contractType === 'CALL' || contractType === 'PUT')) regimeBonus = -3;
     if (regime === 'CHOPPY' && (contractType === 'DIGITEVEN' || contractType === 'DIGITODD')) regimeBonus = 0;
 
-    const finalConfidence = Math.max(CONFIDENCE_FLOOR, Math.min(CONFIDENCE_CEILING, Math.round(avgConf + regimeBonus)));
+    const finalConfidence = Math.max(CONFIDENCE_FLOOR, Math.min(CONFIDENCE_CEILING, Math.round(bestConf + regimeBonus)));
 
     const details = `Regime: ${regime} | Strategies: ${votes.filter(v => v.type === key).map(v => `${v.name}(${v.confidence.toFixed(0)})`).join(', ')}`;
 
