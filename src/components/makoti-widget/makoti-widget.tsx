@@ -119,6 +119,7 @@ export const MakotiWidget: React.FC = () => {
             }
 
             if (wasBtn && btnRef.current) {
+                btnRef.current.style.transition = '';
                 btnRef.current.style.transform = 'none';
                 btnRef.current.style.left = btnPosRef.current.x + 'px';
                 btnRef.current.style.top  = btnPosRef.current.y + 'px';
@@ -135,11 +136,17 @@ export const MakotiWidget: React.FC = () => {
             }
         };
 
+        const onCancel = () => { if (btnDragging.current || winDragging.current || miniDragging.current) onUp(); };
+
         document.addEventListener('pointermove', onMove, { passive: true });
         document.addEventListener('pointerup',   onUp);
+        document.addEventListener('pointercancel', onCancel);
+        document.addEventListener('pointerleave', onCancel);
         return () => {
             document.removeEventListener('pointermove', onMove);
             document.removeEventListener('pointerup',   onUp);
+            document.removeEventListener('pointercancel', onCancel);
+            document.removeEventListener('pointerleave', onCancel);
             if (rafId.current !== null) cancelAnimationFrame(rafId.current);
         };
     }, []);
@@ -171,6 +178,7 @@ export const MakotiWidget: React.FC = () => {
         btnMoved.current    = false;
         startClient.current = { x: e.clientX, y: e.clientY };
         startElem.current   = { ...btnPosRef.current };
+        if (btnRef.current) btnRef.current.style.transition = 'none';
     };
 
     /* ── FAB click — only toggle if not a drag ────────────── */
