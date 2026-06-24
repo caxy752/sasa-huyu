@@ -167,8 +167,11 @@ export const MakotiWidget: React.FC = () => {
             const isMob = w <= 600;
             const defX = Math.max(PAD, w - Math.min(isMob ? 250 : 300, w - PAD * 2) - PAD);
             const defY = Math.max(PAD, h - (isMob ? 380 : 460));
-            winRef.current.style.left = (isMob ? PAD : defX) + 'px';
-            winRef.current.style.top  = (w <= 600 ? PAD : defY) + 'px';
+            const nx = isMob ? PAD : defX;
+            const ny = w <= 600 ? PAD : defY;
+            winRef.current.style.left = nx + 'px';
+            winRef.current.style.top  = ny + 'px';
+            winPosRef.current = { x: nx, y: ny };
         }
     }, [open]);
 
@@ -206,17 +209,6 @@ export const MakotiWidget: React.FC = () => {
         startElem.current   = { ...winPosRef.current };
     };
 
-    /* ── Window initial position (computed inline, no flash) ── */
-    const initWinStyle = (() => {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        if (w <= 600) return { left: PAD, top: PAD };
-        return {
-            left: Math.max(PAD, w - Math.min(400, w - PAD * 2) - PAD),
-            top: Math.max(PAD, h - 640),
-        };
-    })();
-
     return (
         <>
             {/* ── Floating button ── */}
@@ -233,93 +225,89 @@ export const MakotiWidget: React.FC = () => {
                 <span className='mw-fab__label'>MAKOTI</span>
             </button>
 
-            {/* ── Floating window (draggable, same on all devices) ── */}
-            {open && (
-                <>
-                    <div
-                        ref={winRef}
-                        className={`mw-window${minimized ? ' mw-window--hidden' : ''}`}
-                        style={{ position: 'fixed', left: initWinStyle.left + 'px', top: initWinStyle.top + 'px' }}
-                        onPointerDown={onWinPointerDown}
-                    >
-                        <div className='mw-win-header'>
-                            <div className='mw-win-title'>
-                                <span className='mw-win-logo'>⚔</span>
-                                <span>MAKOTI</span>
-                            </div>
-                            <div className='mw-win-actions'>
-                                <button
-                                    className='mw-win-action'
-                                    onClick={() => setMinimized(m => !m)}
-                                    title='Minimize'
-                                >
-                                    ▼
-                                </button>
-                                <button
-                                    className='mw-win-action mw-win-action--close'
-                                    onClick={() => setOpen(false)}
-                                    title='Close'
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className='mw-tabs'>
-                            <button
-                                className={`mw-tab${tab === 'scanner' ? ' mw-tab--active' : ''}`}
-                                onClick={() => setTab('scanner')}
-                            >
-                                Scanner
-                            </button>
-                            <button
-                                className={`mw-tab${tab === 'market_killer' ? ' mw-tab--active' : ''}`}
-                                onClick={() => setTab('market_killer')}
-                            >
-                                Market Killer
-                            </button>
-                            <button
-                                className={`mw-tab${tab === 'over_under' ? ' mw-tab--active' : ''}`}
-                                onClick={() => setTab('over_under')}
-                            >
-                                O/U Killer
-                            </button>
-                        </div>
-
-                        <div className='mw-win-body'>
-                            {tab === 'scanner' && <Scanner />}
-                            {tab === 'market_killer' && <MarketKiller />}
-                            {tab === 'over_under' && <OverUnderKiller />}
-                        </div>
+            {/* ── Floating window & tab content (always mounted so active killer survives close) ── */}
+            <div
+                ref={winRef}
+                className={`mw-window${open ? '' : ' mw-window--closed'}${minimized ? ' mw-window--hidden' : ''}`}
+                style={{ position: 'fixed', left: winPosRef.current.x + 'px', top: winPosRef.current.y + 'px' }}
+                onPointerDown={onWinPointerDown}
+            >
+                <div className='mw-win-header'>
+                    <div className='mw-win-title'>
+                        <span className='mw-win-logo'>⚔</span>
+                        <span>MAKOTI</span>
                     </div>
-
-                    {minimized && (
+                    <div className='mw-win-actions'>
                         <button
-                            ref={miniRef}
-                            className='mw-mini'
-                            style={{
-                                position: 'fixed',
-                                left: winPosRef.current.x,
-                                top: winPosRef.current.y,
-                                zIndex: 99998,
-                            }}
-                            onPointerDown={(e) => {
-                                miniDragging.current = true;
-                                winMoved.current = false;
-                                startClient.current = { x: e.clientX, y: e.clientY };
-                                startElem.current = { ...winPosRef.current };
-                                if (miniRef.current) miniRef.current.style.transition = 'none';
-                                e.preventDefault();
-                            }}
-                            onClick={() => {
-                                if (winMoved.current) { winMoved.current = false; return; }
-                                setMinimized(false);
-                            }}
+                            className='mw-win-action'
+                            onClick={() => setMinimized(m => !m)}
+                            title='Minimize'
                         >
-                            ⚔
+                            ▼
                         </button>
-                    )}
-                </>
+                        <button
+                            className='mw-win-action mw-win-action--close'
+                            onClick={() => setOpen(false)}
+                            title='Close'
+                        >
+                            ×
+                        </button>
+                    </div>
+                </div>
+
+                <div className='mw-tabs'>
+                    <button
+                        className={`mw-tab${tab === 'scanner' ? ' mw-tab--active' : ''}`}
+                        onClick={() => setTab('scanner')}
+                    >
+                        Scanner
+                    </button>
+                    <button
+                        className={`mw-tab${tab === 'market_killer' ? ' mw-tab--active' : ''}`}
+                        onClick={() => setTab('market_killer')}
+                    >
+                        Market Killer
+                    </button>
+                    <button
+                        className={`mw-tab${tab === 'over_under' ? ' mw-tab--active' : ''}`}
+                        onClick={() => setTab('over_under')}
+                    >
+                        O/U Killer
+                    </button>
+                </div>
+
+                <div className='mw-win-body'>
+                    {tab === 'scanner' && <Scanner />}
+                    {tab === 'market_killer' && <MarketKiller />}
+                    {tab === 'over_under' && <OverUnderKiller />}
+                </div>
+            </div>
+
+            {open && minimized && (
+                <button
+                    ref={miniRef}
+                    className='mw-mini'
+                    style={{
+                        position: 'fixed',
+                        left: winPosRef.current.x,
+                        top: winPosRef.current.y,
+                        zIndex: 99998,
+                    }}
+                    onPointerDown={(e) => {
+                        miniDragging.current = true;
+                        winMoved.current = false;
+                        startClient.current = { x: e.clientX, y: e.clientY };
+                        startElem.current = { ...winPosRef.current };
+                        if (miniRef.current) miniRef.current.style.transition = 'none';
+                        e.preventDefault();
+                    }}
+                    onClick={() => {
+                        if (winMoved.current) { winMoved.current = false; return; }
+                        setMinimized(false);
+                    }}
+                >
+                    ⚔
+                </button>
             )}
         </>
     );

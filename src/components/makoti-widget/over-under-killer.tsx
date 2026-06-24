@@ -33,13 +33,28 @@ const CONTRACT_SIDES: { label: string; value: ContractSide }[] = [
 ];
 
 const LS_LOGS_KEY    = 'mw_ouk_logs';
+const LS_CONFIG_KEY  = 'mw_ouk_config';
 const MAX_SAVED_LOGS = 80;
+
+const DEFAULT_CONFIG = { stake: '0.35', martingale: '2', takeProfit: '10', stopLoss: '5', predictionDigit: '5', contractSide: 'DIGITOVER' as const, recoveryMode: false, manualRecovery: false, recoverySide: 'DIGITOVER' as const, recoveryDigit: '5' };
 
 function loadSavedLogs(): LogEntry[] {
     try { const raw = localStorage.getItem(LS_LOGS_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
 }
 function saveLogs(logs: LogEntry[]) {
     try { localStorage.setItem(LS_LOGS_KEY, JSON.stringify(logs.slice(0, MAX_SAVED_LOGS))); } catch {}
+}
+
+function loadConfig(): typeof DEFAULT_CONFIG {
+    try {
+        const raw = localStorage.getItem(LS_CONFIG_KEY);
+        return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG;
+    } catch {
+        return DEFAULT_CONFIG;
+    }
+}
+function saveConfig(cfg: typeof DEFAULT_CONFIG) {
+    try { localStorage.setItem(LS_CONFIG_KEY, JSON.stringify(cfg)); } catch {}
 }
 
 /* ── Digit frequency analysis helpers ─────────────────────────────────────── */
@@ -89,16 +104,17 @@ function analyzeDigitPsychology(ticks: number[]): {
 export const OverUnderKiller: React.FC = () => {
     const { transactions } = useStore();
 
-    const [stake,       setStake]       = useState('0.35');
-    const [martingale,  setMartingale]  = useState('2');
-    const [takeProfit,  setTakeProfit]  = useState('10');
-    const [stopLoss,    setStopLoss]    = useState('5');
-    const [predictionDigit, setPredictionDigit] = useState('5');
-    const [contractSide, setContractSide] = useState<ContractSide>('DIGITOVER');
-    const [recoveryMode, setRecoveryMode] = useState(false);
-    const [manualRecovery, setManualRecovery] = useState(false);
-    const [recoverySide, setRecoverySide] = useState<ContractSide>('DIGITOVER');
-    const [recoveryDigit, setRecoveryDigit] = useState('5');
+    const initCfg = loadConfig();
+    const [stake,       setStake]       = useState(initCfg.stake);
+    const [martingale,  setMartingale]  = useState(initCfg.martingale);
+    const [takeProfit,  setTakeProfit]  = useState(initCfg.takeProfit);
+    const [stopLoss,    setStopLoss]    = useState(initCfg.stopLoss);
+    const [predictionDigit, setPredictionDigit] = useState(initCfg.predictionDigit);
+    const [contractSide, setContractSide] = useState<ContractSide>(initCfg.contractSide);
+    const [recoveryMode, setRecoveryMode] = useState(initCfg.recoveryMode);
+    const [manualRecovery, setManualRecovery] = useState(initCfg.manualRecovery);
+    const [recoverySide, setRecoverySide] = useState<ContractSide>(initCfg.recoverySide);
+    const [recoveryDigit, setRecoveryDigit] = useState(initCfg.recoveryDigit);
     const [running,     setRunning]     = useState(false);
     const [pnl,         setPnl]         = useState(0);
     const [logs,        setLogs]        = useState<LogEntry[]>(loadSavedLogs);
@@ -137,6 +153,7 @@ export const OverUnderKiller: React.FC = () => {
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
     useEffect(() => { saveLogs(logs); }, [logs]);
+    useEffect(() => { saveConfig({ stake, martingale, takeProfit, stopLoss, predictionDigit, contractSide, recoveryMode, manualRecovery, recoverySide, recoveryDigit }); }, [stake, martingale, takeProfit, stopLoss, predictionDigit, contractSide, recoveryMode, manualRecovery, recoverySide, recoveryDigit]);
 
     /* ── Log helper (defined FIRST — no deps) ────────────────────────────── */
     const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {

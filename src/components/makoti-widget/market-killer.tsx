@@ -29,7 +29,10 @@ const CONTRACT_FAMILIES: { label: string; types: ContractType[] }[] = [
 ];
 
 const LS_LOGS_KEY            = 'mw_mk_logs';
+const LS_CONFIG_KEY          = 'mw_mk_config';
 const MAX_SAVED_LOGS         = 80;
+
+const DEFAULT_CONFIG = { stake: '0.35', martingale: '2', takeProfit: '10', stopLoss: '5', vhEnabled: false, vhThreshold: '1', accurateMode: false };
 
 function loadSavedLogs(): LogEntry[] {
     try {
@@ -46,19 +49,35 @@ function saveLogs(logs: LogEntry[]) {
     } catch {}
 }
 
+function loadConfig(): typeof DEFAULT_CONFIG {
+    try {
+        const raw = localStorage.getItem(LS_CONFIG_KEY);
+        return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG;
+    } catch {
+        return DEFAULT_CONFIG;
+    }
+}
+
+function saveConfig(cfg: typeof DEFAULT_CONFIG) {
+    try {
+        localStorage.setItem(LS_CONFIG_KEY, JSON.stringify(cfg));
+    } catch {}
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    MarketKiller
 ═══════════════════════════════════════════════════════════════════════════ */
 export const MarketKiller: React.FC = () => {
     const { transactions } = useStore();
 
-    const [stake,       setStake]       = useState('0.35');
-    const [martingale,  setMartingale]  = useState('2');
-    const [takeProfit,  setTakeProfit]  = useState('10');
-    const [stopLoss,    setStopLoss]    = useState('5');
-    const [vhEnabled,    setVhEnabled]   = useState(false);
-    const [vhThreshold,  setVhThreshold] = useState('1');
-    const [accurateMode, setAccurateMode] = useState(false);
+    const initCfg = loadConfig();
+    const [stake,       setStake]       = useState(initCfg.stake);
+    const [martingale,  setMartingale]  = useState(initCfg.martingale);
+    const [takeProfit,  setTakeProfit]  = useState(initCfg.takeProfit);
+    const [stopLoss,    setStopLoss]    = useState(initCfg.stopLoss);
+    const [vhEnabled,    setVhEnabled]   = useState(initCfg.vhEnabled);
+    const [vhThreshold,  setVhThreshold] = useState(initCfg.vhThreshold);
+    const [accurateMode, setAccurateMode] = useState(initCfg.accurateMode);
     const [running,     setRunning]     = useState(false);
     const [pnl,         setPnl]         = useState(0);
     const [logs,        setLogs]        = useState<LogEntry[]>(loadSavedLogs);
@@ -105,6 +124,7 @@ export const MarketKiller: React.FC = () => {
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
     useEffect(() => { saveLogs(logs); }, [logs]);
+    useEffect(() => { saveConfig({ stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, accurateMode }); }, [stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, accurateMode]);
 
     /* ── Recovery auto-start ─────────────────────────────────────────────── */
     useEffect(() => {
