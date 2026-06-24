@@ -119,10 +119,10 @@ export const MakotiWidget: React.FC = () => {
             }
 
             if (wasBtn && btnRef.current) {
-                btnRef.current.style.transition = '';
-                btnRef.current.style.transform = 'none';
                 btnRef.current.style.left = btnPosRef.current.x + 'px';
                 btnRef.current.style.top  = btnPosRef.current.y + 'px';
+                btnRef.current.style.transform = 'none';
+                btnRef.current.style.transition = '';
             }
             if (wasWin && winRef.current) {
                 winRef.current.style.transform = 'none';
@@ -130,9 +130,10 @@ export const MakotiWidget: React.FC = () => {
                 winRef.current.style.top  = winPosRef.current.y + 'px';
             }
             if (wasMini && miniRef.current) {
-                miniRef.current.style.transform = 'none';
                 miniRef.current.style.left = winPosRef.current.x + 'px';
                 miniRef.current.style.top  = winPosRef.current.y + 'px';
+                miniRef.current.style.transform = 'none';
+                miniRef.current.style.transition = '';
             }
         };
 
@@ -307,6 +308,7 @@ export const MakotiWidget: React.FC = () => {
                                 winMoved.current = false;
                                 startClient.current = { x: e.clientX, y: e.clientY };
                                 startElem.current = { ...winPosRef.current };
+                                if (miniRef.current) miniRef.current.style.transition = 'none';
                                 e.preventDefault();
                             }}
                             onClick={() => {
