@@ -4,8 +4,8 @@ import IframeWrapper from '@/components/iframe-wrapper';
 const Signals: React.FC = () => {
     return (
         <IframeWrapper
-            src='/signals/index.html'
-            title='Trading Signals'
+            src='https://tracktool.netlify.app/signals.html'
+            title='Deriv Signal Scanner'
             className='signals-container'
         />
     );
