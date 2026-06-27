@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import AnalysisTool from './analysis-tool';
 import DpTools from '../dp-tools';
 import Dcircles from '../dtrader/dcircles/dcircles';
 import AllAnalysis from './all-analysis';
 import Signals from '../signals';
 import TickAnalyser from './tick-analyser';
-import IframeWrapper from '@/components/iframe-wrapper';
 import { useStore } from '@/hooks/useStore';
 import { ApiHelpers } from '@/external/bot-skeleton';
 import './analysis-tools.scss';
@@ -13,9 +11,7 @@ import './analysis-tools.scss';
 type AnalysisToolSubTab =
     | 'dcircles'
     | 'signals'
-    | 'analysis-tool'
     | 'dp-tools'
-    | 'smart-analysis'
     | 'all-analysis'
     | 'tick-analyser';
 
@@ -657,24 +653,12 @@ const AnalysisTools: React.FC = () => {
                 return <Dcircles />;
             case 'signals':
                 return <Signals />;
-            case 'analysis-tool':
-                return <AnalysisTool />;
             case 'dp-tools':
                 return <DpTools />;
-            case 'smart-analysis':
-                return (
-                    <IframeWrapper
-                        src='https://www.smartanalysistool.com/signal-center'
-                        title='Smart Analysis'
-                        className='smart-analysis-container'
-                    />
-                );
             case 'all-analysis':
                 return <AllAnalysis />;
             case 'tick-analyser':
                 return <TickAnalyser />;
-            case 'xenon-ai':
-                return <IframeWrapper src='/xenon-ai.html' title='Xenon AI' className='xenon-ai-container' />;
             default:
                 return null;
         }
@@ -700,27 +684,11 @@ const AnalysisTools: React.FC = () => {
                     </div>
                 </div>
                 <div
-                    className={`analysis-tools__card analysis-tools__card--light ${active_tool === 'analysis-tool' ? 'analysis-tools__card--active' : ''}`}
-                    onClick={() => handleCardClick('analysis-tool')}
-                >
-                    <div className='analysis-tools__card-content'>
-                        <span className='analysis-tools__card-label'>Analysis Tool</span>
-                    </div>
-                </div>
-                <div
                     className={`analysis-tools__card analysis-tools__card--light ${active_tool === 'dp-tools' ? 'analysis-tools__card--active' : ''}`}
                     onClick={() => handleCardClick('dp-tools')}
                 >
                     <div className='analysis-tools__card-content'>
                         <span className='analysis-tools__card-label'>DP Tools</span>
-                    </div>
-                </div>
-                <div
-                    className={`analysis-tools__card analysis-tools__card--light ${active_tool === 'smart-analysis' ? 'analysis-tools__card--active' : ''}`}
-                    onClick={() => handleCardClick('smart-analysis')}
-                >
-                    <div className='analysis-tools__card-content'>
-                        <span className='analysis-tools__card-label'>Smart Analysis</span>
                     </div>
                 </div>
                 <div
@@ -737,14 +705,6 @@ const AnalysisTools: React.FC = () => {
                 >
                     <div className='analysis-tools__card-content'>
                         <span className='analysis-tools__card-label'>Tick Analyser</span>
-                    </div>
-                </div>
-                <div
-                    className={`analysis-tools__card analysis-tools__card--light ${active_tool === 'xenon-ai' ? 'analysis-tools__card--active' : ''}`}
-                    onClick={() => handleCardClick('xenon-ai')}
-                >
-                    <div className='analysis-tools__card-content'>
-                        <span className='analysis-tools__card-label'>Xenon AI</span>
                     </div>
                 </div>
             </div>

@@ -4,7 +4,7 @@ import IframeWrapper from '@/components/iframe-wrapper';
 const Signals: React.FC = () => {
     return (
         <IframeWrapper
-            src='https://signals-scanner-vercel-app.vercel.app/'
+            src='/signals/index.html'
             title='Trading Signals'
             className='signals-container'
         />
