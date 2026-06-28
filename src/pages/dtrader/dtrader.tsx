@@ -5,10 +5,14 @@ import {
     getMainAppActiveToken,
     getMainAppActiveLoginId,
 } from '@/external/bot-skeleton/services/api/appId';
+import { isNewLoggedIn } from '@/auth/NewDerivAuth';
+
+const DTRADER_BASE = 'https://deriv-dtrader.vercel.app/';
 
 const Dtrader = observer(() => {
     const [iframeSrc, setIframeSrc] = useState<string>('');
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+    const [isNewAuth, setIsNewAuth] = useState<boolean>(false);
 
     const buildIframeUrl = useCallback((token: string, loginId: string) => {
         // Read all accounts from clientAccounts (has loginid, token, currency for each)
@@ -49,7 +53,6 @@ const Dtrader = observer(() => {
             a => a.loginid === loginId && a.token === token
         );
         if (!activeAlreadyIncluded) {
-            // Get currency for active account
             let activeCurrency = 'USD';
             try {
                 const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
@@ -60,10 +63,8 @@ const Dtrader = observer(() => {
                     activeCurrency = clientAccounts[loginId].currency;
                 }
             } catch (_) {}
-            // Put active account first
             allAccounts = [{ loginid: loginId, token, currency: activeCurrency }, ...allAccounts];
         } else {
-            // Sort so active account is first
             allAccounts = [
                 ...allAccounts.filter(a => a.loginid === loginId),
                 ...allAccounts.filter(a => a.loginid !== loginId),
@@ -82,41 +83,37 @@ const Dtrader = observer(() => {
             params.set(`cur${n}`, acc.currency || 'USD');
         });
 
-        const url = `https://deriv-dtrader.vercel.app/?${params.toString()}`;
+        const url = `${DTRADER_BASE}?${params.toString()}`;
         setIframeSrc(url);
     }, []);
 
-    useEffect(() => {
+    const checkAuth = useCallback(() => {
+        const newAuth = isNewLoggedIn();
+        setIsNewAuth(newAuth);
+
         const token = getMainAppActiveToken();
         const activeLoginId = getMainAppActiveLoginId();
 
-        if (token && activeLoginId) {
+        if (newAuth) {
+            // New-auth users have no real Deriv API token to pass to DTrader.
+            // Show a prompt instead of embedding a foreign login page in the iframe.
+            setIsAuthenticated(false);
+            setIframeSrc('');
+        } else if (token && activeLoginId) {
             setIsAuthenticated(true);
             buildIframeUrl(token, activeLoginId);
         } else {
             setIsAuthenticated(false);
-            setIframeSrc('https://deriv-dtrader.vercel.app/');
+            setIframeSrc(DTRADER_BASE);
         }
     }, [buildIframeUrl]);
 
+    useEffect(() => {
+        checkAuth();
+    }, [checkAuth]);
+
     // Listen for account switches and authentication changes
     useEffect(() => {
-        const checkAuthAndUpdate = () => {
-            const token = getMainAppActiveToken();
-            const activeLoginId = getMainAppActiveLoginId();
-
-            if (token && activeLoginId) {
-                if (!isAuthenticated) {
-                    setIsAuthenticated(true);
-                }
-                buildIframeUrl(token, activeLoginId);
-            } else if (isAuthenticated) {
-                setIsAuthenticated(false);
-                setIframeSrc('https://deriv-dtrader.vercel.app/');
-            }
-        };
-
-        // Listen for storage changes (account switches from other tabs)
         const handleStorageChange = (e: StorageEvent) => {
             if (
                 e.key === 'authToken' ||
@@ -126,20 +123,63 @@ const Dtrader = observer(() => {
                 e.key === 'accountsList' ||
                 e.key === 'show_as_cr'
             ) {
-                checkAuthAndUpdate();
+                checkAuth();
             }
         };
 
         window.addEventListener('storage', handleStorageChange);
-
-        // Poll for same-tab localStorage changes (e.g. auth completes after mount)
-        const interval = setInterval(checkAuthAndUpdate, 2000);
+        const interval = setInterval(checkAuth, 2000);
 
         return () => {
             window.removeEventListener('storage', handleStorageChange);
             clearInterval(interval);
         };
-    }, [isAuthenticated, buildIframeUrl]);
+    }, [checkAuth]);
+
+    // New-auth users: no legacy token available — open DTrader in a new tab
+    if (isNewAuth) {
+        const loginId = getMainAppActiveLoginId() || '';
+        return (
+            <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                gap: '16px',
+                padding: '40px',
+                textAlign: 'center',
+                color: '#fff',
+            }}>
+                <div style={{ fontSize: '48px' }}>📈</div>
+                <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 700 }}>Open DTrader</h2>
+                <p style={{ margin: 0, maxWidth: '420px', color: '#aaa', fontSize: '14px', lineHeight: 1.6 }}>
+                    You&apos;re signed in with the new Deriv account system. DTrader uses its own
+                    sign-in flow — click below to open it in a new tab and log in there.
+                    {loginId ? ` Your account ID is ${loginId}.` : ''}
+                </p>
+                <button
+                    onClick={() => window.open(DTRADER_BASE, '_blank', 'noopener,noreferrer')}
+                    style={{
+                        padding: '12px 32px',
+                        background: 'linear-gradient(135deg, #ff444f, #cc2233)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '15px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 16px rgba(255,68,79,0.35)',
+                    }}
+                >
+                    Open DTrader
+                </button>
+                <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>
+                    Opens in a new tab — sign in with your Deriv account there.
+                </p>
+            </div>
+        );
+    }
 
     if (!iframeSrc) {
         return (
