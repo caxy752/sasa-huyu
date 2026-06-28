@@ -1,0 +1,39 @@
+apply the same clean auth token handling to any other iframe tabs (Overlord 2026, Elite Prime AI) that embed external Deriv-based tools.then as per screenshot we have already treated that dtrader as a third party trading tab not for the standard deriv dtrader ....so rectify on that since its still not executing remember we are using new auth not the legacy auth
+
+20 minutes ago
+
+Deciding on auth token handling (20 seconds)
+The screenshot tells me exactly what's wrong: "Input validation failed: authorize" — the OIDC token (NEW_AUTH_token) is being passed to DTrader's authorize WebSocket, but that WebSocket needs an actual Deriv API token (starts with a1-...), not an OIDC token. Even with new auth, the real Deriv API tokens are stored in clientAccounts[loginid].token by useTMB. I need to read those directly.
+
+Let me first find the Overlord and Elite Prime AI files:
+
+
+3 actions
+Now I see the full picture. Let me read the Overlord, ElitePremium files and check useTMB to understand where the real Deriv API tokens land:
+
+
+4 actions
+Now I have the complete picture:
+
+useTMB.processTokens() stores REAL Deriv API tokens in clientAccounts[loginid].token and accountsList[loginid] — even for new-auth users
+getMainAppActiveToken() returns NEW_AUTH_token (OIDC token) first — this is what fails the authorize call with "Input validation failed"
+Overlord/ElitePremium already read clientAccounts[active_loginid].token directly — they're native components, not iframe tabs
+The fix for DTrader: bypass getMainAppActiveToken() entirely and read the real API token straight from clientAccounts. Let me do DTrader + apply the same logic to any external iframe tabs in customizations:
+
+
+2 actions
+Let me find the actual Overlord 2026 and Elite Prime AI tab pages (used in main navigation):
+
+
+3 actions
+Let me read all the relevant files in parallel:
+
+
+5 actions
+Now I have complete clarity. The key insight:
+
+clientAccounts[loginid].token = real Deriv API token (a1-xxx) stored by useTMB — works for WebSocket authorize
+NEW_AUTH_token = OIDC OAuth token — "Input validation failed: authorize" error
+Overlord.tsx / Elite-prime-ai.tsx = analysis-only, no trading, no auth needed
+Overlord.js / ElitePremium.js already read from clientAccounts[loginid].token correctly via getStoredAuthContext() — those are fine
+The only fix needed: DTrader must read directly from clientAccounts, bypassing getMainAppActiveToken() entirely:
