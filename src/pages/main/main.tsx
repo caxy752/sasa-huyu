@@ -142,7 +142,7 @@ const AppWrapper = observer(() => {
         <React.Fragment>
             <div className='main' data-active-tab={currentHash}>
                 <div className={classNames('main__container', { 'main__container--active': active_tour && active_tab === DASHBOARD && !isDesktop })}>
-                    <Tabs active_index={active_tab} className='main__tabs' onTabItemClick={handleTabChange} top>
+                    <Tabs active_index={active_tab} className='main__tabs' onTabItemClick={handleTabChange} top is_scrollable>
                         {/* 0 – Dashboard */}
                         <div label={<><LabelPairedObjectsColumnCaptionRegularIcon height='24px' width='24px' /><Localize i18n_default_text='Dashboard' /></>} id='id-dbot-dashboard'>
                             <Dashboard handleTabChange={handleTabChange} />
