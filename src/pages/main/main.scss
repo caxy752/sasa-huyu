@@ -1273,3 +1273,84 @@ body.theme--dark .dc-tabs__item {
         }
     }
 }
+
+// ─── CUSTOM TAB CENTERING & FULL-WIDTH FIX ───────────────────────────────────
+// ElitePremium.css and SmartTrader.css use width: calc(100vw - 400px) — built
+// for a layout with a 400px sidebar that doesn't exist here. Override without
+// touching the zip source files.
+
+// 1. ElitePremium root shell
+.epf-shell {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+// 2. SmartTrader root container
+.overall-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+// 3. dc-tabs fills its flex parent so content panels get full height
+.main__container > div > .dc-tabs,
+.main__container .dc-tabs {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+// 4. All custom tabs: content panel stretches full-width, scrolls vertically
+.main[data-active-tab='overlord_2026'],
+.main[data-active-tab='elite_prime_ai'],
+.main[data-active-tab='signal_zone'],
+.main[data-active-tab='smart_trader'],
+.main[data-active-tab='trading_bots'],
+.main[data-active-tab='strategies'],
+.main[data-active-tab='copy_trading'],
+.main[data-active-tab='dtrader'],
+.main[data-active-tab='tradingview'],
+.main[data-active-tab='over_under'],
+.main[data-active-tab='makoti_magic'],
+.main[data-active-tab='analysis_tool'] {
+    .dc-tabs__content {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+
+        > div {
+            width: 100% !important;
+            box-sizing: border-box !important;
+            flex-shrink: 0;
+        }
+    }
+}
+
+// 5. Mobile: all custom components go full-width, no horizontal overflow
+@media (max-width: 768px) {
+    .epf-shell,
+    .overall-container,
+    .sh-main-container,
+    .dash-container,
+    .ai-bots-page {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+    }
+
+    .epf-shell .epf-monitor-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .overall-container .pro-master-wrapper {
+        flex-direction: column !important;
+        width: 100% !important;
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
