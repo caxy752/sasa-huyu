@@ -61,7 +61,7 @@ const Dtrader = observer(() => {
             hide_bot_controls: 'true',
         });
 
-        const url = `https://deriv-dtrader.vercel.app/dtrader?${params.toString()}`;
+        const url = `https://deriv-dtrader.vercel.app/?${params.toString()}`;
         setIframeSrc(url);
     }, []);
 
