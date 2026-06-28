@@ -50,7 +50,7 @@ const CONTRACT_TYPE_MAP = {
 const getDerivContractType = type => CONTRACT_TYPE_MAP[type] || type;
 
 const DERIV_PUBLIC_WS_URL = isProduction() ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
-const DERIV_OPTIONS_API_URL = DERIV_PUBLIC_WS_URL.replace(/ws\/public$/, '');
+const DERIV_OPTIONS_API_URL = DERIV_PUBLIC_WS_URL.replace(/^wss:\/\//, 'https://').replace(/ws\/public$/, '');
 const SCAN_WS_URL = DERIV_PUBLIC_WS_URL;
 const SCAN_TIMEOUT_MS = 6000;
 const SCAN_MAX_RETRIES = 3;

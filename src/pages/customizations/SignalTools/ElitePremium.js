@@ -11,7 +11,7 @@ import { observer } from '@/external/bot-skeleton';
 import './ElitePremium.css';
 
 const DERIV_PUBLIC_WS_URL = isProduction() ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
-const DERIV_OPTIONS_API_URL = DERIV_PUBLIC_WS_URL.replace(/ws\/public$/, '');
+const DERIV_OPTIONS_API_URL = DERIV_PUBLIC_WS_URL.replace(/^wss:\/\//, 'https://').replace(/ws\/public$/, '');
 const JOURNAL_SLOT_ID = 'db-journal-custom-slot';
 const MAX_STRATEGIES = 5;
 const MONITOR_WINDOW = 5;
