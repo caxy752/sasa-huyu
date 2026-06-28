@@ -20,6 +20,12 @@ export const OAUTH_TOKEN_URL = 'https://auth.deriv.com/oauth2/token';
 /** The public Deriv trading WebSocket (no auth required). */
 export const PUBLIC_TRADING_WS_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 
+/** WebSocket server URLs used by trading tools (Overlord, ElitePremium, SmartTrader, etc.) */
+export const WS_SERVERS = Object.freeze({
+    PRODUCTION: 'wss://api.derivws.com/trading/v1/options/ws/public',
+    STAGING: 'wss://api.staging.derivws.com/trading/v1/options/ws/public',
+});
+
 /** Returns the full OAuth2 callback URL for the current origin. */
 export const getCallbackURL = () => `${window.location.origin}/callback`;
 
