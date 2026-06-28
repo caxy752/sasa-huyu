@@ -1,0 +1,38 @@
+14:16:59.577 Running build in Washington, D.C., USA (East) – iad1
+14:16:59.578 Build machine configuration: 2 cores, 8 GB
+14:16:59.700 Cloning github.com/caxy752/sasa-huyu (Branch: main, Commit: e7e6720)
+14:17:04.300 Cloning completed: 4.600s
+14:17:04.482 Found .vercelignore
+14:17:04.576 Removed 42 ignored files defined in .vercelignore
+14:17:04.577   /.git/config
+14:17:04.577   /.git/description
+14:17:04.577   /.git/FETCH_HEAD
+14:17:04.578   /.git/HEAD
+14:17:04.578   /.git/hooks/applypatch-msg.sample
+14:17:04.578   /.git/hooks/commit-msg.sample
+14:17:04.578   /.git/hooks/fsmonitor-watchman.sample
+14:17:04.578   /.git/hooks/post-update.sample
+14:17:04.578   /.git/hooks/pre-applypatch.sample
+14:17:04.578   /.git/hooks/pre-commit.sample
+14:17:04.665 Restored build cache from previous deployment (9hf1GA5Qt4QWK8nbKjPU1tdxnr9t)
+14:17:04.998 Running "vercel build"
+14:17:05.018 Vercel CLI 54.17.2
+14:17:06.025 Error: Node.js version 20.x is deprecated. Deployments created on or after 2026-10-01 will fail to build. Please set "engines": { "node": "24.x" } in your `package.json` file to use Node.js 24.
+14:17:06.026 Warning: Due to "engines": { "node": "20.x" } in your `package.json` file, the Node.js Version defined in your Project Settings ("24.x") will not apply, Node.js Version "20.x" will be used instead. Learn More: https://vercel.link/node-version
+14:17:06.042 Running "install" command: `npm install`...
+14:17:07.724 npm warn EBADENGINE Unsupported engine {
+14:17:07.724 npm warn EBADENGINE   package: '@deriv-com/analytics@1.42.1',
+14:17:07.724 npm warn EBADENGINE   required: { node: '>=24.13.0', npm: '>=11.7.0' },
+14:17:07.724 npm warn EBADENGINE   current: { node: 'v20.20.2', npm: '10.8.2' }
+14:17:07.725 npm warn EBADENGINE }
+14:18:35.435 npm error code ENOTFOUND
+14:18:35.436 npm error syscall getaddrinfo
+14:18:35.436 npm error errno ENOTFOUND
+14:18:35.436 npm error network request to http://package-firewall.replit.local/npm/react-router-dom/-/react-router-dom-6.30.4.tgz failed, reason: getaddrinfo ENOTFOUND package-firewall.replit.local
+14:18:35.436 npm error network This is a problem related to network connectivity.
+14:18:35.437 npm error network In most cases you are behind a proxy or have bad network settings.
+14:18:35.437 npm error network
+14:18:35.437 npm error network If you are behind a proxy, please make sure that the
+14:18:35.437 npm error network 'proxy' config is set properly.  See: 'npm help config'
+14:18:35.438 npm error A complete log of this run can be found in: /vercel/.npm/_logs/2026-06-28T11_17_06_168Z-debug-0.log
+14:18:35.470 Error: Command "npm install" exited with 1
