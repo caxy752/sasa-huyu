@@ -21,6 +21,8 @@ import './SmartTrader.css';
 
 const DERIV_PUBLIC_WS_URL = isProduction() ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
 const DERIV_OPTIONS_API_URL = DERIV_PUBLIC_WS_URL.replace(/^wss:\/\//, 'https://').replace(/ws\/public$/, '');
+// Legacy Deriv API — supports { authorize: token } with standard API tokens
+const LEGACY_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=101585';
 
 const CONTRACT_TYPE_MAP = Object.freeze({
     CALL: 'CALL',

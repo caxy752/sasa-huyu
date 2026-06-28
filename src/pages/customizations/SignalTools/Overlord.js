@@ -51,7 +51,8 @@ const getDerivContractType = type => CONTRACT_TYPE_MAP[type] || type;
 
 const DERIV_PUBLIC_WS_URL = isProduction() ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
 const DERIV_OPTIONS_API_URL = DERIV_PUBLIC_WS_URL.replace(/^wss:\/\//, 'https://').replace(/ws\/public$/, '');
-const SCAN_WS_URL = DERIV_PUBLIC_WS_URL;
+// Legacy Deriv API — supports { authorize: token } with standard API tokens
+const SCAN_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=101585';
 const SCAN_TIMEOUT_MS = 6000;
 const SCAN_MAX_RETRIES = 3;
 
