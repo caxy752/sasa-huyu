@@ -229,32 +229,22 @@ const SmartTrader = () => {
 
     const getStoredAuthContext = useCallback(() => {
         try {
-            const auth_raw = sessionStorage.getItem('auth_info');
-            const accounts_raw = sessionStorage.getItem('deriv_accounts');
+            const active_loginid = localStorage.getItem('active_loginid');
+            if (!active_loginid) return null;
 
-            if (!auth_raw || !accounts_raw) return null;
+            const client_accounts_raw = localStorage.getItem('clientAccounts');
+            if (!client_accounts_raw) return null;
 
-            const { access_token } = JSON.parse(auth_raw);
-            const accounts = JSON.parse(accounts_raw);
-
-            if (!access_token || !Array.isArray(accounts) || accounts.length === 0) {
-                return null;
-            }
-
-            const active_login_id = localStorage.getItem('active_loginid');
-            const active_account =
-                accounts.find(account => account.account_id === active_login_id) ||
-                accounts.find(account => account.account_id?.startsWith('DOT')) ||
-                accounts[0];
-
-            if (!active_account?.account_id) return null;
+            const client_accounts = JSON.parse(client_accounts_raw);
+            const account = client_accounts[active_loginid];
+            if (!account?.token) return null;
 
             return {
-                accessToken: access_token,
-                activeAccount: active_account,
+                accessToken: account.token,
+                activeAccount: { account_id: active_loginid },
             };
         } catch (error) {
-            console.error('[SmartTrader] Failed to parse Deriv session storage:', error);
+            console.error('[SmartTrader] Failed to parse auth context:', error);
             return null;
         }
     }, []);
@@ -866,8 +856,10 @@ const SmartTrader = () => {
 
             try {
                 const authenticated_url = requireAuth ? await getAuthenticatedUrl() : null;
+                const auth_context = requireAuth && !authenticated_url ? getStoredAuthContext() : null;
+                const use_token_auth = Boolean(auth_context?.accessToken);
 
-                if (requireAuth && !authenticated_url) {
+                if (requireAuth && !authenticated_url && !use_token_auth) {
                     setProposalError('Unable to create an authenticated Deriv session.');
                     return false;
                 }
@@ -877,7 +869,7 @@ const SmartTrader = () => {
 
                 wsRef.current = new WebSocket(socket_url);
                 wsRef.current.onopen = () => {
-                    logMessage(is_authenticated_socket ? 'Trading socket connected' : 'Public socket connected');
+                    logMessage(is_authenticated_socket ? 'Trading socket connected' : use_token_auth ? 'Token-auth socket connected' : 'Public socket connected');
                     setProposalError('');
                     isAuthorizedRef.current = is_authenticated_socket;
 
@@ -897,6 +889,8 @@ const SmartTrader = () => {
                         if (isRunningRef.current && activeContractsRef.current.size === 0) {
                             useBulkRef.current ? firePrecisionBurst() : requestProposal();
                         }
+                    } else if (use_token_auth) {
+                        wsRef.current.send(JSON.stringify({ authorize: auth_context.accessToken }));
                     }
                 };
 

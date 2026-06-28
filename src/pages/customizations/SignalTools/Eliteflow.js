@@ -137,32 +137,22 @@ const EliteFlow = () => {
 
     const getStoredAuthContext = useCallback(() => {
         try {
-            const authRaw = sessionStorage.getItem('auth_info');
-            const accountsRaw = sessionStorage.getItem('deriv_accounts');
-
-            if (!authRaw || !accountsRaw) return null;
-
-            const { access_token } = JSON.parse(authRaw);
-            const accounts = JSON.parse(accountsRaw);
-
-            if (!access_token || !Array.isArray(accounts) || accounts.length === 0) {
-                return null;
-            }
-
             const activeLoginId = localStorage.getItem('active_loginid');
-            const activeAccount =
-                accounts.find(acc => acc.account_id === activeLoginId) ||
-                accounts.find(acc => acc.account_id?.startsWith('DOT')) ||
-                accounts[0];
+            if (!activeLoginId) return null;
 
-            if (!activeAccount?.account_id) return null;
+            const clientAccountsRaw = localStorage.getItem('clientAccounts');
+            if (!clientAccountsRaw) return null;
+
+            const clientAccounts = JSON.parse(clientAccountsRaw);
+            const account = clientAccounts[activeLoginId];
+            if (!account?.token) return null;
 
             return {
-                accessToken: access_token,
-                activeAccount,
+                accessToken: account.token,
+                activeAccount: { account_id: activeLoginId },
             };
         } catch (error) {
-            console.error('[EliteFlow] Failed to parse Deriv session storage:', error);
+            console.error('[Eliteflow] Failed to parse auth context:', error);
             return null;
         }
     }, []);
@@ -695,8 +685,10 @@ const EliteFlow = () => {
 
             try {
                 const authenticatedUrl = requireAuth ? await getAuthenticatedUrl() : null;
+                const authContextFallback = requireAuth && !authenticatedUrl ? getStoredAuthContext() : null;
+                const useTokenAuth = Boolean(authContextFallback?.accessToken);
 
-                if (requireAuth && !authenticatedUrl) {
+                if (requireAuth && !authenticatedUrl && !useTokenAuth) {
                     return false;
                 }
 
@@ -723,6 +715,8 @@ const EliteFlow = () => {
                                 })
                             );
                         });
+                    } else if (useTokenAuth) {
+                        wsRef.current.send(JSON.stringify({ authorize: authContextFallback.accessToken }));
                     }
                 };
                 wsRef.current.onmessage = handleSocketMessage;
