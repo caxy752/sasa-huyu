@@ -50,6 +50,7 @@ export default defineConfig({
         alias: {
             react: path.resolve('./node_modules/react'),
             'react-dom': path.resolve('./node_modules/react-dom'),
+            'react-dom/server': path.resolve('./node_modules/react-dom/server.browser'),
             // Temporary shim for malformed @deriv-com/ui import path "Submenu /index.js"
             './components/AppLayout/Submenu /index.js': path.resolve(
                 __dirname,
