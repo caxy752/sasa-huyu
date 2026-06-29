@@ -189,7 +189,9 @@ const AppWrapper = observer(() => {
                         </div>
                         {/* 8 – Elite Prime AI */}
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>🤖</span><Localize i18n_default_text='Elite Prime AI' /></>} id='id-elite-prime-ai'>
-                            <Suspense fallback={<ChunkLoader message={localize('Loading Elite Prime AI...')} />}><ElitePrimeAI /></Suspense>
+                            <TabErrorBoundary tabName='Elite Prime AI'>
+                                <Suspense fallback={<ChunkLoader message={localize('Loading Elite Prime AI...')} />}><ElitePrimeAI /></Suspense>
+                            </TabErrorBoundary>
                         </div>
                         {/* 9 – Smart Trader */}
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>💹</span><Localize i18n_default_text='Smart Trader' /></>} id='id-smart-trader'>
