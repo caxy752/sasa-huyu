@@ -174,60 +174,6 @@
                 overflow: hidden;
                 text-overflow: ellipsis;
                 padding: 0 0.8rem;
-
-                // Theme-responsive text color
-                color: var(--text-prominent) !important;
-                font-weight: bold !important;
-
-                * {
-                    color: var(--text-prominent) !important;
-                    font-weight: bold !important;
-                }
-
-                span,
-                div,
-                p,
-                label {
-                    color: var(--text-prominent) !important;
-                    font-weight: bold !important;
-                }
-
-                // Specifically target non-active tabs
-                &:not(.dc-tabs__active) {
-                    color: var(--text-prominent) !important;
-                    font-weight: bold !important;
-
-                    * {
-                        color: var(--text-prominent) !important;
-                        font-weight: bold !important;
-                    }
-
-                    span,
-                    div,
-                    p,
-                    label {
-                        color: var(--text-prominent) !important;
-                        font-weight: bold !important;
-                    }
-                }
-            }
-
-            &__active {
-                color: var(--text-prominent) !important;
-                font-weight: bold !important;
-
-                * {
-                    color: var(--text-prominent) !important;
-                    font-weight: bold !important;
-                }
-
-                span,
-                div,
-                p,
-                label {
-                    color: var(--text-prominent) !important;
-                    font-weight: bold !important;
-                }
             }
         }
     }
