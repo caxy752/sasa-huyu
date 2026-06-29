@@ -49,11 +49,8 @@
         }
 
         &-content {
-            min-height: 18px;
-            height: auto;
+            height: 18px;
             margin-bottom: 4px;
-            overflow: visible;
-            white-space: nowrap;
 
             @include typeface(--small-center-normal-black, none);
         }
@@ -65,8 +62,6 @@
         flex-direction: column;
         width: 35rem;
         background-color: var(--general-section-2);
-        padding-bottom: 1.6rem;
-        margin-bottom: 0.4rem;
 
         @include mobile-or-tablet-screen {
             margin: 0;
@@ -121,16 +116,15 @@
 
     &__footer {
         text-align: center;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+
+        @include flex-center(space-between);
+
+        flex-direction: column;
 
         &-button {
-            width: auto;
-            min-width: 12rem;
+            width: 318px;
             height: 32px !important;
-            padding: 0 2.4rem;
-            margin: 10px auto;
+            margin: 12px 24px;
 
             // Make reset button text theme-responsive - multiple overrides
             color: var(--text-prominent) !important;
@@ -173,56 +167,65 @@
         display: flex;
         justify-content: space-between;
         flex-direction: column;
-        overflow: hidden;
-        padding-bottom: 0.8rem;
+        overflow: hidden !important;
 
         .dc-tabs {
-            flex: 1;
-            min-height: 0;
-
-            &__list {
-                background: transparent !important;
-                gap: 0.5rem;
-                padding: 0.3rem 0.5rem;
-                border: none !important;
-            }
-
             &__item {
                 overflow: hidden;
                 text-overflow: ellipsis;
-                padding: 0.4rem 0.8rem;
-                background: rgba(249,115,22,0.2) !important;
-                border: none !important;
-                border-radius: 6px !important;
+                padding: 0 0.8rem;
 
-                color: rgba(255,255,255,0.85) !important;
-                font-weight: 500 !important;
+                // Theme-responsive text color
+                color: var(--text-prominent) !important;
+                font-weight: bold !important;
 
                 * {
-                    color: rgba(255,255,255,0.85) !important;
-                    font-weight: 500 !important;
+                    color: var(--text-prominent) !important;
+                    font-weight: bold !important;
                 }
 
+                span,
+                div,
+                p,
+                label {
+                    color: var(--text-prominent) !important;
+                    font-weight: bold !important;
+                }
+
+                // Specifically target non-active tabs
                 &:not(.dc-tabs__active) {
-                    color: rgba(255,255,255,0.85) !important;
-                    font-weight: 500 !important;
+                    color: var(--text-prominent) !important;
+                    font-weight: bold !important;
 
                     * {
-                        color: rgba(255,255,255,0.85) !important;
-                        font-weight: 500 !important;
+                        color: var(--text-prominent) !important;
+                        font-weight: bold !important;
+                    }
+
+                    span,
+                    div,
+                    p,
+                    label {
+                        color: var(--text-prominent) !important;
+                        font-weight: bold !important;
                     }
                 }
             }
 
             &__active {
-                background: linear-gradient(145deg, #007cf0, #00dfd8) !important;
-                color: #ffffff !important;
+                color: var(--text-prominent) !important;
                 font-weight: bold !important;
-                border: none !important;
-                border-radius: 6px !important;
 
                 * {
-                    color: #ffffff !important;
+                    color: var(--text-prominent) !important;
+                    font-weight: bold !important;
+                }
+
+                span,
+                div,
+                p,
+                label {
+                    color: var(--text-prominent) !important;
                     font-weight: bold !important;
                 }
             }
@@ -239,11 +242,11 @@
 
     &-tab {
         &__content {
-            height: 100%;
-            overflow: auto;
+            height: calc(100vh - 42rem);
+            overflow: hidden;
 
             &--no-stat {
-                height: 100%;
+                height: var(--drawer-content-height-no-stat);
             }
 
             &--mobile {
@@ -268,8 +271,9 @@
 
     &__clear-button {
         @include mobile-or-tablet-screen {
-            position: relative !important;
-            margin-top: 1rem;
+            position: absolute !important;
+            top: 0.5rem;
+            right: 1.6rem;
             height: 2.6rem !important;
             min-width: 8rem;
         }
