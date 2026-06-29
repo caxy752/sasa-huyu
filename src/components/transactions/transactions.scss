@@ -1,4 +1,5 @@
 @use 'sass:string';
+@use 'components/shared/styles/constants' as *;
 @use 'components/shared/styles/mixins' as *;
 
 .transactions {
@@ -34,7 +35,7 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        background: rgba(10, 18, 44, 0.85);
+        background: $color-hub-navy-mid;
 
         &-box {
             display: grid;
@@ -44,7 +45,7 @@
 
         &__header {
             padding: 0.8rem;
-            color: rgba(255, 215, 0, 0.85) !important;
+            color: $color-hub-gold-label !important;
         }
 
         &__icon-box {
@@ -55,7 +56,7 @@
             svg {
                 g {
                     path {
-                        fill: #f5c542;
+                        fill: $color-hub-gold;
                     }
                 }
             }
@@ -67,18 +68,18 @@
             svg,
             svg > path,
             svg > g > path {
-                fill: #f5c542 !important;
+                fill: $color-hub-gold !important;
             }
         }
 
         &__message {
             margin: 0 auto;
             margin-bottom: 2rem;
-            color: #ffffff !important;
+            color: $color-white !important;
 
             & .dc-text {
                 line-height: var(--text-lh-xxl);
-                color: #ffffff !important;
+                color: $color-white !important;
             }
         }
 
@@ -92,12 +93,12 @@
     }
 
     &__header {
-        background: rgba(10, 18, 44, 0.96);
-        border-bottom: 1px solid rgba(255, 215, 0, 0.35) !important;
+        background: $color-hub-navy-mid;
+        border-bottom: 1px solid $color-hub-gold-border !important;
         border-top: none;
         width: 100%;
         display: grid;
-        color: rgba(255, 215, 0, 0.85) !important;
+        color: $color-hub-gold-label !important;
 
         @include typeface(--small-left-bold-black, none);
 
@@ -107,7 +108,7 @@
         height: 6.4rem;
         align-items: center;
 
-        * { color: rgba(255, 215, 0, 0.85) !important; }
+        * { color: $color-hub-gold-label !important; }
 
         $header-grid-items: (string.unquote('type'), string.unquote('spot'), string.unquote('profit'));
 
@@ -164,7 +165,7 @@
         grid-template-rows: auto auto;
         grid-template-areas: ('trade-type entry-spot stake' 'trade-type exit-spot  profit');
         padding: 0.8rem 0;
-        color: #ffffff;
+        color: $color-white;
 
         @include rtl {
             direction: rtl;
@@ -175,13 +176,13 @@
             padding: 0 1.6rem;
             cursor: pointer;
             position: relative;
-            border-top: 1px solid rgba(255, 215, 0, 0.12) !important;
+            border-top: 1px solid $color-hub-gold-border-light !important;
             background: transparent;
             transition: background-color 0.15s ease;
 
             &:hover {
-                background-color: rgba(59, 130, 246, 0.12) !important;
-                border-color: rgba(255, 215, 0, 0.25) !important;
+                background-color: $color-hub-blue-glow !important;
+                border-color: $color-hub-gold-border !important;
             }
         }
     }
@@ -210,7 +211,7 @@
     }
 
     &__divider {
-        border-top: 1px solid rgba(255, 215, 0, 0.18) !important;
+        border-top: 1px solid $color-hub-gold-border-light !important;
         padding: 8px 16px;
 
         &-line {
@@ -249,7 +250,7 @@
             svg,
             svg > path,
             svg > g > path {
-                fill: #f5c542 !important;
+                fill: $color-hub-gold !important;
             }
         }
     }
@@ -264,25 +265,25 @@
         svg,
         svg > path,
         svg > g > path {
-            fill: #f5c542 !important;
+            fill: $color-hub-gold !important;
         }
     }
 
     &__cell {
         display: flex;
         align-items: center;
-        color: #ffffff !important;
+        color: $color-white !important;
 
         span,
         div,
         p {
-            color: #ffffff !important;
+            color: $color-white !important;
         }
     }
 
     &__profit {
         &--win {
-            color: #4ade80 !important;
+            color: $color-hub-profit !important;
             font-weight: bold;
 
             &:before {
@@ -291,7 +292,7 @@
         }
 
         &--loss {
-            color: #f87171 !important;
+            color: $color-hub-loss !important;
             font-weight: bold;
 
             &:before {
@@ -303,7 +304,7 @@
     &__info {
         &-header {
             font-weight: bold;
-            color: rgba(255, 215, 0, 0.85) !important;
+            color: $color-hub-gold-label !important;
         }
     }
 
@@ -311,13 +312,13 @@
         &-title {
             @include typeface(--xsmall-left-normal-black, none);
 
-            color: rgba(255, 215, 0, 0.85) !important;
+            color: $color-hub-gold-label !important;
         }
 
         &-item {
             @include typeface(--small-left-bold-black, none);
 
-            color: #ffffff !important;
+            color: $color-white !important;
 
             &:not(:last-of-type) {
                 margin-bottom: 0.8rem;
