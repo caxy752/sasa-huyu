@@ -124,7 +124,7 @@ const Transactions = observer(({ is_drawer_open }: TTransactions) => {
                     <Localize i18n_default_text='Entry/Exit spot' />
                 </span>
                 <span className='transactions__header-column transactions__header-profit'>
-                    <Localize i18n_default_text='Buy price and P/L' />
+                    <Localize i18n_default_text='Buy price' />
                 </span>
             </div>
             <div
