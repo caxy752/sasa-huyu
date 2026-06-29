@@ -1,44 +1,5 @@
 @use 'components/shared/styles/devices' as *;
 
-// Keyframe animation for a subtle 3D effect on the active tab
-@keyframes dc-tab-active-3d {
-    0% {
-        transform: perspective(600px) rotateX(0deg) rotateY(0deg) scale(1);
-        box-shadow:
-            0 2px 10px rgba(0, 124, 240, 0.4),
-            0 1px 3px rgba(0, 0, 0, 0.25),
-            inset 0 1px 0 rgba(255, 255, 255, 0.15),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.1);
-    }
-
-    25% {
-        transform: perspective(600px) rotateX(5deg) rotateY(-5deg) scale(1.05);
-        box-shadow:
-            0 6px 20px rgba(0, 124, 240, 0.6),
-            0 3px 8px rgba(0, 0, 0, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.2),
-            inset 0 -2px 0 rgba(0, 0, 0, 0.15);
-    }
-
-    75% {
-        transform: perspective(600px) rotateX(-3deg) rotateY(3deg) scale(1.03);
-        box-shadow:
-            0 4px 15px rgba(0, 223, 216, 0.5),
-            0 2px 6px rgba(0, 0, 0, 0.28),
-            inset 0 1px 0 rgba(255, 255, 255, 0.18),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.12);
-    }
-
-    100% {
-        transform: perspective(600px) rotateX(0deg) rotateY(0deg) scale(1);
-        box-shadow:
-            0 2px 10px rgba(0, 124, 240, 0.4),
-            0 1px 3px rgba(0, 0, 0, 0.25),
-            inset 0 1px 0 rgba(255, 255, 255, 0.15),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.1);
-    }
-}
-
 .dc-tabs {
     position: relative;
     display: grid;
@@ -53,11 +14,11 @@
 
     &__list {
         width: 100%;
-        line-height: 38px;
+        line-height: 40px;
         display: flex;
         position: relative;
-        background: #2a261f !important; // Goldish-brown background for all tab lists
-        border-bottom: 1px solid #4a4132 !important; // Consistent border
+        background: var(--general-main-1);
+        border-bottom: 1px solid var(--general-section-1);
 
         @include mobile-or-tablet-screen {
             justify-content: flex-start;
@@ -69,7 +30,7 @@
         }
 
         &--border-bottom {
-            border-bottom: 1px solid #4a4132 !important; // Goldish border
+            border-bottom: 1px solid var(--general-section-1);
         }
 
         &--top {
@@ -78,7 +39,7 @@
 
         &--bottom {
             order: 1;
-            border-top: 1px solid #4a4132 !important; // Goldish border
+            border-top: 1px solid var(--general-section-1);
         }
 
         &--center {
@@ -117,33 +78,22 @@
 
     &__item {
         list-style: none;
-        font-size: 14px !important;
-        font-weight: 500 !important;
+        font-size: 1.4rem;
+        font-weight: 400;
         text-align: center;
         white-space: nowrap;
-        color: #e0d7c5 !important; // Light gold text for inactive tabs
-        font-family:
-            Arial,
-            Helvetica,
-            -apple-system,
-            BlinkMacSystemFont,
-            'Segoe UI',
-            sans-serif !important;
+        color: var(--text-general);
+        cursor: pointer;
         -webkit-touch-callout: none;
         -webkit-tap-highlight-color: transparent;
-        border-right: 1px solid #4a4132 !important; // Boundary line
-
-        &:last-child {
-            border-right: none !important; // No boundary on last tab
-        }
+        transition: background-color 0.15s ease, color 0.15s ease;
 
         * {
-            color: #e0d7c5 !important;
-            font-weight: 500 !important;
+            color: inherit;
         }
 
         svg {
-            fill: #c9b492 !important; // Medium gold icons
+            fill: currentColor;
         }
 
         &__counter {
@@ -172,7 +122,7 @@
             position: relative;
 
             &:after {
-                border-bottom: 2px solid #007cf0; // Cool blue underline for scrollable active
+                border-bottom: 2px solid var(--brand-red-coral);
                 content: '';
                 position: absolute;
                 left: 0;
@@ -182,19 +132,19 @@
         }
 
         &:not(.dc-tabs__active) {
-            cursor: pointer;
-            background-color: transparent !important;
+            background-color: var(--general-main-1);
+            color: var(--text-general);
+
+            * {
+                color: var(--text-general);
+            }
 
             &:hover {
-                color: #ffffff !important;
-                background: rgba(255, 215, 0, 0.1) !important; // Faint gold hover
+                background-color: var(--state-hover);
+                color: var(--text-general);
 
                 * {
-                    color: #ffffff !important;
-                }
-
-                svg {
-                    fill: #f0e68c !important; // Brighter gold icons on hover
+                    color: var(--text-general);
                 }
             }
         }
@@ -205,42 +155,25 @@
     }
 
     &__active {
-        font-weight: bold !important;
-        color: #ffffff !important; // White text for active
-        background: linear-gradient(145deg, #007cf0, #00dfd8) !important; // Cool blue gradient
-        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important;
-        font-family:
-            Arial,
-            Helvetica,
-            -apple-system,
-            BlinkMacSystemFont,
-            'Segoe UI',
-            sans-serif !important;
-        font-size: 14px !important;
-        border-radius: 5px !important;
-        position: relative;
-        z-index: 1;
-        animation: dc-tab-active-3d 6s ease-in-out infinite !important;
-        transform-origin: center center !important;
-        will-change: transform, box-shadow !important;
-        border-right: 1px solid #4a4132 !important; // Keep boundary consistent
+        font-weight: 700;
+        color: #ffffff !important;
+        background-color: #0075c6 !important;
+        cursor: default;
 
         * {
             color: #ffffff !important;
-            font-weight: bold !important;
         }
 
         svg {
-            fill: #ffffff !important; // White icons for active tab
+            fill: #ffffff !important;
         }
 
         &:hover {
-            background: linear-gradient(145deg, #0088ff, #00f5eb) !important; // Brighter cool gradient on hover
+            background-color: #0075c6 !important;
         }
     }
 
     &__active-line {
-        display: none; // Completely remove the default active line
+        display: none;
     }
 }
-
