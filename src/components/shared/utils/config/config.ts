@@ -91,7 +91,7 @@ export const getConfiguredClientId = () =>
     process.env.VITE_OAUTH_CLIENT_ID ||
     localStorage.getItem('configured_client_id') ||
     brandConfig.oauth?.client_id ||
-    '';
+    '33ykZitbYuDLkIyluxFHu';
 
 export const getOAuthBaseUrl = () =>
     process.env.AUTH_BASE_URL ||
@@ -264,22 +264,26 @@ export const clearCSRFToken = () => {
     sessionStorage.removeItem(OAUTH_STATE_TIMESTAMP_KEY);
 };
 
+export const getCallbackURL = (): string => {
+    const protocol = window.location.protocol;
+    const host = window.location.host;
+    return `${protocol}//${host}/callback`;
+};
+
 export const getAuthRedirectUri = () => {
     // Check environment variables first
-    const envRedirectUri = 
+    const envRedirectUri =
         process.env.DERIV_REDIRECT_URI ||
         process.env.OAUTH_REDIRECT_URI ||
         process.env.REDIRECT_URI ||
         brandConfig.oauth?.redirect_uri;
-    
+
     if (envRedirectUri) {
         return envRedirectUri;
     }
-    
-    // Fall back to current origin
-    const protocol = window.location.protocol;
-    const host = window.location.host;
-    return `${protocol}//${host}`;
+
+    // Fall back to the /callback route on the current origin
+    return getCallbackURL();
 };
 
 export const isProduction = () => {
@@ -422,7 +426,11 @@ export const generateOAuthURL = async (prompt?: string) => {
     try {
         const environment = isProduction() ? 'production' : 'staging';
         const hostname = brandConfig?.platform?.auth2_url?.[environment] || 'https://auth.deriv.com/';
-        const clientId = getConfiguredClientId() || String(getConfiguredAppId());
+        const clientId = getConfiguredClientId();
+
+        if (!clientId) {
+            throw new Error('OAuth Client ID is missing.');
+        }
 
         if (hostname && clientId) {
             // Generate CSRF token for security
@@ -488,9 +496,3 @@ export const OAUTH_TOKEN_URL: string =
 export const OAUTH_AUTH_URL: string =
     (brandConfig.oauth?.server_base_url || 'https://auth.deriv.com') +
     (brandConfig.oauth?.authorization_path || '/oauth2/auth');
-
-export const getCallbackURL = (): string => {
-    const protocol = window.location.protocol;
-    const host = window.location.host;
-    return `${protocol}//${host}/callback`;
-};

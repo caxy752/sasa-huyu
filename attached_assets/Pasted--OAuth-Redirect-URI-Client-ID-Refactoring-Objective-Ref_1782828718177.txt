@@ -1,0 +1,231 @@
+# OAuth Redirect URI & Client ID Refactoring
+
+## Objective
+
+Refactor the OAuth configuration to use the new Deriv OAuth implementation consistently without hardcoding values throughout the project.
+
+The application must use:
+
+* OAuth Client ID:
+  `33ykZitbYuDLkIyluxFHu`
+
+* Redirect URI:
+  `https://poundprinterpro.vercel.app/callback`
+
+The redirect URI should **not** be hardcoded inside the OAuth URL builder. Instead, it should be provided by the configuration system so that it can be changed later without modifying business logic.
+
+---
+
+# File to Modify
+
+```
+components/shared/utils/config/config.ts
+```
+
+This is the only configuration file that should be changed initially.
+
+---
+
+# 1. Fix getAuthRedirectUri()
+
+The current implementation falls back to:
+
+```ts
+https://yourdomain.com
+```
+
+This is incorrect because the OAuth callback route is:
+
+```
+/callback
+```
+
+Update `getAuthRedirectUri()` so that:
+
+1. It first checks:
+
+* DERIV_REDIRECT_URI
+* OAUTH_REDIRECT_URI
+* REDIRECT_URI
+* brandConfig.oauth.redirect_uri
+
+2. If none exist, it should return:
+
+```ts
+return getCallbackURL();
+```
+
+instead of
+
+```ts
+return `${protocol}//${host}`;
+```
+
+This ensures the redirect URI is always:
+
+```
+https://poundprinterpro.vercel.app/callback
+```
+
+or whatever callback URL is configured for the environment.
+
+---
+
+# 2. Use One OAuth Client ID
+
+Ensure the application always uses:
+
+```
+33ykZitbYuDLkIyluxFHu
+```
+
+This value should come from:
+
+```ts
+OAUTH_CLIENT_ID
+```
+
+or
+
+```
+brand.config.json
+```
+
+Do not allow multiple conflicting client IDs.
+
+If another client ID exists elsewhere in the project, replace it so the application uses only one OAuth Client ID.
+
+---
+
+# 3. Remove Invalid Fallback
+
+Inside:
+
+```ts
+generateOAuthURL()
+```
+
+the code currently does:
+
+```ts
+const clientId =
+    getConfiguredClientId() ||
+    String(getConfiguredAppId());
+```
+
+This is incorrect because an OAuth Client ID is not the same as a Legacy App ID.
+
+Replace it with:
+
+```ts
+const clientId = getConfiguredClientId();
+
+if (!clientId) {
+    throw new Error("OAuth Client ID is missing.");
+}
+```
+
+Never fall back to the App ID.
+
+---
+
+# 4. Verify Redirect URI
+
+Inside `generateOAuthURL()` ensure:
+
+```ts
+const redirectUrl = getAuthRedirectUri();
+```
+
+returns
+
+```
+https://poundprinterpro.vercel.app/callback
+```
+
+or the configured callback URL from the environment.
+
+Do not hardcode the URL inside the OAuth builder.
+
+---
+
+# 5. Preserve PKCE
+
+Do NOT modify:
+
+* code_verifier generation
+* code_challenge generation
+* state generation
+* CSRF validation
+* SHA-256 implementation
+
+These parts are already correct.
+
+---
+
+# 6. Preserve OAuth Parameters
+
+Ensure the generated OAuth URL includes:
+
+* response_type=code
+* client_id
+* redirect_uri
+* scope
+* state
+* code_challenge
+* code_challenge_method=S256
+
+The URL structure should remain compliant with Deriv's OAuth 2.0 PKCE flow.
+
+---
+
+# 7. Add Debug Logging
+
+Immediately before redirecting, log:
+
+```ts
+console.log({
+    clientId,
+    redirectUri: redirectUrl,
+    appId,
+    oauthUrl,
+});
+```
+
+This makes it easy to verify that:
+
+* the correct Client ID is being used,
+* the redirect URI is `/callback`,
+* the OAuth URL is correct.
+
+---
+
+# 8. Do Not Modify
+
+Do not change:
+
+* trading logic
+* WebSocket authentication
+* REST API calls
+* token exchange
+* callback processing
+* account loading
+* balance subscriptions
+
+Only refactor the OAuth configuration layer.
+
+---
+
+# Expected Result
+
+After these changes, the login flow should consistently:
+
+1. Generate a PKCE verifier.
+2. Generate a PKCE challenge.
+3. Store the verifier.
+4. Redirect to Deriv using:
+
+   * OAuth Client ID: `33ykZitbYuDLkIyluxFHu`
+   * Redirect URI: `https://poundprinterpro.vercel.app/callback`
+5. Receive a valid authorization code on the callback route.
+6. Continue with the existing token exchange flow without changes.
