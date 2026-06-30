@@ -186,6 +186,13 @@ function App() {
     }, []);
 
     React.useEffect(() => {
+        // Clear stale legacy app_id (111670) that was cached from the old Deriv auth system
+        const cachedAppId = localStorage.getItem('configured_app_id');
+        if (cachedAppId === '111670') {
+            localStorage.removeItem('configured_app_id');
+            localStorage.removeItem('config.app_id');
+        }
+
         // Force update app ID in localStorage to ensure we use the current config value
         forceUpdateAppId();
 

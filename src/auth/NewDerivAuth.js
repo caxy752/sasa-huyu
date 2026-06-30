@@ -144,7 +144,6 @@ export function subscribeNewSystemTopics() {
 
 const CONFIG = {
   clientId:    "33ykZitbYuDLkIyluxFHu",
-  legacyAppId: "111670",
   get redirectUri() {
     return window.location.protocol + '//' + window.location.host + '/callback';
   },
@@ -242,7 +241,6 @@ export async function startNewLogin() {
     code_challenge:        challenge,
     code_challenge_method: "S256",
     prompt:                "login consent",
-    app_id:                CONFIG.legacyAppId
   })
   
   window.location.href = CONFIG.authUrl + "?" + params.toString()
