@@ -7,6 +7,7 @@ import Cookies from 'js-cookie';
  * @type {Set<(event: MessageEvent) => void>}
  */
 const _newSystemHandlers = new Set()
+let __wsReconnecting = false
 
 // ── Promise-based send (req_id matching) ─────────────────────────────────
 /** @type {Map<number, {resolve: Function, reject: Function}>} */
@@ -26,7 +27,9 @@ _newSystemHandlers.add((event) => {
       }
       _pendingRequests.delete(data.req_id)
     }
-  } catch (_) {}
+  } catch (e) {
+    console.warn("[NEW WS] handler parse error:", event.data)
+  }
 })
 
 /**
@@ -218,8 +221,8 @@ export async function startNewLogin() {
   localStorage.setItem(K.active, "true")
 
   // Verify values were actually saved
-  const savedVerifier = localStorage.getItem('NEW_AUTH_verifier')
-  const savedActive = localStorage.getItem('NEW_AUTH_active')
+  const savedVerifier = localStorage.getItem(K.verifier)
+  const savedActive = localStorage.getItem(K.active)
   
   console.log('[NEW AUTH] Pre-redirect verification:')
   console.log('[NEW AUTH] verifier saved:', !!savedVerifier)
@@ -692,45 +695,58 @@ export async function createNewWebSocket() {
     // net; the function is idempotent (window._newSystemTopicsSubscribed flag).
   }
   
-  // Dispatch messages to all registered handlers (survives reconnection)
   ws.addEventListener('message', (event) => {
-    _newSystemHandlers.forEach(handler => {
-      try { handler(event) } catch(e) { console.warn("[NEW WS] Handler error:", e) }
-    })
-  })
+    let data
 
-  // Keep minimal logging for debugging
-  ws.addEventListener('message', (event) => {
     try {
-      const data = JSON.parse(event.data)
-      if (data.error) {
-        console.warn("[NEW WS] Error for", data.msg_type || JSON.stringify(data.echo_req).slice(0,80), ":", data.error?.message || data.error?.code)
-      } else if (data.msg_type) {
-        console.log("[NEW WS] Message:", data.msg_type)
-        // Handle balance updates — OTP WS may return single-account format instead of
-        // the multi-account { accounts: {...} } format that handleMessages expects.
-        if (data.msg_type === 'balance' && data.balance) {
-          let balanceData = data.balance
-          // Single-account format: { balance: 100, currency: 'USD', loginid: 'CR123' }
-          if (!balanceData.accounts && typeof balanceData.balance === 'number') {
-            const lid = balanceData.loginid || localStorage.getItem('active_loginid') || 'unknown'
-            balanceData = {
-              accounts: {
-                [lid]: {
-                  balance: balanceData.balance,
-                  currency: balanceData.currency || 'USD',
-                  loginid: lid,
-                }
-              }
+      data = JSON.parse(event.data)
+    } catch (e) {
+      console.warn("[NEW WS] Invalid JSON:", event.data)
+      return
+    }
+
+    // 1. Forward to registered handlers
+    _newSystemHandlers.forEach(handler => {
+      try {
+        handler(event)
+      } catch (e) {
+        console.warn("[NEW WS] Handler error:", e)
+      }
+    })
+
+    // 2. Handle balance updates safely
+    if (data?.msg_type === 'balance' && data.balance) {
+      let balanceData = data.balance
+
+      if (!balanceData.accounts && typeof balanceData.balance === 'number') {
+        const lid =
+          balanceData.loginid ||
+          localStorage.getItem('active_loginid') ||
+          'unknown'
+
+        balanceData = {
+          accounts: {
+            [lid]: {
+              balance: balanceData.balance,
+              currency: balanceData.currency || 'USD',
+              loginid: lid,
             }
-          }
-          if (balanceData.accounts) {
-            window.dispatchEvent(new CustomEvent('new-system-balance', { detail: balanceData }))
           }
         }
       }
-    } catch(e) {
-      console.warn("[NEW WS] Message parse error:", e)
+
+      window.dispatchEvent(
+        new CustomEvent('new-system-balance', {
+          detail: balanceData
+        })
+      )
+    }
+
+    // 3. Optional debug logs
+    if (data?.error) {
+      console.warn("[NEW WS] Error:", data.error?.message || data.error)
+    } else if (data?.msg_type) {
+      console.log("[NEW WS]", data.msg_type)
     }
   })
   
@@ -741,33 +757,46 @@ export async function createNewWebSocket() {
   
   ws.onclose = () => {
     console.log("[NEW WS] Closed. Reconnecting in 3s...")
+
     window._newSystemWSReady = false
-    // Reset so balance subscription is re-sent on the new connection
     window._newSystemTopicsSubscribed = false
 
-    // Reject all pending requests so they don't hang forever
-    const err = { error: { code: 'DisconnectError', message: 'New system WS disconnected' } }
-    _pendingRequests.forEach((entry) => entry.reject(err))
+    const err = {
+      error: {
+        code: 'DisconnectError',
+        message: 'New system WS disconnected'
+      }
+    }
+
+    _pendingRequests.forEach(r => r.reject(err))
     _pendingRequests.clear()
 
-    if (!isNewLoggedIn()) return;
+    if (!isNewLoggedIn()) return
+    if (__wsReconnecting) return
+
+    __wsReconnecting = true
 
     const reconnect = (delay = 3000) => {
       setTimeout(async () => {
         try {
-          const ws = await createNewWebSocket();
+          const ws = await createNewWebSocket()
+
           if (!ws && isNewLoggedIn()) {
-            // REST call failed (accounts/OTP fetch) — retry with backoff
-            reconnect(Math.min(delay * 1.5, 30000));
+            reconnect(Math.min(delay * 1.5, 30000))
+          } else {
+            __wsReconnecting = false
           }
         } catch (e) {
           if (isNewLoggedIn()) {
-            reconnect(Math.min(delay * 1.5, 30000));
+            reconnect(Math.min(delay * 1.5, 30000))
+          } else {
+            __wsReconnecting = false
           }
         }
-      }, delay);
-    };
-    reconnect(3000);
+      }, delay)
+    }
+
+    reconnect(3000)
   }
   
   return ws
