@@ -78,14 +78,23 @@
 }
 
 .smart-loader__brand-mark {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
     display: grid;
     place-items: center;
-    background: rgba(34, 211, 238, 0.12);
+    background: rgba(34, 211, 238, 0.08);
     border: 1px solid rgba(34, 211, 238, 0.22);
     box-shadow: 0 0 16px rgba(34, 211, 238, 0.22);
+    overflow: hidden;
+    padding: 2px;
+}
+
+.smart-loader__brand-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 50%;
 }
 
 .smart-loader__brand-text {

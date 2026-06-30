@@ -84,15 +84,15 @@ export const getDomainBrandName = () => {
 };
 
 export const getBrandLabel = () => {
-    return `${getDomainBrandName()} Trading Hub`;
+    return 'Captain Peter Trading Hub';
 };
 
 export const getBrandTitle = () => {
-    return `${getHostBaseName().replace(/\s+/g, ' ').toUpperCase()} TRADING HUB`;
+    return 'CAPTAIN PETER TRADING HUB';
 };
 
 export const getBrandShortName = () => {
-    return getDomainBrandName();
+    return 'Captain Peter';
 };
 
 export const getPlatformSettings = (platform_key: keyof TPlatforms): TPlatform => {
