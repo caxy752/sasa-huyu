@@ -323,17 +323,10 @@ export const AuthWrapper = () => {
                 if (!hasAccounts) {
                     await restoreLoginFromServerSession();
                 } else {
-                    // For new OAuth PKCE flow, the stored authToken is a Bearer token that the
-                    // Deriv WebSocket API doesn't accept. Calling api_base.init() would trigger
-                    // authorizeAndSubscribe() → api.balance() failure → clearAuthData() + reload
-                    // which wipes accountsList and causes a login redirect loop.
-                    // Skip WebSocket init here; the app will connect when actually needed.
-                    const isNewAuthMode = !!localStorage.getItem('NEW_AUTH_token');
-                    if (!isNewAuthMode) {
-                        // Returning user: accounts already in localStorage, just init the API
-                        // This ensures new wallet accounts (DOT/ROT) get the WebSocket connection
-                        await api_base.init(true);
-                    }
+                    // Returning user: accounts already in localStorage, init the API.
+                    // For new OAuth PKCE flow the Bearer token can't WS-authorize, but
+                    // handleTokenExchangeIfNeeded() in api-base.ts handles that safely.
+                    await api_base.init(true);
                 }
             }
 

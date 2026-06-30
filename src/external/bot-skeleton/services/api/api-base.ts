@@ -106,14 +106,74 @@ class APIBase {
 
         if (accountIdFromUrl) {
             localStorage.setItem('active_loginid', accountIdFromUrl);
-            // Remove account_id from URL after storing
             removeUrlParameter('account_id');
         }
         if (accountTypeFromUrl) {
             localStorage.setItem('account_type', accountTypeFromUrl);
-            // Remove account_type from URL after storing
             removeUrlParameter('account_type');
         }
+
+        // ── New OAuth PKCE mode ──────────────────────────────────────────────────
+        // The Bearer token stored as authToken/NEW_AUTH_token cannot authorize via
+        // Deriv WebSocket API (which needs old-style API tokens). Calling
+        // authorizeAndSubscribe() would fail, its catch block would wipe accountsList,
+        // and the user would be redirected back to the login page in a loop.
+        //
+        // Instead: seed the observable auth state directly from localStorage, then
+        // fetch active symbols so market dropdowns populate.
+        const isNewAuthMode = !!localStorage.getItem('NEW_AUTH_token');
+        if (isNewAuthMode) {
+            try {
+                const clientAccounts: Record<string, any> = JSON.parse(
+                    localStorage.getItem('clientAccounts') ?? '{}'
+                );
+                const loginid = localStorage.getItem('active_loginid') || '';
+                const account = clientAccounts[loginid];
+                const accountListArr = Object.entries(clientAccounts).map(([lid, acc]: [string, any]) => ({
+                    balance: parseFloat(acc.balance) || 0,
+                    currency: acc.currency || 'USD',
+                    is_virtual: acc.account_type === 'demo' ? 1 : 0,
+                    loginid: lid,
+                }));
+
+                if (account && accountListArr.length > 0) {
+                    this.is_authorized = true;
+                    this.account_info = {
+                        balance: parseFloat(account.balance) || 0,
+                        currency: account.currency || 'USD',
+                        loginid,
+                    };
+                    setIsAuthorized(true);
+                    setAuthData({
+                        balance: parseFloat(account.balance) || 0,
+                        currency: account.currency || 'USD',
+                        loginid,
+                        is_virtual: account.account_type === 'demo' ? 1 : 0,
+                        account_list: accountListArr,
+                    });
+                    setAccountList(accountListArr);
+                    globalObserver.emit('api.authorize', {
+                        account_list: accountListArr,
+                        current_account: {
+                            loginid,
+                            currency: account.currency || 'USD',
+                            is_virtual: account.account_type === 'demo' ? 1 : 0,
+                            balance: parseFloat(account.balance) || 0,
+                        },
+                    });
+                }
+            } catch (e) {
+                console.warn('[APIBase] New auth mode: could not seed auth state from localStorage', e);
+            }
+
+            // Always fetch market data (public API — no auth required)
+            if (!this.has_active_symbols) {
+                this.active_symbols_promise = this.getActiveSymbols();
+            }
+            setIsAuthorizing(false);
+            return;
+        }
+        // ────────────────────────────────────────────────────────────────────────
 
         // Check if we have an account_id from URL or localStorage
         let activeAccountId: string | null = getAccountId();
@@ -125,12 +185,9 @@ class APIBase {
                 if (storedAccounts) {
                     const accounts = JSON.parse(storedAccounts);
                     if (accounts && accounts.length > 0 && accounts[0].account_id) {
-                        // Use the first account as default
                         const accountId = accounts[0].account_id as string;
                         activeAccountId = accountId;
                         localStorage.setItem('active_loginid', accountId);
-
-                        // Set account type based on account_id prefix
                         const isDemo = isDemoAccount(accountId);
                         localStorage.setItem('account_type', isDemo ? 'demo' : 'real');
                     }
