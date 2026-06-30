@@ -78,6 +78,22 @@ export const useOAuthCallback = (): OAuthCallbackResult => {
     }, []);
 
     useEffect(() => {
+        // The /callback and /auth/callback routes own their own OAuth processing.
+        // If we run here too we will call cleanupURL() and strip ?code=/?state= from
+        // the URL BEFORE NewSystemCallbackHandler's useEffect gets to read them,
+        // which causes "Missing authorization code" even when Deriv sent a valid code.
+        const currentPath = window.location.pathname;
+        if (currentPath === '/callback' || currentPath === '/auth/callback') {
+            setResult({
+                isProcessing: false,
+                isValid: false,
+                params: { code: null, state: null, error: null, error_description: null },
+                legacyAccounts: [],
+                error: null,
+            });
+            return;
+        }
+
         const urlParams = new URLSearchParams(window.location.search);
 
         const legacyAccounts = parseLegacyAccounts(urlParams);
