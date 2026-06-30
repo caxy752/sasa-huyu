@@ -1,0 +1,31 @@
+22:00:44.387 Running build in Washington, D.C., USA (East) – iad1
+22:00:44.388 Build machine configuration: 2 cores, 8 GB
+22:00:44.504 Cloning github.com/caxy752/sasa-huyu (Branch: main, Commit: 03a8652)
+22:00:49.908 Cloning completed: 5.403s
+22:00:50.155 Found .vercelignore
+22:00:50.206 Removed 43 ignored files defined in .vercelignore
+22:00:50.207   /.git/config
+22:00:50.207   /.git/description
+22:00:50.207   /.git/FETCH_HEAD
+22:00:50.208   /.git/HEAD
+22:00:50.208   /.git/hooks/applypatch-msg.sample
+22:00:50.208   /.git/hooks/commit-msg.sample
+22:00:50.209   /.git/hooks/fsmonitor-watchman.sample
+22:00:50.209   /.git/hooks/post-update.sample
+22:00:50.209   /.git/hooks/pre-applypatch.sample
+22:00:50.210   /.git/hooks/pre-commit.sample
+22:00:50.294 Restored build cache from previous deployment (5rAmfAWXAwWJUbYre3C2nbNykQyo)
+22:00:50.540 Running "vercel build"
+22:00:50.561 Vercel CLI 54.18.4
+22:00:51.689 Warning: Detected "engines": { "node": ">=20.x" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version
+22:00:51.710 Installing dependencies...
+22:02:03.905 npm error code ENOTFOUND
+22:02:03.906 npm error syscall getaddrinfo
+22:02:03.906 npm error errno ENOTFOUND
+22:02:03.906 npm error network request to http://package-firewall.replit.local/npm/posthog-js/-/posthog-js-1.396.3.tgz failed, reason: getaddrinfo ENOTFOUND package-firewall.replit.local
+22:02:03.907 npm error network This is a problem related to network connectivity.
+22:02:03.907 npm error network In most cases you are behind a proxy or have bad network settings.
+22:02:03.908 npm error network
+22:02:03.908 npm error network If you are behind a proxy, please make sure that the 'proxy' config is set properly.  See: 'npm help config'
+22:02:03.910 npm error A complete log of this run can be found in: /vercel/.npm/_logs/2026-06-30T19_00_51_827Z-debug-0.log
+22:02:03.947 Error: Command "npm install" exited with 1
