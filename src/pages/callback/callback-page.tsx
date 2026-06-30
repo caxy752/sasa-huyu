@@ -1,176 +1,125 @@
-import Cookies from 'js-cookie';
-import { crypto_currencies_display_order, fiat_currencies_display_order } from '@/components/shared';
-import { generateDerivApiInstance } from '@/external/bot-skeleton/services/api/appId';
-// Reference implementation adapted from https://github.com/DukeNyamasege/new-user-interface.git
-import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
-import useTMB from '@/hooks/useTMB';
-import { clearAuthData } from '@/utils/auth-utils';
-import { Callback } from '@deriv-com/auth-client';
-import { Button } from '@deriv-com/ui';
-
-/**
- * Gets the selected currency or falls back to appropriate defaults
- */
-const getSelectedCurrency = (
-    tokens: Record<string, string>,
-    clientAccounts: Record<string, any>,
-    state: any
-): string => {
-    const getQueryParams = new URLSearchParams(window.location.search);
-    const currency =
-        (state && state?.account) ||
-        getQueryParams.get('account') ||
-        sessionStorage.getItem('query_param_currency') ||
-        '';
-    const firstAccountKey = tokens.acct1;
-    const firstAccountCurrency = clientAccounts[firstAccountKey]?.currency;
-
-    const validCurrencies = [...fiat_currencies_display_order, ...crypto_currencies_display_order];
-    if (tokens.acct1?.startsWith('VR') || currency.toLowerCase() === 'demo') return 'demo';
-    if (currency && validCurrencies.includes(currency.toUpperCase())) return currency;
-    return firstAccountCurrency || 'USD';
-};
+import React, { useEffect, useState } from 'react';
+import { handleNewCallback, createNewWebSocket } from '@/auth/NewDerivAuth';
 
 const CallbackPage = () => {
-    const { is_tmb_enabled = false } = useTMB();
+    const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+    const [message, setMessage] = useState('Authenticating with Deriv...');
+    const [errorDetail, setErrorDetail] = useState('');
+
+    useEffect(() => {
+        const run = async () => {
+            try {
+                // Step 1: Exchange the code for an access token (PKCE)
+                setMessage('Exchanging authorization code...');
+                const token = await handleNewCallback();
+
+                if (!token) {
+                    // Already handled (duplicate call guard)
+                    setStatus('success');
+                    setMessage('Redirecting...');
+                    setTimeout(() => window.location.replace('/'), 300);
+                    return;
+                }
+
+                // Step 2: Use the token to open the authenticated WebSocket
+                setMessage('Connecting to trading server...');
+                const ws = await createNewWebSocket();
+
+                if (!ws) {
+                    // Non-fatal: token is saved, app will try again on next load
+                    console.warn('[Callback] WebSocket init skipped — will retry on home page');
+                }
+
+                // Step 3: Redirect to dashboard
+                setStatus('success');
+                setMessage('Login successful! Redirecting...');
+                setTimeout(() => window.location.replace('/'), 400);
+            } catch (err: unknown) {
+                console.error('[Callback] Error:', err);
+                const msg = err instanceof Error ? err.message : String(err);
+                setStatus('error');
+                setErrorDetail(msg);
+            }
+        };
+
+        run();
+    }, []);
+
+    if (status === 'error') {
+        return (
+            <div
+                style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100vh',
+                    gap: '20px',
+                    padding: '24px',
+                    textAlign: 'center',
+                    background: '#0a1628',
+                    color: '#e5e7eb',
+                    fontFamily: 'Roboto, sans-serif',
+                }}
+            >
+                <div style={{ fontSize: '40px' }}>🚨</div>
+                <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#f87171' }}>Authentication Failed</h1>
+                <p style={{ maxWidth: '480px', fontSize: '14px', color: '#9ca3af', lineHeight: 1.6 }}>
+                    {errorDetail}
+                </p>
+                <button
+                    onClick={() => window.location.replace('/')}
+                    style={{
+                        marginTop: '8px',
+                        padding: '12px 28px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: 'linear-gradient(90deg,#22d3ee,#3b82f6)',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                    }}
+                >
+                    ← Back to Login
+                </button>
+            </div>
+        );
+    }
 
     return (
-        <Callback
-            onSignInSuccess={async (tokens: Record<string, string>, rawState: unknown) => {
-                const state = rawState as { account?: string } | null;
-                const accountsList: Record<string, string> = {};
-                const clientAccounts: Record<
-                    string,
-                    { loginid: string; token: string; currency: string; account_type?: string; balance?: string }
-                > = {};
-
-                for (const [key, value] of Object.entries(tokens)) {
-                    if (key.startsWith('acct')) {
-                        const tokenKey = key.replace('acct', 'token');
-                        if (tokens[tokenKey]) {
-                            accountsList[value] = tokens[tokenKey];
-                            clientAccounts[value] = {
-                                loginid: value,
-                                token: tokens[tokenKey],
-                                currency: '',
-                                account_type: undefined,
-                                balance: undefined,
-                            };
-                        }
-                    } else if (key.startsWith('cur')) {
-                        const accKey = key.replace('cur', 'acct');
-                        if (tokens[accKey] && clientAccounts[tokens[accKey]]) {
-                            clientAccounts[tokens[accKey]].currency = value;
-                        }
-                    }
-                }
-
-                const updateClientAccountsFromAuthorize = (authorize: any) => {
-                    if (!authorize?.account_list?.length) return;
-
-                    authorize.account_list.forEach((account: any) => {
-                        const loginid = account.loginid;
-                        if (!loginid) return;
-
-                        const existing = clientAccounts[loginid] || {
-                            loginid,
-                            token: tokens.token1,
-                            currency: account.currency || '',
-                            account_type: account.account_type || (account.is_virtual ? 'demo' : 'real'),
-                            balance: account.balance?.toString() || '0',
-                        };
-
-                        existing.currency = account.currency || existing.currency;
-                        existing.account_type = account.account_type || existing.account_type || (account.is_virtual ? 'demo' : 'real');
-                        existing.balance = account.balance?.toString() || existing.balance || '0';
-                        existing.token = existing.token || tokens.token1;
-
-                        clientAccounts[loginid] = existing;
-                        accountsList[loginid] = existing.token;
-                    });
-                };
-
-                localStorage.setItem('accountsList', JSON.stringify(accountsList));
-                localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts));
-
-                let selectedLoginId = tokens.acct1 || Object.keys(clientAccounts)[0] || '';
-                let selectedAccountType = undefined;
-
-                let is_token_set = false;
-                const api = await generateDerivApiInstance();
-                if (api) {
-                    const { authorize, error } = await api.authorize(tokens.token1);
-                    api.disconnect();
-                    if (error) {
-                        if (error.code === 'InvalidToken') {
-                            is_token_set = true;
-                            if (Cookies.get('logged_state') === 'true' && !is_tmb_enabled) {
-                                globalObserver.emit('InvalidToken', { error });
-                            }
-                            if (Cookies.get('logged_state') === 'false') {
-                                clearAuthData();
-                            }
-                        }
-                    } else {
-                        localStorage.setItem('callback_token', authorize.toString());
-                        updateClientAccountsFromAuthorize(authorize);
-
-                        const firstId = authorize?.account_list?.[0]?.loginid;
-                        const filteredTokens = Object.values(clientAccounts).filter(account => account.loginid === firstId);
-                        if (filteredTokens.length) {
-                            const selectedAccount = filteredTokens[0];
-                            localStorage.setItem('authToken', selectedAccount.token);
-                            localStorage.setItem('active_loginid', selectedAccount.loginid);
-                            selectedLoginId = selectedAccount.loginid;
-                            selectedAccountType = selectedAccount.account_type;
-                            is_token_set = true;
-                        }
-                    }
-                }
-
-                const finalAccount = clientAccounts[selectedLoginId] || Object.values(clientAccounts)[0];
-                if (finalAccount) {
-                    selectedLoginId = finalAccount.loginid;
-                    selectedAccountType = selectedAccountType || finalAccount.account_type;
-                    localStorage.setItem('authToken', finalAccount.token);
-                    localStorage.setItem('active_loginid', finalAccount.loginid);
-                    if (finalAccount.account_type) {
-                        localStorage.setItem('account_type', finalAccount.account_type);
-                    }
-                    localStorage.setItem('client.country', finalAccount.currency || '');
-                }
-
-                if (!is_token_set && finalAccount) {
-                    localStorage.setItem('authToken', finalAccount.token);
-                    localStorage.setItem('active_loginid', finalAccount.loginid);
-                }
-
-                Cookies.set('logged_state', 'true', {
-                    domain: window.location.hostname,
-                    expires: 30,
-                    path: '/',
-                    secure: window.location.protocol === 'https:',
-                });
-
-                const selected_currency = getSelectedCurrency(tokens, clientAccounts, state);
-
-                await new Promise(resolve => setTimeout(resolve, 100));
-
-                window.location.replace(window.location.origin + `/?account=${selected_currency}`);
+        <div
+            style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100vh',
+                gap: '20px',
+                background: '#0a1628',
+                color: '#e5e7eb',
+                fontFamily: 'Roboto, sans-serif',
             }}
-            renderReturnButton={() => {
-                return (
-                    <Button
-                        className='callback-return-button'
-                        onClick={() => {
-                            window.location.href = '/';
-                        }}
-                    >
-                        {'Return to Bot'}
-                    </Button>
-                );
-            }}
-        />
+        >
+            <img
+                src='/captain-peter-logo.png'
+                alt='Captain Peter'
+                style={{ width: '72px', height: '72px', borderRadius: '50%', objectFit: 'contain' }}
+            />
+            <div
+                style={{
+                    width: '40px',
+                    height: '40px',
+                    border: '3px solid rgba(34,211,238,0.2)',
+                    borderTop: '3px solid #22d3ee',
+                    borderRadius: '50%',
+                    animation: 'spin 0.9s linear infinite',
+                }}
+            />
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            <p style={{ fontSize: '15px', color: '#22d3ee', fontWeight: 600 }}>{message}</p>
+            <p style={{ fontSize: '12px', color: '#6b7280' }}>Captain Peter Trading Hub</p>
+        </div>
     );
 };
 
