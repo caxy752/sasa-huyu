@@ -570,35 +570,33 @@
 
     // Mobile-specific scrolling adjustments
     @media (max-width: 768px) {
-        height: calc(100vh - 8rem);
+        height: calc(100vh - 8rem); // Reduced height calculation
         overflow-y: auto;
-        padding-bottom: 0;
+        padding-bottom: 6rem; // Reduced padding for mobile Run button
 
         &__container {
-            padding: 1rem;
-            padding-bottom: 8rem;
-            gap: 1rem;
-            height: 100%;
+            padding: 1rem; // Reduced overall padding
+            padding-bottom: 8rem; // Reduced bottom padding
+            gap: 1rem; // Reduced gap between elements
         }
 
         &__content {
-            padding-bottom: 6rem;
-            max-height: none;
-            align-items: flex-start;
-            flex: 1;
-            min-height: 0;
+            padding-bottom: 6rem; // Reduced mobile content padding
+            max-height: none; // Remove height limit to allow natural flow
+            align-items: flex-start; // Align content to top
+            flex: none; // Don't expand to fill space
         }
 
         &__topbar {
             position: relative;
-            margin-top: 0;
-            margin-bottom: 0.5rem;
-            padding: 0.6rem 1rem;
+            margin-top: 0; // Remove top margin
+            margin-bottom: 0.5rem; // Minimal bottom margin
+            padding: 0.6rem 1rem; // Further reduced padding
         }
 
         &__card {
-            padding: 1.5rem;
-            gap: 1rem;
+            padding: 1.5rem; // Reduced card padding on mobile
+            gap: 1rem; // Reduced gap in card
         }
     }
 
@@ -612,9 +610,7 @@
         background: #ffffff;
 
         @media (max-width: 768px) {
-            height: 100%;
-            flex: 1;
-            min-height: 0;
+            height: calc(100vh - 15rem);
         }
     }
 

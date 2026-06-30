@@ -7,6 +7,7 @@
     flex-direction: column;
     background: var(--general-main-1);
     padding: 1rem 2rem;
+    position: relative;
 
     &__cards-container {
         display: flex;
@@ -35,6 +36,8 @@
             gap: 0.75rem;
             padding-bottom: 0.5rem;
         }
+
+        padding-right: 14rem;
     }
 
     &__card {
@@ -163,12 +166,10 @@
     &__actions {
         display: flex;
         justify-content: flex-end;
-        gap: 0.75rem; /* Add a gap between buttons */
-        margin-bottom: 0.75rem;
+        margin-bottom: 0;
     }
 
-    &__trade-button,
-    &__results-button {
+    &__trade-button {
         padding: 0.55rem 1.2rem;
         border-radius: 6px;
         border: 1px solid #1e3a8a;
@@ -179,16 +180,15 @@
         box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25);
         transition: all 0.2s ease;
 
+        /* Floating button near the top-right of the analyses toolbar */
+        position: absolute;
+        top: 1rem;
+        right: 2rem;
+        z-index: 2000;
+
         &:hover {
             transform: translateY(-1px);
             box-shadow: 0 10px 24px rgba(37, 99, 235, 0.35);
-        }
-    }
-
-    /* Media query to hide the results button on smaller screens */
-    @media (max-width: 768px) {
-        .analysis-tools__results-button {
-            display: none;
         }
     }
 

@@ -33,28 +33,8 @@ const BotBuilder = observer(() => {
 
     React.useEffect(() => {
         onMount();
-        
-        // Load default starter bot if workspace is empty and no pending bot
-        const loadDefaultBot = async () => {
-            const workspace = (window as any).Blockly?.derivWorkspace;
-            const { pending_free_bot } = dashboard;
-            if (workspace && workspace.getTopBlocks().length === 0 && !pending_free_bot) {
-                try {
-                    const response = await fetch('/xml/STARTER_BOT.xml');
-                    const xml_text = await response.text();
-                    const dom = (window as any).Blockly.utils.xml.textToDom(xml_text);
-                    (window as any).Blockly.utils.xml.domToWorkspace(dom, workspace);
-                } catch (e) {
-                    // Silently fail
-                }
-            }
-        };
-
-        // Instant load check
-        loadDefaultBot();
-
         return () => onUnmount();
-    }, [onMount, onUnmount, dashboard]);
+    }, [onMount, onUnmount]);
 
     React.useEffect(() => {
         const workspace = window.Blockly?.derivWorkspace;

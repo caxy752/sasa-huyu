@@ -55,6 +55,46 @@ export const getBrandWebsiteName = () => {
     return config_data.domain_name;
 };
 
+const getHostBaseName = (hostname?: string) => {
+    let host = hostname || (typeof window !== 'undefined' ? window.location.hostname : config_data.domain_name);
+    if (!host) return config_data.brand_name;
+
+    host = host
+        .toLowerCase()
+        .split(':')[0]
+        .replace(/^www\./, '');
+    const parts = host.split('.');
+    let base = parts.length > 2 ? parts[parts.length - 2] : parts[0];
+    if (base === 'localhost') return 'localhost';
+
+    base = base.replace(/hub$/i, '');
+    base = base.replace(/[^a-z0-9]+/g, ' ').trim();
+    return base || config_data.brand_name;
+};
+
+const formatBrandDisplay = (base: string) =>
+    base
+        .split(/[^a-z0-9]+/i)
+        .filter(Boolean)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+
+export const getDomainBrandName = () => {
+    return formatBrandDisplay(getHostBaseName());
+};
+
+export const getBrandLabel = () => {
+    return `${getDomainBrandName()} Trading Hub`;
+};
+
+export const getBrandTitle = () => {
+    return `${getHostBaseName().replace(/\s+/g, ' ').toUpperCase()} TRADING HUB`;
+};
+
+export const getBrandShortName = () => {
+    return getDomainBrandName();
+};
+
 export const getPlatformSettings = (platform_key: keyof TPlatforms): TPlatform => {
     const allowed_config_data = config_data.platforms[platform_key];
 

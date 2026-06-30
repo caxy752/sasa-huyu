@@ -90,7 +90,10 @@ export default function MobileTransactionCards({ transaction }: { transaction: T
                 />
             </div>
             <div className={`${PARENT_CLASS}__card__row`}>
-                <CardColumn title='Ref. ID' label={transaction?.display_transaction_ids?.buy ?? transaction?.transaction_ids?.buy} />
+                <CardColumn
+                    title='Ref. ID'
+                    label={transaction?.display_transaction_ids?.buy ?? transaction?.transaction_ids?.buy}
+                />
             </div>
             <div className={`${PARENT_CLASS}__card__row`}>
                 <CardColumn
@@ -118,23 +121,7 @@ export default function MobileTransactionCards({ transaction }: { transaction: T
                 />
             </div>
 
-            <div className={`${PARENT_CLASS}__card__row`}>
-                <CardColumn title='Profit / Loss' large_title />
-                <CardColumn
-                    label={
-                        <div
-                            className={classNames({
-                                [`${PARENT_CLASS}__card__profit--win`]: transaction?.profit > 0,
-                                [`${PARENT_CLASS}__card__profit--loss`]: transaction?.profit < 0,
-                            })}
-                        >
-                            {Math.abs(transaction?.profit ?? 0).toFixed(2)}
-                        </div>
-                    }
-                    right_aligned
-                    loader={!transaction.is_completed}
-                />
-            </div>
+            {/* Profit/Loss row intentionally removed to avoid showing P/L under Buy Price tap on run panel */}
         </div>
     );
 }

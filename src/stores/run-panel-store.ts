@@ -1,4 +1,4 @@
-﻿import { action, computed, makeObservable, observable, reaction, runInAction } from 'mobx';
+import { action, computed, makeObservable, observable, reaction, runInAction } from 'mobx';
 import { botNotification } from '@/components/bot-notification/bot-notification';
 import { notification_message } from '@/components/bot-notification/bot-notification-utils';
 import { isSafari, mobileOSDetect, standalone_routes } from '@/components/shared';
@@ -89,8 +89,6 @@ export default class RunPanelStore {
             preloadAudio: action,
             onMount: action,
             onUnmount: action,
-            is_bot_paused: observable,
-            toggleBotPause: action,
         });
 
         this.root_store = root_store;
@@ -111,11 +109,6 @@ export default class RunPanelStore {
     is_sell_requested = false;
     show_bot_stop_message = false;
     is_contracy_buying_in_progress = false;
-    is_bot_paused = false;
-
-    toggleBotPause = () => {
-        this.is_bot_paused = !this.is_bot_paused;
-    };
 
     run_id = '';
     onOkButtonClick: (() => void) | null = null;
@@ -191,36 +184,34 @@ export default class RunPanelStore {
         }
 
         try {
+            // Import special account helpers
+            const { getSpecialAccountConfig } = await import('@/utils/special-accounts-config');
+
             // Get demo account info
             const accountsList = JSON.parse(localStorage.getItem('accountsList') || '{}');
             const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
             console.log('[Run Panel] 🔄 Available accounts:', Object.keys(accountsList));
-            const accountsArray = Array.isArray(clientAccounts) 
-                ? clientAccounts 
-                : Object.values(clientAccounts);
-            
-            // Check if CR6779123 is active - if so, use VRTC10109979
+            const accountsArray = Array.isArray(clientAccounts) ? clientAccounts : Object.values(clientAccounts);
+
+            // Check if any special account is active
             const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
             let demoAccountId = null;
             let demoToken = null;
-            
-            if (showAsCR === 'CR6779123') {
-                const crDemoAccount = accountsArray.find(
-                    (acc: any) => acc.loginid === 'VRTC10109979'
-                );
-                if (crDemoAccount?.loginid) {
-                    demoAccountId = crDemoAccount.loginid;
+
+            if (showAsCR) {
+                // Get the demo account ID from the special account config
+                const specialConfig = getSpecialAccountConfig(showAsCR);
+                if (specialConfig?.demoAccountId) {
+                    demoAccountId = specialConfig.demoAccountId;
                     demoToken = accountsList[demoAccountId];
-                    console.log(`[Run Panel] ✅ Found CR6779123 demo account: ${demoAccountId}`);
+                    console.log(`[Run Panel] ✅ Found special account demo: ${showAsCR} -> ${demoAccountId}`);
                 }
             }
-            
-            // If not found, try to find VRTC7346559 specifically (for other accounts)
+
+            // If not found, try to find the first available demo account
             if (!demoAccountId) {
-                const specificDemoAccount = accountsArray.find(
-                    (acc: any) => acc.loginid === 'VRTC7346559'
-                );
-                
+                const specificDemoAccount = accountsArray.find((acc: any) => acc.loginid === 'VRTC7346559');
+
                 if (specificDemoAccount?.loginid) {
                     demoAccountId = specificDemoAccount.loginid;
                     demoToken = accountsList[demoAccountId];
@@ -266,7 +257,7 @@ export default class RunPanelStore {
                 api_base.account_info = { ...authorize, loginid: demoAccountId };
                 api_base.token = demoToken;
                 api_base.account_id = demoAccountId;
-                
+
                 console.log(`[Run Panel] ✅ Successfully switched to demo account ${demoAccountId} for bot trading`);
                 console.log(`[Run Panel] ✅ Demo account balance: ${authorize.balance || 'N/A'}`);
                 return true;
@@ -304,7 +295,7 @@ export default class RunPanelStore {
                 api_base.account_info = { ...authorize, loginid };
                 api_base.token = token;
                 api_base.account_id = loginid;
-                
+
                 console.log(`[Run Panel] Successfully restored original account ${loginid}`);
             }
 
@@ -316,11 +307,6 @@ export default class RunPanelStore {
     }
 
     onRunButtonClick = async () => {
-        if (!navigator.onLine) {
-            botNotification(localize('❌ Cannot start bot while offline. Connect to the internet first.'));
-            return;
-        }
-
         // CRITICAL: Prevent multiple simultaneous runs (especially on desktop double-clicks)
         if (this.is_running || this.is_contracy_buying_in_progress) {
             console.warn('[Run Panel] ⚠️ Bot is already running, ignoring duplicate run request');
@@ -364,21 +350,27 @@ export default class RunPanelStore {
         }
         self_exclusion.setIsRestricted(false);
 
-        // CRITICAL: Check if special CR account is active and switch to demo account BEFORE starting bot
+        // CRITICAL: Check if special account is active and switch to demo account BEFORE starting bot
         // This ensures the API is using the correct account before any trades are made
         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-        const isSpecialCR = showAsCR === 'CR6779123';
-        
-        if (isSpecialCR) {
-            console.log('[Run Panel] 🔄 Special CR account detected - ensuring API is on demo account before bot starts...');
-            
+        const isSpecialAccount = showAsCR && isSpecialCRAccount(showAsCR);
+
+        if (isSpecialAccount) {
+            console.log(
+                '[Run Panel] 🔄 Special account detected - ensuring API is on demo account before bot starts...'
+            );
+
+            // Get the expected demo account from special account config
+            const { getSpecialAccountConfig } = await import('@/utils/special-accounts-config');
+            const specialConfig = getSpecialAccountConfig(showAsCR);
+            const expectedDemoAccount = specialConfig?.demoAccountId;
+
             // Verify current API account
             const currentApiAccount = api_base.account_info?.loginid;
-            const expectedDemoAccount = 'VRTC10109979';
-            
+
             console.log('[Run Panel] 🔍 Current API account:', currentApiAccount);
             console.log('[Run Panel] 🔍 Expected demo account:', expectedDemoAccount);
-            
+
             // Only switch if not already on demo account
             if (currentApiAccount !== expectedDemoAccount) {
                 console.log('[Run Panel] 🔄 API not on demo account - switching now...');
@@ -393,7 +385,7 @@ export default class RunPanelStore {
             } else {
                 console.log('[Run Panel] ✅ API is already on demo account - no switch needed');
             }
-            
+
             // Final verification before starting bot
             const finalApiAccount = api_base.account_info?.loginid;
             if (finalApiAccount !== expectedDemoAccount) {
@@ -401,7 +393,7 @@ export default class RunPanelStore {
                 this.showErrorMessage('API account verification failed. Please refresh the page and try again.');
                 return;
             }
-            
+
             console.log('[Run Panel] ✅ API verified on demo account - bot can now start safely');
         }
 
@@ -498,53 +490,15 @@ export default class RunPanelStore {
     };
 
     clearStat = () => {
-        try {
-            // Store references first
-            const journal = this.root_store?.journal;
-            const summary_card = this.root_store?.summary_card;
-            const transactions = this.root_store?.transactions;
-            
-            // Clear journal
-            if (journal?.clear && typeof journal.clear === 'function') {
-                try {
-                    journal.clear();
-                    console.log('[Run Panel] Journal cleared');
-                } catch (e) {
-                    console.error('[Run Panel] Journal clear error:', e);
-                }
-            }
-            
-            // Clear summary card
-            if (summary_card?.clear && typeof summary_card.clear === 'function') {
-                try {
-                    summary_card.clear();
-                    console.log('[Run Panel] Summary card cleared');
-                } catch (e) {
-                    console.error('[Run Panel] Summary clear error:', e);
-                }
-            }
-            
-            // Clear transactions
-            if (transactions?.clear && typeof transactions.clear === 'function') {
-                try {
-                    transactions.clear();
-                    console.log('[Run Panel] Transactions cleared');
-                } catch (e) {
-                    console.error('[Run Panel] Transactions clear error:', e);
-                }
-            }
-            
-            console.log('[Run Panel] ✅ Clear operation completed');
-        } catch (e) {
-            console.error('[Run Panel] ❌ Unexpected error in clearStat:', e);
-        } finally {
-            // Close dialog LAST, after all clears are done
-            try {
-                this.onCloseDialog();
-            } catch (e) {
-                console.error('[Run Panel] Error closing dialog:', e);
-            }
-        }
+        const { summary_card, journal, transactions } = this.root_store;
+
+        this.setIsRunning(false);
+        this.setHasOpenContract(false);
+        this.clear();
+        journal.clear();
+        summary_card.clear();
+        transactions.clear();
+        this.setContractStage(contract_stages.NOT_RUNNING);
     };
 
     toggleStatisticsInfoModal = () => {
@@ -656,6 +610,7 @@ export default class RunPanelStore {
     showClearStatDialog = () => {
         this.onOkButtonClick = () => {
             this.clearStat();
+            this.onCloseDialog();
         };
         this.onCancelButtonClick = this.onCloseDialog;
         this.dialog_options = {
@@ -703,7 +658,13 @@ export default class RunPanelStore {
         observer.register('bot.contract', summary_card.onBotContractEvent, false, undefined, false);
         observer.register('bot.contract', transactions.onBotContractEvent, false, undefined, false);
         observer.register('Error', this.onError, false, undefined, true);
-        observer.register('bot.recoverOpenPositionLimitExceeded', this.OpenPositionLimitExceededEvent, false, undefined, true);
+        observer.register(
+            'bot.recoverOpenPositionLimitExceeded',
+            this.OpenPositionLimitExceededEvent,
+            false,
+            undefined,
+            true
+        );
     };
 
     OpenPositionLimitExceededEvent = () => (this.is_contracy_buying_in_progress = true);
@@ -784,19 +745,17 @@ export default class RunPanelStore {
     onBotStopEvent = () => {
         const { self_exclusion, summary_card } = this.root_store;
         const { ui } = this.core;
-        const currentLoginId = this.core?.client?.loginid as string;
         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-        const isSpecialCR = (currentLoginId === 'CR6779123') || (showAsCR === 'CR6779123');
-        
+        const isSpecialAccount = showAsCR && isSpecialCRAccount(showAsCR);
+
         console.log('[Run Panel] 🛑 onBotStopEvent called:', {
-            currentLoginId,
             showAsCR,
-            isSpecialCR,
+            isSpecialAccount,
             has_open_contract: this.has_open_contract,
             is_running: this.is_running,
-            error_type: this.error_type
+            error_type: this.error_type,
         });
-        
+
         const indicateBotStopped = () => {
             this.error_type = undefined;
             this.setContractStage(contract_stages.NOT_RUNNING);
@@ -829,11 +788,11 @@ export default class RunPanelStore {
             this.error_type = undefined;
             this.is_sell_requested = false;
             this.setContractStage(contract_stages.CONTRACT_CLOSED);
-            
-            // For special CR accounts, keep the bot running - don't unregister listeners
+
+            // For special accounts, keep the bot running - don't unregister listeners
             // This allows the bot to continue trading after each contract closes
-            if (isSpecialCR && this.is_running) {
-                console.log('[Run Panel] 🔄 Special CR account - keeping bot running after contract close');
+            if (isSpecialAccount && this.is_running) {
+                console.log('[Run Panel] 🔄 Special account - keeping bot running after contract close');
                 // Don't unregister listeners - keep bot running
                 // Just update the contract stage and clear the open contract flag
                 ui.setAccountSwitcherDisabledMessage();
@@ -858,41 +817,37 @@ export default class RunPanelStore {
     };
 
     onBotReadyEvent = () => {
-        const currentLoginId = this.core?.client?.loginid as string;
         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-        const isSpecialCR = (currentLoginId === 'CR6779123') || (showAsCR === 'CR6779123');
-        
+        const isSpecialAccount = showAsCR && isSpecialCRAccount(showAsCR);
+
         console.log('[Run Panel] ✅ onBotReadyEvent called:', {
-            currentLoginId,
             showAsCR,
-            isSpecialCR,
-            is_running: this.is_running
+            isSpecialAccount,
+            is_running: this.is_running,
         });
-        
-        // For special CR accounts, don't stop the bot when it's ready
+
+        // For special accounts, don't stop the bot when it's ready
         // This allows continuous trading
-        if (!isSpecialCR) {
+        if (!isSpecialAccount) {
             console.log('[Run Panel] 🛑 Normal account - stopping bot on ready');
             this.setIsRunning(false);
         } else {
-            console.log('[Run Panel] 🔄 Special CR account - keeping bot running on ready');
+            console.log('[Run Panel] 🔄 Special account - keeping bot running on ready');
         }
         observer.unregisterAll('bot.bot_ready');
     };
 
     onBotTradeAgain = (is_trade_again: boolean) => {
-        const currentLoginId = this.core?.client?.loginid as string;
         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-        const isSpecialCR = (currentLoginId === 'CR6779123') || (showAsCR === 'CR6779123');
-        
+        const isSpecialAccount = showAsCR && isSpecialCRAccount(showAsCR);
+
         console.log('[Run Panel] 🔄 onBotTradeAgain called:', {
-            currentLoginId,
             showAsCR,
-            isSpecialCR,
+            isSpecialAccount,
             is_trade_again,
-            is_running: this.is_running
+            is_running: this.is_running,
         });
-        
+
         // CRITICAL: Check if target profit is reached FIRST - if so, stop bot regardless of is_trade_again
         // This prevents the bot from continuing even if bot logic calls trade_again(true)
         try {
@@ -901,30 +856,37 @@ export default class RunPanelStore {
                 // Get total profit - use toString=false to get numeric value
                 const totalProfit = Number(tradeEngine.getTotalProfit(false, tradeEngine.tradeOptions?.currency)) || 0;
                 // Check both limit_order.take_profit and tradeOptions.take_profit
-                const takeProfit = Number(tradeEngine.tradeOptions?.limit_order?.take_profit) || Number(tradeEngine.tradeOptions?.take_profit) || 0;
-                
+                const takeProfit =
+                    Number(tradeEngine.tradeOptions?.limit_order?.take_profit) ||
+                    Number(tradeEngine.tradeOptions?.take_profit) ||
+                    0;
+
                 console.log('[Run Panel] 💰 Checking target profit in onBotTradeAgain:', {
                     totalProfit,
                     takeProfit,
                     is_trade_again,
                     limit_order: tradeEngine.tradeOptions?.limit_order,
-                    tradeOptions: tradeEngine.tradeOptions
+                    tradeOptions: tradeEngine.tradeOptions,
                 });
-                
+
                 // If target profit is set and reached (or exceeded), stop the bot automatically
                 // This overrides the bot's trade_again decision
                 if (takeProfit > 0 && totalProfit >= takeProfit) {
-                    console.log('[Run Panel] 🎯🎯🎯 TARGET PROFIT REACHED in onBotTradeAgain! Stopping bot automatically');
-                    console.log(`[Run Panel] 💰 Total profit: ${totalProfit}, Target: ${takeProfit}, Difference: ${totalProfit - takeProfit}`);
+                    console.log(
+                        '[Run Panel] 🎯🎯🎯 TARGET PROFIT REACHED in onBotTradeAgain! Stopping bot automatically'
+                    );
+                    console.log(
+                        `[Run Panel] 💰 Total profit: ${totalProfit}, Target: ${takeProfit}, Difference: ${totalProfit - takeProfit}`
+                    );
                     console.log('[Run Panel] ⚠️ Bot tried to trade_again but target reached - overriding and stopping');
-                    
+
                     // CRITICAL: Set is_running to false FIRST so button shows "Run" instead of "Stop"
                     this.setIsRunning(false);
                     this.setHasOpenContract(false);
-                    
+
                     // Stop the bot immediately
                     this.stopBot();
-                    
+
                     // Emit event to ensure bot stops
                     if (this.dbot?.interpreter?.bot) {
                         try {
@@ -933,45 +895,49 @@ export default class RunPanelStore {
                             console.warn('[Run Panel] ⚠️ Error calling bot.stop():', e);
                         }
                     }
-                    
-                    console.log('[Run Panel] ✅ Bot stopped successfully after reaching target profit (from onBotTradeAgain)');
+
+                    console.log(
+                        '[Run Panel] ✅ Bot stopped successfully after reaching target profit (from onBotTradeAgain)'
+                    );
                     return; // Stop processing, bot is stopped - don't continue with trade_again logic
                 } else if (takeProfit > 0) {
-                    console.log(`[Run Panel] ⏳ Target not reached yet in onBotTradeAgain. Current: ${totalProfit}, Target: ${takeProfit}, Remaining: ${takeProfit - totalProfit}`);
+                    console.log(
+                        `[Run Panel] ⏳ Target not reached yet in onBotTradeAgain. Current: ${totalProfit}, Target: ${takeProfit}, Remaining: ${takeProfit - totalProfit}`
+                    );
                 }
             }
         } catch (error) {
             console.error('[Run Panel] ❌ Error checking target profit in onBotTradeAgain:', error);
         }
-        
-        // For special CR accounts, always allow trading to continue (only if target not reached)
+
+        // For special accounts, always allow trading to continue (only if target not reached)
         // Don't stop the bot even if is_trade_again is false
-        if (!is_trade_again && !isSpecialCR) {
+        if (!is_trade_again && !isSpecialAccount) {
             console.log('[Run Panel] 🛑 Normal account - stopping bot (is_trade_again=false)');
             this.stopBot();
-        } else if (isSpecialCR) {
-            console.log('[Run Panel] 🔄 Special CR account - bot will continue regardless of is_trade_again');
+        } else if (isSpecialAccount) {
+            console.log('[Run Panel] 🔄 Special account - bot will continue regardless of is_trade_again');
             // Bot will continue running - don't stop it
         }
-        // If isSpecialCR is true, the bot will continue running regardless of is_trade_again value
+        // If isSpecialAccount is true, the bot will continue running regardless of is_trade_again value
     };
 
     onContractStatusEvent = (contract_status: TContractState) => {
-        const currentLoginId = this.core?.client?.loginid as string;
         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-        const isSpecialCR = (currentLoginId === 'CR6779123') || (showAsCR === 'CR6779123');
-        
+        const isSpecialAccount = showAsCR && isSpecialCRAccount(showAsCR);
+
         console.log('[Run Panel] 📊 onContractStatusEvent called:', {
             id: contract_status.id,
-            currentLoginId,
             showAsCR,
-            isSpecialCR,
-            is_running: this.is_running
+            isSpecialAccount,
+            is_running: this.is_running,
         });
-        
+
         switch (contract_status.id) {
             case 'contract.purchase_sent': {
                 console.log('[Run Panel] 📊 Purchase sent, setting stage');
+                this.is_contracy_buying_in_progress = true;
+                this.setHasOpenContract(false);
                 this.setContractStage(contract_stages.PURCHASE_SENT);
                 break;
             }
@@ -995,37 +961,43 @@ export default class RunPanelStore {
                 this.setContractStage(contract_stages.CONTRACT_CLOSED);
                 this.setHasOpenContract(false);
                 if (contract_status.contract) GTM.onTransactionClosed(contract_status.contract);
-                
+
                 // CRITICAL: Check if target profit is reached and stop bot automatically
                 // This check MUST happen immediately after contract is sold, before bot logic runs
                 try {
                     const tradeEngine = this.dbot?.interpreter?.bot?.tradeEngine;
                     if (tradeEngine && this.is_running) {
                         // Get total profit - use toString=false to get numeric value
-                        const totalProfit = Number(tradeEngine.getTotalProfit(false, tradeEngine.tradeOptions?.currency)) || 0;
+                        const totalProfit =
+                            Number(tradeEngine.getTotalProfit(false, tradeEngine.tradeOptions?.currency)) || 0;
                         // Check both limit_order.take_profit and tradeOptions.take_profit
-                        const takeProfit = Number(tradeEngine.tradeOptions?.limit_order?.take_profit) || Number(tradeEngine.tradeOptions?.take_profit) || 0;
-                        
+                        const takeProfit =
+                            Number(tradeEngine.tradeOptions?.limit_order?.take_profit) ||
+                            Number(tradeEngine.tradeOptions?.take_profit) ||
+                            0;
+
                         console.log('[Run Panel] 💰 Checking target profit on contract.sold:', {
                             totalProfit,
                             takeProfit,
                             is_running: this.is_running,
                             limit_order: tradeEngine.tradeOptions?.limit_order,
-                            tradeOptions: tradeEngine.tradeOptions
+                            tradeOptions: tradeEngine.tradeOptions,
                         });
-                        
+
                         // If target profit is set and reached (or exceeded), stop the bot automatically
                         if (takeProfit > 0 && totalProfit >= takeProfit) {
                             console.log('[Run Panel] 🎯🎯🎯 TARGET PROFIT REACHED! Stopping bot automatically');
-                            console.log(`[Run Panel] 💰 Total profit: ${totalProfit}, Target: ${takeProfit}, Difference: ${totalProfit - takeProfit}`);
-                            
+                            console.log(
+                                `[Run Panel] 💰 Total profit: ${totalProfit}, Target: ${takeProfit}, Difference: ${totalProfit - takeProfit}`
+                            );
+
                             // CRITICAL: Set is_running to false FIRST so button shows "Run" instead of "Stop"
                             this.setIsRunning(false);
                             this.setHasOpenContract(false);
-                            
+
                             // Stop the bot immediately
                             this.stopBot();
-                            
+
                             // Emit event to ensure bot stops
                             if (this.dbot?.interpreter?.bot) {
                                 try {
@@ -1034,21 +1006,23 @@ export default class RunPanelStore {
                                     console.warn('[Run Panel] ⚠️ Error calling bot.stop():', e);
                                 }
                             }
-                            
+
                             console.log('[Run Panel] ✅ Bot stopped successfully after reaching target profit');
                             return; // Stop processing, bot is stopped
                         } else if (takeProfit > 0) {
-                            console.log(`[Run Panel] ⏳ Target not reached yet. Current: ${totalProfit}, Target: ${takeProfit}, Remaining: ${takeProfit - totalProfit}`);
+                            console.log(
+                                `[Run Panel] ⏳ Target not reached yet. Current: ${totalProfit}, Target: ${takeProfit}, Remaining: ${takeProfit - totalProfit}`
+                            );
                         }
                     }
                 } catch (error) {
                     console.error('[Run Panel] ❌ Error checking target profit:', error);
                 }
-                
-                // For special CR accounts, the bot should continue automatically
+
+                // For special accounts, the bot should continue automatically
                 // Don't stop the bot - it will continue to the next trade
-                if (isSpecialCR && this.is_running) {
-                    console.log('[Run Panel] 🔄 Special CR account - bot will continue after contract sold');
+                if (isSpecialAccount && this.is_running) {
+                    console.log('[Run Panel] 🔄 Special account - bot will continue after contract sold');
                     // Bot will continue automatically - don't stop it
                 }
                 break;
@@ -1074,24 +1048,37 @@ export default class RunPanelStore {
 
     onBotContractEvent = (data: { is_sold?: boolean }) => {
         console.log('[Run Panel] 📨 onBotContractEvent called:', data);
+        const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
+        const isSpecialAccount = showAsCR && isSpecialCRAccount(showAsCR);
+
         if (data?.is_sold) {
             console.log('[Run Panel] ✅ Contract sold, closing');
             this.is_sell_requested = false;
             this.setContractStage(contract_stages.CONTRACT_CLOSED);
-            
+
+            // CRITICAL: For special accounts, ensure the contract shows as complete immediately
+            // This displays the transaction in the run panel right away
+            if (isSpecialAccount) {
+                console.log('[Run Panel] 📊 Special account - ensuring contract displays as complete');
+                // Force the has_open_contract to briefly stay true then set to false
+                // This ensures the contract appears in the completed list
+                this.setHasOpenContract(false);
+            }
+
             // CRITICAL: Check if target profit is reached and stop bot automatically
             try {
                 const tradeEngine = this.dbot?.interpreter?.bot?.tradeEngine;
                 if (tradeEngine) {
                     const totalProfit = tradeEngine.getTotalProfit(false, tradeEngine.tradeOptions?.currency);
                     const takeProfit = tradeEngine.tradeOptions?.limit_order?.take_profit;
-                    
+
                     console.log('[Run Panel] 💰 Checking target profit:', {
                         totalProfit,
                         takeProfit,
-                        is_running: this.is_running
+                        is_running: this.is_running,
+                        isSpecialAccount,
                     });
-                    
+
                     // If target profit is set and reached, stop the bot automatically
                     if (takeProfit && totalProfit >= takeProfit && this.is_running) {
                         console.log('[Run Panel] 🎯 Target profit reached! Stopping bot automatically');

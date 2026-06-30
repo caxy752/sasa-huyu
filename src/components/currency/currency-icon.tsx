@@ -1,5 +1,4 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react';
-import { isCustomDemoIconActive, CUSTOM_DEMO_SVG } from '@/utils/custom-demo-icon-utils';
+import { lazy, Suspense } from 'react';
 
 const CURRENCY_ICONS = {
     aud: lazy(() => import('@deriv/quill-icons/Currencies').then(module => ({ default: module.CurrencyAudIcon }))),
@@ -64,20 +63,6 @@ const CURRENCY_ICONS = {
 };
 
 export const CurrencyIcon = ({ currency, isVirtual }: { currency?: string; isVirtual?: boolean }) => {
-    const [isActive, setIsActive] = useState(isCustomDemoIconActive());
-
-    useEffect(() => {
-        const handleIconChange = () => {
-            setIsActive(isCustomDemoIconActive());
-        };
-        window.addEventListener('custom_demo_icon_changed', handleIconChange);
-        return () => window.removeEventListener('custom_demo_icon_changed', handleIconChange);
-    }, []);
-
-    if (isVirtual && isActive) {
-        return <div className="dc-tabs__item__icon">{CUSTOM_DEMO_SVG}</div>;
-    }
-
     const Icon = isVirtual
         ? CURRENCY_ICONS.virtual
         : CURRENCY_ICONS[currency?.toLowerCase() as keyof typeof CURRENCY_ICONS] || CURRENCY_ICONS.unknown;

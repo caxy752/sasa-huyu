@@ -5,9 +5,7 @@ import { removeCookies } from '@/components/shared/utils/storage/storage';
 import { api_base } from '@/external/bot-skeleton';
 import { setAuthData } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { TAuthData } from '@/types/api-types';
-import { requestSessionActive } from '@deriv-com/auth-client';
-import { isNewLoggedIn } from '@/auth/NewDerivAuth';
-
+import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
 // Extend Window interface to include is_tmb_enabled property
 declare global {
     interface Window {
@@ -19,7 +17,7 @@ type UseTMBReturn = {
     handleLogout: () => void;
     isOAuth2Enabled: boolean;
     is_tmb_enabled: boolean;
-    onRenderTMBCheck: (fromLoginButton?: boolean, setIsAuthenticating?: (value: boolean) => void, is_new_account?: boolean) => Promise<void>;
+    onRenderTMBCheck: (fromLoginButton?: boolean, setIsAuthenticating?: (value: boolean) => void) => Promise<void>;
     isTmbEnabled: () => Promise<boolean>;
     isInitialized: boolean;
     isTmbCheckComplete: boolean;
@@ -64,30 +62,39 @@ const useTMB = (): UseTMBReturn => {
     const [, setIsApiInitialized] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const [isTmbCheckComplete, setIsTmbCheckComplete] = useState(false);
-    const authTokenRef = useRef(localStorage.getItem('authToken'));
+    const authTokenRef = useRef(((() => {
+        try {
+            const token = OAuthTokenExchangeService.getAccessToken();
+            return token || localStorage.getItem('authToken');
+        } catch (e) {
+            return localStorage.getItem('authToken');
+        }
+    })()));
     const activeSessionsRef = useRef<TMBWebsocketTokens | undefined>(undefined);
 
     const getActiveSessions = useCallback(async (): Promise<TMBWebsocketTokens | undefined> => {
-        try {
-            return (await requestSessionActive()) as TMBWebsocketTokens;
-        } catch (error) {
-            // eslint-disable-next-line no-console
-            console.error('Failed to get active sessions', error);
-            return undefined;
-        }
+        // TMB active session polling is disabled for this integration.
+        return undefined;
     }, []);
 
     const processTokens = useCallback((tokens: TokenItem[]) => {
         const accountsList: Record<string, string> = {};
-        const clientAccounts: Record<string, { loginid: string; token: string; currency: string }> = {};
+        const clientAccounts: Record<
+            string,
+            { loginid: string; token: string; currency: string; account_type: string; balance: string }
+        > = {};
 
         tokens.forEach((token: TokenItem) => {
             if (token.loginid && token.token) {
+                const account_type =
+                    token.loginid.startsWith('VRT') || token.loginid.startsWith('VRTC') ? 'demo' : 'real';
                 accountsList[token.loginid] = token.token;
                 clientAccounts[token.loginid] = {
                     loginid: token.loginid,
                     token: token.token,
                     currency: token.cur || '',
+                    account_type,
+                    balance: '0',
                 };
             }
         });
@@ -195,8 +202,7 @@ const useTMB = (): UseTMBReturn => {
         const initializeHook = async () => {
             try {
                 // Pre-fetch active sessions if needed
-                // Skip for new auth system users to avoid rogue CORS fetch
-                if (!isCallbackPage && window.is_tmb_enabled && !isNewLoggedIn()) {
+                if (!isCallbackPage && window.is_tmb_enabled) {
                     try {
                         // This is a critical step - we need to await this
                         const activeSessions = await getActiveSessions();
@@ -287,10 +293,8 @@ const useTMB = (): UseTMBReturn => {
     }, []);
 
     const onRenderTMBCheck = useCallback(
-        async (fromLoginButton?: boolean, setIsAuthenticating?: (value: boolean) => void, is_new_account = false) => {
+        async (fromLoginButton = false, setIsAuthenticating?: (value: boolean) => void) => {
             if (isCallbackPage) return;
-            // Skip for new auth system users — they don't need legacy TMB/OAuth
-            if (isNewLoggedIn()) return;
             if (TMBState.checkInProgress) return;
 
             TMBState.checkInProgress = true;
@@ -316,7 +320,9 @@ const useTMB = (): UseTMBReturn => {
                         setIsAuthenticating(false);
                     }
                     try {
-                        window.location.replace(generateOAuthURL(is_new_account, 'home'));
+                        const accountParam = getAccountFromURL();
+                        sessionStorage.setItem('query_param_currency', accountParam || 'USD');
+                        window.location.replace(await generateOAuthURL());
                     } catch (error) {
                         console.error('Failed to redirect to OAuth:', error);
                         if (setIsAuthenticating) {

@@ -6,7 +6,7 @@
     align-items: center;
     flex-direction: column;
     justify-content: center;
-    background: linear-gradient(180deg, $color-hub-navy-mid 0%, $color-hub-navy-light 80%);
+    background: linear-gradient(180deg, var(--general-section-2) 0%, rgb(242 243 244 / 0%) 80%);
     width: 100%;
 
     @include desktop-screen {
@@ -36,70 +36,37 @@
         width: 32%;
         max-width: 32%;
         text-align: center;
-        background: $color-hub-navy-mid;
-        border: 1px solid $color-hub-gold-border;
-        box-shadow: $shadow-hub-gold;
+        background-color: var(--general-section-1);
         padding: 8px 8px 0;
         margin-bottom: 2%;
         height: 56px;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
-
-        &:hover {
-            border-color: rgba(255, 215, 0, 0.5);
-            box-shadow:
-                0 0 0 1px rgba(255, 215, 0, 0.25),
-                inset 0 0 12px rgba(59, 130, 246, 0.08);
-        }
 
         &-title {
             height: 18px;
             margin-bottom: 4px;
-            color: $color-hub-gold-label !important;
-            font-weight: bold;
-            font-size: 1.1rem;
 
             @include typeface(--small-center-bold-black, none);
-
-            * { color: $color-hub-gold-label !important; }
         }
 
         &-content {
             height: 18px;
             margin-bottom: 4px;
-            color: $color-white !important;
 
             @include typeface(--small-center-normal-black, none);
-
-            * { color: $color-white !important; }
         }
     }
 
     &__amount {
         @include typeface(--small-center-normal-black, none);
 
-        color: $color-white !important;
-
-        * { color: $color-white !important; }
-
         &--positive {
             font-weight: bold;
-            color: $color-hub-profit !important;
-
-            * { color: $color-hub-profit !important; }
+            color: var(--text-profit-success);
         }
 
         &--negative {
             font-weight: bold;
-            color: $color-hub-loss !important;
-
-            * { color: $color-hub-loss !important; }
+            color: var(--text-loss-danger);
         }
-    }
-
-    span,
-    div,
-    p,
-    label {
-        color: $color-white;
     }
 }

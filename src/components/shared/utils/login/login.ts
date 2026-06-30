@@ -1,42 +1,53 @@
-
-import { website_name } from '@/utils/site-config';
-import { getAppId } from '../config/config';
+import { generateOAuthURL } from '../config/config';
 import { CookieStorage, isStorageSupported, LocalStore } from '../storage/storage';
 import { getStaticUrl, urlForCurrentDomain } from '../url';
-import { deriv_urls } from '../url/constants';
 
-export const redirectToLogin = (is_logged_in: boolean, language: string, has_params = true, redirect_delay = 0) => {
+export const redirectToLogin = async (
+    is_logged_in: boolean,
+    language: string,
+    has_params = true,
+    redirect_delay = 0
+) => {
     if (!is_logged_in && isStorageSupported(sessionStorage)) {
         const l = window.location;
         const redirect_url = has_params ? window.location.href : `${l.protocol}//${l.host}${l.pathname}`;
         sessionStorage.setItem('redirect_url', redirect_url);
-        setTimeout(() => {
-            const new_href = loginUrl({ language });
+        setTimeout(async () => {
+            const new_href = await loginUrl({ language });
             window.location.href = new_href;
         }, redirect_delay);
     }
 };
 
-export const redirectToSignUp = () => {
-    window.open(getStaticUrl('/signup/'));
+export const redirectToSignUp = async () => {
+    window.location.replace(await generateOAuthURL('registration'));
 };
 
 type TLoginUrl = {
     language: string;
 };
 
-export const loginUrl = ({ language, is_new_account = false }: TLoginUrl & { is_new_account?: boolean }) => {
+export const loginUrl = async ({ language }: TLoginUrl) => {
     const server_url = LocalStore.get('config.server_url');
-    const getOAuthUrl = () => {
-        const redirect_uri = `${window.location.origin}/callback`;
-        const endpoint = is_new_account ? 'auth.deriv.com' : 'oauth.deriv.com';
-        return `https://${endpoint}/oauth2/authorize?app_id=${getAppId()}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
-    };
+    const signup_device_cookie = new (CookieStorage as any)('signup_device');
+    const signup_device = signup_device_cookie.get('signup_device');
+    const date_first_contact_cookie = new (CookieStorage as any)('date_first_contact');
+    const date_first_contact = date_first_contact_cookie.get('date_first_contact');
+    const oauth_url = new URL(await generateOAuthURL());
 
-    if (server_url && /qa/.test(server_url)) {
-        const redirect_uri = `${window.location.origin}/callback`;
-        return `https://${server_url}/oauth2/authorize?app_id=${getAppId()}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
+    oauth_url.searchParams.set('l', language);
+
+    if (signup_device) {
+        oauth_url.searchParams.set('signup_device', signup_device);
     }
 
-    return getOAuthUrl();
+    if (date_first_contact) {
+        oauth_url.searchParams.set('date_first_contact', date_first_contact);
+    }
+
+    if (server_url && /qa/.test(server_url)) {
+        oauth_url.hostname = server_url;
+    }
+
+    return urlForCurrentDomain(oauth_url.toString()) || oauth_url.toString();
 };

@@ -86,6 +86,7 @@ const DataListRow = ({
                 <div
                     className={classNames('data-list__item--wrapper', {
                         'data-list__item--dynamic-height-wrapper': is_dynamic_height,
+                        'data-list__item--new-row': other_props.is_new_row,
                     })}
                 >
                     {action_desc ? (

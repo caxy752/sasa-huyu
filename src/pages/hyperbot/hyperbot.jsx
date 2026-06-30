@@ -35,8 +35,6 @@ const Hyperbot = observer(() => {
     const [enableEntryPoint, setEnableEntryPoint] = useState(false);
     const [entryPointDigit, setEntryPointDigit] = useState(5);
     const [lockEntryPoint, setLockEntryPoint] = useState(false);
-    const [quadState, setQuadState] = useState({ status: 'waiting', lastDigits: [] });
-
 
     // Refs
     const recentDigits = useRef([]);
@@ -234,33 +232,46 @@ const Hyperbot = observer(() => {
                     const data = JSON.parse(evt.data);
                     if (data?.msg_type === 'tick' && data?.tick?.symbol === market) {
                         const quote = data.tick.quote;
-                        
-                        const priceStr = String(quote);
-                        const digits = priceStr.replace('.', '').slice(-4);
-            
-                        if (digits.length === 4) {
-                            const lastFourDigits = digits.split('').map(d => parseInt(d));
-                            setCurrentDigit(lastFourDigits[3]); // Update single digit display
-            
-                            // Update quad state
-                            setQuadState({ status: 'monitoring', lastDigits: lastFourDigits });
-            
-                            // Push the last single digit to other arrays for existing logic
-                            allDigits.current.push(lastFourDigits[3]);
-                            recentDigits.current.push(lastFourDigits[3]);
-                            if (recentDigits.current.length > 50) {
-                                recentDigits.current = recentDigits.current.slice(-50);
-                            }
-            
-                            if (tickCount && allDigits.current.length > tickCount) {
-                                allDigits.current = allDigits.current.slice(-tickCount);
-                            }
-            
-                            // Keep other logic running on the last digit
-                            analyzeOverUnder(allDigits.current);
-                        } else {
-                            setQuadState(prevState => ({ ...prevState, status: 'waiting' }));
+                        const formattedPrice = parseFloat(quote).toFixed(pipSize.current || 4);
+                        const digit = parseInt(formattedPrice[formattedPrice.length - 1]);
+
+                        setCurrentDigit(digit);
+                        allDigits.current.push(digit);
+                        recentDigits.current.push(digit);
+                        if (recentDigits.current.length > 50) {
+                            recentDigits.current = recentDigits.current.slice(-50);
                         }
+
+                        if (tickCount && allDigits.current.length > tickCount) {
+                            allDigits.current = allDigits.current.slice(-tickCount);
+                        }
+
+                        // Check if entry point digit is matched
+                        if (enableEntryPointRef.current) {
+                            const expectedDigit =
+                                typeof entryPointDigitRef.current === 'number'
+                                    ? entryPointDigitRef.current
+                                    : parseInt(String(entryPointDigitRef.current)) || 5;
+
+                            // Compare digits strictly (both should be numbers)
+                            if (typeof digit === 'number' && digit === expectedDigit) {
+                                if (!entryPointMet.current) {
+                                    entryPointMet.current = true;
+                                    console.log(
+                                        `✅✅✅ Entry point digit ${digit} matched! Expected: ${expectedDigit}. Trading can proceed now! ✅✅✅`
+                                    );
+                                }
+                            } else {
+                                // Debug: log when digit doesn't match (only occasionally to avoid spam)
+                                if (Math.random() < 0.001 && !entryPointMet.current) {
+                                    console.log(
+                                        `🔍 Entry point check - Received digit: ${digit} (type: ${typeof digit}), Expected: ${expectedDigit} (type: ${typeof expectedDigit})`
+                                    );
+                                }
+                            }
+                        }
+
+                        analyzeOverUnder(allDigits.current);
                     }
                 } catch (e) {
                     // Ignore parse errors
@@ -1028,14 +1039,7 @@ const Hyperbot = observer(() => {
                     </div>
 
                     <div className='control-group'>
-                         {/* Live Monitor for Quad */}
-                        <div className='quad-monitor'>
-                            {quadState.status === 'waiting' ? (
-                                <span>Waiting for quad...</span>
-                            ) : (
-                                <span>Last: {quadState.lastDigits.join(', ')}</span>
-                            )}
-                        </div>
+                        <span className='current-digit current-digit-purple'>{currentDigit}</span>
                     </div>
                 </div>
             </div>

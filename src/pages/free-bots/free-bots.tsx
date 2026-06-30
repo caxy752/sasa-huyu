@@ -5,7 +5,7 @@ import Text from '@/components/shared_ui/text';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
-import { getBotsManifest, prefetchAllXmlInBackground, fetchXmlWithCache } from '@/utils/freebots-cache';
+import { getXmlUploadsManifest, fetchXmlWithCache } from '@/utils/freebots-cache';
 import './free-bots.scss';
 
 interface BotData {
@@ -15,8 +15,12 @@ interface BotData {
     strategy: string;
     features: string[];
     xml: string;
-    badge_text?: string;
-    badge_class?: string;
+}
+
+interface ManifestItem {
+    name: string;
+    file: string;
+    basePath?: string;
 }
 
 const DEFAULT_FEATURES = ['Automated Trading', 'Risk Management', 'Profit Optimization'];
@@ -24,40 +28,26 @@ const DEFAULT_FEATURES = ['Automated Trading', 'Risk Management', 'Profit Optimi
 const FreeBots = observer(() => {
     const { dashboard, app } = useStore();
     const { active_tab, setActiveTab, setPendingFreeBot } = dashboard;
-    const [availableBots, setAvailableBots] = useState<BotData[]>([]);
+    const [defaultBots, setDefaultBots] = useState<BotData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     // Bot descriptions mapping
     const getBotDescription = (botName: string): string => {
         const descriptions: { [key: string]: string } = {
-            'STARTER BOT':
-                'Official starter bot for Captain Peter Trading Hub. Optimized for beginners with standard risk management.',
-            'POVERTY KILLER':
-                'High-performance digit trading bot with intelligent recovery and profit optimization.',
-            'POVERTY KILLER V2.1':
-                'Updated version of the Poverty Killer bot with enhanced performance and risk management.',
-            'BEST RISE FALL':
-                'Automated rise and fall strategy optimized for consistent returns in trending markets.',
-            'MAKOTI AUTOMATED RISE FALL':
-                'Premium rise and fall strategy featuring advanced entry points and recovery mechanisms.',
-            'OVER1 R32 PRO':
-                'Professional Over 1 trading bot with R32 recovery strategy. Optimized for high win rates with intelligent recovery mechanisms and risk management.',
-            'OVER2 R43 PRO':
-                'Advanced Over 2 bot featuring R43 recovery system. Designed for consistent profits with sophisticated entry points and recovery strategies.',
-            'THE CMV PRO':
-                'Premium CMV Pro trading bot with multi-strategy approach. Combines technical analysis with automated execution for maximum profitability.',
-            'UNDER BLAST PRO':
-                'High-performance Under trading bot with blast strategy. Optimized for rapid execution and high-probability trades in Under markets.',
-            'UNDER7 R56 PRO':
-                'Professional Under 7 bot with R56 recovery mechanism. Features intelligent risk management and recovery strategies for consistent returns.',
-            'UNDER8 R67 PRO':
-                'Advanced Under 8 trading bot with R67 recovery system. Designed for optimal performance with sophisticated pattern recognition and recovery.',
-            'MAKOTIV3RISE FALL':
-                'Premium Rise/Fall trading bot with MACD analysis and intelligent recovery. Optimized for consistent returns in trending markets.',
-            'MAKOTI RISE/FALL V4':
-                'Latest version of the Makoti Rise/Fall bot. Enhanced with improved entry signals and advanced recovery management for maximum stability.',
-                        };
+            'OVER DESTROYER':
+                'Professional Over trading bot with R32 recovery strategy. Optimized for high win rates with intelligent recovery mechanisms and risk management.',
+            'OVER DESTRYER 2 PRO BOT':
+                'Advanced Over bot featuring R43 recovery system. Designed for consistent profits with sophisticated entry points and recovery strategies.',
+            'EVEN ODD SPEEDY':
+                'Premium Even Odd Speedy trading bot with multi-strategy approach. Combines technical analysis with automated execution for maximum profitability.',
+            'OVER UNDER PRO BOT':
+                'High-performance Over Under trading bot with blast strategy. Optimized for rapid execution and high-probability trades in Under markets.',
+            'UNDER DESTROYER PRO BOT':
+                'Professional Under Destroyer Pro trading bot with R56 recovery mechanism. Features intelligent risk management and recovery strategies for consistent returns.',
+            'UNDER DESTROYER':
+                'Advanced Under Destroyer trading bot with R67 recovery system. Designed for optimal performance with sophisticated pattern recognition and recovery.',
+        };
 
         // Try exact match first
         if (descriptions[botName]) {
@@ -77,24 +67,19 @@ const FreeBots = observer(() => {
     // Show selected bots from public/xml (explicit curated list)
     const getXmlFiles = () => {
         return [
-            'STARTER_BOT.xml',
-            'POVERTY_KILLER.xml',
-            'POVERTY_KILLER_V2.1.xml',
-            'BEST_RISE_FALL.xml',
-            'MAKOTI_AUTOMATED_RISE_FALL.xml',
-            'THE CMV PRO.xml',
-            'UNDER BLAST PRO.xml',
-            'OVER1_R32 PRO.xml',
-            'OVER2_R43 PRO.xml',
-            'UNDER8_R67 PRO.xml',
-            'UNDER7_R56 PRO.xml',
-            'MAKOTIV3RISE_FALL.xml',
-            'MAKOTIRISE_FALLV4.xml',
+            'EVEN ODD SPEEDY.xml',
+            'OVER UNDER PRO BOT.xml',
+            'OVER DESTROYER.xml',
+            'OVER DESTRYER 2 PRO BOT.xml',
+            'UNDER DESTROYER.xml',
+            'UNDER DESTROYER PRO BOT.xml',
         ];
     };
 
+    const visibleBots = defaultBots;
+
     // Wait for workspace to be available
-    const waitForWorkspace = (maxAttempts = 3, delay = 50) => {
+    const waitForWorkspace = (maxAttempts = 10, delay = 500) => {
         return new Promise((resolve, reject) => {
             let attempts = 0;
 
@@ -116,25 +101,41 @@ const FreeBots = observer(() => {
     };
 
     // Load bot into builder
-    const loadBotIntoBuilder = (bot: BotData) => {
-        if (bot.xml) {
-            // Flag the selected bot for the Bot Builder to load after navigation
-            setPendingFreeBot({ name: bot.name, xml: bot.xml });
-            // Instant navigation
-            setActiveTab(DBOT_TABS.BOT_BUILDER);
+    const loadBotIntoBuilder = async (bot: BotData) => {
+        try {
+            if (bot.xml) {
+                console.log('Loading bot:', bot.name);
+                console.log('Blockly workspace available:', !!window.Blockly?.derivWorkspace);
+
+                // Flag the selected bot for the Bot Builder to load after navigation
+                setPendingFreeBot({ name: bot.name, xml: bot.xml });
+
+                // Navigate to Bot Builder; loading will be handled when workspace is ready
+                setActiveTab(DBOT_TABS.BOT_BUILDER);
+
+                console.log('Navigating to Bot Builder to load bot:', bot.name);
+            }
+        } catch (error) {
+            console.error('Error loading bot:', error);
         }
     };
 
     // Load bots with instant UI and progressive loading (no blocking spinner)
     useEffect(() => {
         const loadBots = async () => {
-            // Always load when component is mounted (now used as sub-component)
-
             setError(null);
 
-            // 0) Immediately render skeleton cards from a small fallback list
-            const fallback = getXmlFiles().map(file => ({ name: file.replace('.xml', ''), file }));
-            const initialSkeleton: BotData[] = fallback.map(item => {
+            const curatedManifest: ManifestItem[] = getXmlFiles().map(file => ({
+                name: file.replace('.xml', ''),
+                file,
+                basePath: '/xml/',
+            }));
+
+            const xmlUploadsManifest = (await getXmlUploadsManifest()) || [];
+            const combinedManifest: ManifestItem[] = [...curatedManifest, ...xmlUploadsManifest];
+
+            // Immediately render skeleton cards for the current manifest
+            const initialSkeleton: BotData[] = combinedManifest.map(item => {
                 const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ');
                 return {
                     name: botName,
@@ -145,39 +146,19 @@ const FreeBots = observer(() => {
                     xml: '',
                 };
             });
-            setAvailableBots(initialSkeleton);
+            setDefaultBots(initialSkeleton);
             setIsLoading(false); // hide "Loading free bots..." right away
 
             try {
-                // Force use of explicit list only; ignore remote manifest
-                const manifest = getXmlFiles().map(file => ({ name: file.replace('.xml', ''), file }));
-
-                // Update skeletons to our explicit list
-                const skeletonBots: BotData[] = manifest.map(item => {
-                    const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('MAKOTIRISE FALLV4', 'MAKOTI RISE/FALL V4');
-                    const isPremiumPlus = botName.includes('MAKOTI RISE/FALL V4');
-                    return {
-                        name: botName,
-                        description: getBotDescription(botName),
-                        difficulty: 'Intermediate',
-                        strategy: 'Multi-Strategy',
-                        features: DEFAULT_FEATURES,
-                        xml: '',
-                        badge_text: isPremiumPlus ? 'PREMIUM PLUS' : 'PREMIUM',
-                        badge_class: isPremiumPlus ? 'premium-plus' : 'premium',
-                    };
-                });
-                setAvailableBots(skeletonBots);
-
-                // 3) Load XMLs progressively in background
+                const skeletonBots = initialSkeleton;
                 const loadedBots: BotData[] = [];
-                for (let i = 0; i < manifest.length; i++) {
-                    const item = manifest[i];
+
+                for (let i = 0; i < combinedManifest.length; i++) {
+                    const item = combinedManifest[i];
                     try {
-                        const xml = await fetchXmlWithCache(item.file);
+                        const xml = await fetchXmlWithCache(item.file, item.basePath);
                         if (xml) {
-                            const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('MAKOTIRISE FALLV4', 'MAKOTI RISE/FALL V4');
-                            const isPremiumPlus = botName.includes('MAKOTI RISE/FALL V4');
+                            const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ');
                             loadedBots.push({
                                 name: botName,
                                 description: getBotDescription(botName),
@@ -185,10 +166,8 @@ const FreeBots = observer(() => {
                                 strategy: 'Multi-Strategy',
                                 features: DEFAULT_FEATURES,
                                 xml,
-                                badge_text: isPremiumPlus ? 'PREMIUM PLUS' : 'PREMIUM',
-                                badge_class: isPremiumPlus ? 'premium-plus' : 'premium',
                             });
-                            setAvailableBots([...loadedBots, ...skeletonBots.slice(loadedBots.length)]);
+                            setDefaultBots([...loadedBots, ...skeletonBots.slice(loadedBots.length)]);
                         }
                     } catch (err) {
                         console.warn(`Failed to load ${item.file}:`, err);
@@ -222,7 +201,7 @@ const FreeBots = observer(() => {
                             <Button onClick={() => window.location.reload()}>{localize('Retry')}</Button>
                         </div>
                     </div>
-                ) : availableBots.length === 0 ? (
+                ) : visibleBots.length === 0 ? (
                     <div className='free-bots__empty'>
                         <Text size='s' color='general'>
                             {localize('No bots available at the moment.')}
@@ -230,12 +209,8 @@ const FreeBots = observer(() => {
                     </div>
                 ) : (
                     <div className='free-bots__grid'>
-                        {availableBots.map((bot, index) => (
-                                <div
-                                    key={index}
-                                    className={`free-bot-card ${bot.badge_class ? `free-bot-card--${bot.badge_class}` : ''}`}
-                                    data-badge={bot.badge_text || 'PREMIUM'}
-                                >
+                        {visibleBots.map((bot, index) => (
+                            <div key={index} className='free-bot-card'>
                                 <div className='free-bot-card__header'>
                                     <Text size='s' weight='bold' className='free-bot-card__title'>
                                         {bot.name}
@@ -252,23 +227,10 @@ const FreeBots = observer(() => {
 
                                     {/* Bot Description */}
                                     <Text size='xs' className='free-bot-card__description'>
-                                        {bot.description}
+                                        {bot.description?.length > 68
+                                            ? `${bot.description.slice(0, 65).trim()}...`
+                                            : bot.description}
                                     </Text>
-                                </div>
-
-                                <div className='free-bot-card__badges'>
-                                    <span className={`free-bot-card__badge free-bot-card__badge--${bot.difficulty.toLowerCase()}`}>
-                                        {bot.difficulty}
-                                    </span>
-                                    <span className='free-bot-card__badge free-bot-card__badge--strategy'>
-                                        {bot.strategy}
-                                    </span>
-                                </div>
-
-                                <div className='free-bot-card__features'>
-                                    {bot.features.map((f, i) => (
-                                        <span key={i} className='free-bot-card__feature-tag'>{f}</span>
-                                    ))}
                                 </div>
 
                                 <Button
@@ -277,7 +239,7 @@ const FreeBots = observer(() => {
                                     primary
                                     has_effect
                                     type='button'
-                                    disabled={!bot.xml}
+                                    disabled={!bot.xml} // Disable if XML not loaded yet
                                 >
                                     {bot.xml ? 'LOAD PREMIUM BOT' : 'LOADING...'}
                                 </Button>

@@ -2,7 +2,7 @@
 
 /** @define dc-drawer */
 .dc-drawer {
-    $toggler-width: 10px;
+    $toggler-width: 16px;
 
     position: fixed;
     will-change: transform;
@@ -69,36 +69,14 @@
 
     &__toggle {
         align-items: center;
-        justify-content: center;
-        border-left: 1px solid var(--brand-secondary);
-        border-right: 1px solid var(--brand-secondary);
+        border-left: 1px solid var(--border-disabled);
+        border-right: 1px solid var(--border-disabled);
         display: flex;
         position: absolute;
-        top: 0;
-        left: 0;
         width: $toggler-width;
         height: 100%;
-        background-color: #7a5c1e;
+        background-color: var(--general-section-5);
         cursor: pointer;
-        z-index: 10;
-        box-shadow: -2px 0 6px rgba(0, 0, 0, 0.35);
-
-        &::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            margin: auto;
-            width: 0;
-            height: 0;
-            border-top: 6px solid transparent;
-            border-bottom: 6px solid transparent;
-            border-right: 8px solid #ffffff;
-            pointer-events: none;
-        }
-
-        &:hover {
-            background-color: #c9a227;
-        }
 
         @include mobile-or-tablet-screen {
             position: unset;
@@ -138,62 +116,11 @@
                 transform: rotate(180deg);
             }
         }
-
-        &--open::after {
-            transform: rotate(180deg);
-        }
     }
 
     &--open {
         @include mobile-or-tablet-screen {
             transform: translateY(calc(-100% + 3.6rem));
-        }
-    }
-
-    // Always-visible floating "reopen" handle that's rendered outside the
-    // drawer flow so it's not affected by any clipping/transform on the
-    // drawer itself.
-    &__reopen {
-        position: fixed;
-        top: 50%;
-        width: 22px;
-        height: 80px;
-        background-color: #7a5c1e;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-        transform: translateY(-50%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        &::after {
-            content: '';
-            width: 0;
-            height: 0;
-            border-top: 7px solid transparent;
-            border-bottom: 7px solid transparent;
-        }
-
-        &--right {
-            right: 0;
-            border-radius: 6px 0 0 6px;
-
-            &::after {
-                border-right: 9px solid #ffffff;
-            }
-        }
-
-        &--left {
-            left: 0;
-            border-radius: 0 6px 6px 0;
-
-            &::after {
-                border-left: 9px solid #ffffff;
-            }
-        }
-
-        &:hover {
-            background-color: #c9a227;
         }
     }
 }

@@ -1,6 +1,5 @@
 import React from 'react';
 import { observer } from 'mobx-react-lite';
-import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { useDevice } from '@deriv-com/ui';
 import { localize } from '@deriv-com/translations';
@@ -10,6 +9,7 @@ const SpeedBotFloatingStop = observer(() => {
     const { dashboard, run_panel } = useStore();
     const { isDesktop } = useDevice();
     const { active_tab } = dashboard;
+    const { DBOT_TABS } = require('@/constants/bot-contents');
 
     // Check if we're on SpeedBot tab and if there's an active contract or running
     const isSpeedBotActive = active_tab === DBOT_TABS.SPEEDBOT;

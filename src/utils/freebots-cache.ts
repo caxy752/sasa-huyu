@@ -3,11 +3,12 @@ import LZString from 'lz-string';
 
 export type TBotsManifestItem = {
     name: string;
-    file: string; // xml filename in /public/xml
+    file: string; // xml filename relative to its source base path
     description?: string;
     difficulty?: string;
     strategy?: string;
     features?: string[];
+    basePath?: string; // optional base path for non-/xml sources such as /xml-uploads/
 };
 
 const XML_CACHE_PREFIX = 'freebots:xml:';
@@ -47,27 +48,36 @@ export const setCachedXml = async (file: string, xml: string) => {
     }
 };
 
-export const fetchXmlWithCache = async (file: string): Promise<string | null> => {
+export const fetchXmlWithCache = async (file: string, basePath?: string): Promise<string | null> => {
+    const cacheKey = basePath ? `${basePath}${file}` : file;
+
     // Check memory cache first
-    if (memoryCache.has(file)) {
-        return memoryCache.get(file)!;
+    if (memoryCache.has(cacheKey)) {
+        return memoryCache.get(cacheKey)!;
     }
 
     // Check persistent cache
-    const cached = await getCachedXml(file);
+    const cached = await getCachedXml(cacheKey);
     if (cached) {
-        memoryCache.set(file, cached); // Store in memory for faster access
+        memoryCache.set(cacheKey, cached); // Store in memory for faster access
         return cached;
     }
 
     try {
-        // 1) Try domain-specific base (set after manifest) else default /xml/
-        const primaryUrl = `${getXmlBase()}${encodeURIComponent(file)}`;
+        const resolveUrl = (sourceFile: string, base: string) => {
+            if (sourceFile.startsWith('/') || sourceFile.startsWith('http')) {
+                return sourceFile;
+            }
+            const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+            return `${normalizedBase}${sourceFile.split('/').map(encodeURIComponent).join('/')}`;
+        };
+
+        const primaryUrl = basePath ? resolveUrl(file, basePath) : resolveUrl(file, getXmlBase());
         let res = await fetch(primaryUrl);
 
-        // 2) Fallback: try default /xml/ if domain-specific path 404s
-        if (!res.ok) {
-            const fallbackUrl = `/xml/${encodeURIComponent(file)}`;
+        // 2) Fallback: try default /xml/ if the primary fails and it isn't already the /xml/ base
+        if (!res.ok && (!basePath || basePath !== '/xml/')) {
+            const fallbackUrl = resolveUrl(file, '/xml/');
             res = await fetch(fallbackUrl);
         }
 
@@ -81,8 +91,8 @@ export const fetchXmlWithCache = async (file: string): Promise<string | null> =>
         const xml = await res.text();
 
         // Store in both caches
-        memoryCache.set(file, xml);
-        await setCachedXml(file, xml);
+        memoryCache.set(cacheKey, xml);
+        await setCachedXml(cacheKey, xml);
         return xml;
     } catch (e: any) {
         // Only log non-404 errors to reduce console noise
@@ -117,37 +127,37 @@ export const getBotsManifest = async (): Promise<TBotsManifestItem[] | null> => 
         // Try domain-specific manifest first
         let res = await fetch(`/xml/${encodeURIComponent(domain)}/bots.json`, { cache: 'force-cache' });
         if (!res.ok) {
-            // Fallback to generic manifest
-            res = await fetch('/xml/bots.json', { cache: 'force-cache' });
+            // Fallback to default manifest when generic /xml/bots.json is not available
+            res = await fetch('/xml/default/bots.json', { cache: 'force-cache' });
         }
         if (!res.ok) return null;
 
-        // Guard against HTML fallback responses (e.g. CDN 404 page)
-        const contentType = res.headers.get('content-type') || '';
-        if (!contentType.includes('json')) {
-            console.warn('freebots-cache:getBotsManifest non-JSON response, skipping');
-            return null;
-        }
-
-        let data: TBotsManifestItem[];
-        try {
-            data = (await res.json()) as TBotsManifestItem[];
-        } catch {
-            console.warn('freebots-cache:getBotsManifest JSON parse failed, returning empty');
-            return [];
-        }
+        const data = (await res.json()) as TBotsManifestItem[];
 
         // If we loaded a domain-specific file, set base for XML fetches
         if (res.url.includes(`/${domain}/bots.json`)) {
             setXmlBase(`/xml/${domain}/`);
         } else {
-            setXmlBase('/xml/');
+            setXmlBase('/xml/default/');
         }
 
         return data;
     } catch (e) {
         // eslint-disable-next-line no-console
         console.warn('freebots-cache:getBotsManifest error', e);
+        return null;
+    }
+};
+
+export const getXmlUploadsManifest = async (): Promise<TBotsManifestItem[] | null> => {
+    try {
+        const res = await fetch('/xml-uploads/bots.json', { cache: 'force-cache' });
+        if (!res.ok) return null;
+        const data = (await res.json()) as TBotsManifestItem[];
+        return data.map(item => ({ ...item, basePath: '/xml-uploads/' }));
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('freebots-cache:getXmlUploadsManifest error', e);
         return null;
     }
 };

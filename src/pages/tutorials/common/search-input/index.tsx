@@ -45,14 +45,14 @@ const SearchInput = observer(({ faq_value, setFaqSearchContent, prev_active_tuto
         // Nuclear option - force white border and watch for Chrome changes
         if (input_ref.current) {
             const input = input_ref.current as HTMLInputElement;
-            
+
             // Remove all validation
             input.removeAttribute('required');
             input.removeAttribute('pattern');
             input.setAttribute('novalidate', '');
             input.setAttribute('formnovalidate', '');
             input.setAttribute('autocomplete', 'off');
-            
+
             // Force white border function - nuclear option
             const forceWhite = () => {
                 if (input) {
@@ -78,30 +78,30 @@ const SearchInput = observer(({ faq_value, setFaqSearchContent, prev_active_tuto
                     input.style.setProperty('box-shadow', 'none', 'important');
                 }
             };
-            
+
             // Force immediately
             forceWhite();
-            
+
             // Watch for style changes (Chrome validation)
             const observer = new MutationObserver(() => {
                 forceWhite();
             });
-            
+
             observer.observe(input, {
                 attributes: true,
                 attributeFilter: ['style', 'class'],
-                subtree: false
+                subtree: false,
             });
-            
+
             // Force every 50ms
             const interval = setInterval(forceWhite, 50);
-            
+
             // Force on all events
             const events = ['focus', 'blur', 'input', 'change', 'keyup', 'keydown', 'click'];
             events.forEach(event => {
                 input.addEventListener(event, forceWhite, true);
             });
-            
+
             return () => {
                 clearInterval(interval);
                 observer.disconnect();

@@ -56,16 +56,16 @@ window.Blockly.JavaScript.javascriptGenerator.forBlock.vh_settings = function (b
     const takeProfit = Number(block.getFieldValue('TAKE_PROFIT'));
     const stopLoss = Number(block.getFieldValue('STOP_LOSS'));
 
-    // Note: Currently TradeEngine vh_state only uses threshold. 
-    // Other settings like martingaleFactor can be added to vh_state if needed.
     const code = `
-Bot.setVirtualHook({
+// Virtual Hook: apply settings
+if (!window.__VH__) window.__VH__ = { enabled: false, config: {} };
+window.__VH__.config = {
   martingaleFactor: ${martingale},
   maxSteps: ${maxSteps},
   minTradesOnReal: ${minTradesReal},
   takeProfit: ${takeProfit},
   stopLoss: ${stopLoss},
-});
+};
 `;
     return code;
 };

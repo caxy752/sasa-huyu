@@ -158,6 +158,16 @@ const PopoverContent = ({ contract }: TPopoverContent) => (
 );
 
 const Transaction = ({ contract, active_transaction_id, onClickTransaction }: TTransaction) => {
+    const isCompleted =
+        contract?.is_completed ||
+        contract?.status !== 'open' ||
+        !!contract?.sell_price ||
+        !!contract?.exit_tick ||
+        !!contract?.exit_tick_time ||
+        !!contract?.is_sold ||
+        (typeof contract?.profit === 'number' && contract.profit !== 0);
+
+    const buyPrice = contract?.buy_price || (contract as any)?.stake || (contract as any)?.amount;
     return (
         <Popover
             zIndex={popover_zindex.TRANSACTION.toString()}
@@ -219,23 +229,14 @@ const Transaction = ({ contract, active_transaction_id, onClickTransaction }: TT
                 </div>
                 <div className='transactions__cell transactions__stake'>
                     {contract ? (
-                        <Money amount={contract.buy_price} currency={contract.currency} show_currency />
+                        <Money amount={buyPrice} currency={contract.currency} show_currency />
                     ) : (
                         <TransactionFieldLoader />
                     )}
                 </div>
                 <div className='transactions__cell transactions__profit'>
-                    {contract?.is_completed ? (
-                        contract?.is_virtual && contract?.display_name ? (
-                            <div
-                                className={classNames({
-                                    'transactions__profit--win': contract.display_name.includes('Win'),
-                                    'transactions__profit--loss': contract.display_name.includes('Loss'),
-                                })}
-                            >
-                                {contract.display_name}
-                            </div>
-                        ) : (
+                    {contract ? (
+                        isCompleted ? (
                             <div
                                 className={classNames({
                                     'transactions__profit--win': contract?.profit && contract?.profit >= 0,
@@ -248,6 +249,10 @@ const Transaction = ({ contract, active_transaction_id, onClickTransaction }: TT
                                     show_currency
                                 />
                             </div>
+                        ) : (
+                            // Do not display the "Pending" label for in-flight contracts.
+                            // Keep the cell empty to show contracts immediately as normal.
+                            <div />
                         )
                     ) : (
                         <TransactionFieldLoader />

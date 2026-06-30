@@ -26,7 +26,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
     const { active_tab } = dashboard;
     const { has_active_bot, has_saved_bots } = blockly_store;
     const { isMobile } = useDevice();
-    
+
     // Don't show TradeAnimation (Run button) on DTrader tab - manual trading only
     if (active_tab === DBOT_TABS.DTRADER) {
         return null;
@@ -38,10 +38,8 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
         is_stop_button_visible,
         is_stop_button_disabled,
         is_running,
-        is_bot_paused,
         onRunButtonClick,
         onStopBotClick,
-        toggleBotPause,
         performSelfExclusionCheck,
     } = run_panel;
     const { account_status } = client;
@@ -146,21 +144,13 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                 icon: <LabelPairedSquareLgFillIcon fill='#fff' />,
             };
         }
-        if (is_bot_paused && !is_stop_button_visible) {
-            return {
-                id: 'db-animation__resume-button',
-                class: 'animation__run-button',
-                text: <Localize i18n_default_text='Resume' />,
-                icon: <LabelPairedPlayLgFillIcon fill='#fff' />,
-            };
-        }
         return {
             id: 'db-animation__run-button',
             class: 'animation__run-button',
             text: <Localize i18n_default_text='Run' />,
             icon: <LabelPairedPlayLgFillIcon fill='#fff' />,
         };
-    }, [is_stop_button_visible, is_bot_paused]);
+    }, [is_stop_button_visible]);
     const show_overlay = should_show_overlay && is_contract_completed;
 
     // Fix TypeScript error by ensuring active_tab is a number
@@ -212,7 +202,9 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                             className={button_props.class}
                             id={button_props.id}
                             icon={button_props.icon}
-                            onClick={() => {}}
+                            onClick={() => {
+                                // Disabled button, no action
+                            }}
                             has_effect
                             {...(is_stop_button_visible || !is_unavailable_for_payment_agent
                                 ? { primary: true }
@@ -229,12 +221,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                     id={button_props.id}
                     icon={button_props.icon}
                     onClick={() => {
-                        if (is_bot_paused && !is_stop_button_visible) {
-                            toggleBotPause();
-                            onRunButtonClick();
-                            rudderStackSendRunBotEvent({ subpage_name: safeActiveTab } as any);
-                            return;
-                        }
+                        // CRITICAL: Prevent multiple clicks when already running
                         if (is_running && !is_stop_button_visible) {
                             console.warn('[Trade Animation] ⚠️ Bot is already running, ignoring click');
                             return;
@@ -245,6 +232,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                             return;
                         }
                         onRunButtonClick();
+                        // Cast to any to avoid TypeScript error with subpage_name
                         rudderStackSendRunBotEvent({ subpage_name: safeActiveTab } as any);
                     }}
                     has_effect
@@ -254,18 +242,6 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                 >
                     {button_props.text}
                 </Button>
-            )}
-            {is_stop_button_visible && (
-                <button
-                    className='animation__pause-button'
-                    onClick={() => {
-                        toggleBotPause();
-                        onStopBotClick();
-                    }}
-                    title={localize('Pause the bot after this contract completes')}
-                >
-                    ⏸
-                </button>
             )}
             <div
                 className={classNames('animation__container', className, {

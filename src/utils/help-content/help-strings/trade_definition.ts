@@ -23,7 +23,5 @@ export default {
         localize('Place blocks here to perform tasks once when your bot starts running.'),
         localize('8. Trade Options'),
         localize('The desired duration, stake, prediction, and/or barrier(s) for the contract is defined here.'),
-        localize('9. Virtual Hook'),
-        localize('Enable Virtual Hook to run simulated trades before switching to real trades. Set the Loss Threshold to determine how many consecutive virtual losses are required before the bot starts real trading. Once a real trade wins, the bot switches back to virtual mode.'),
     ],
 };

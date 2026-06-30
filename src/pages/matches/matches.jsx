@@ -18,6 +18,7 @@ const Matches = observer(() => {
     // State Management
     const [market, setMarket] = useState('');
     const [ticks, setTicks] = useState(1000);
+    const [currentPrice, setCurrentPrice] = useState('--');
     const [currentDigit, setCurrentDigit] = useState('--');
     const [digitStats, setDigitStats] = useState([]);
     const [symbols, setSymbols] = useState([]);
@@ -30,7 +31,7 @@ const Matches = observer(() => {
     const [takeProfit, setTakeProfit] = useState(5);
     const [stopLoss, setStopLoss] = useState(10);
     const [enableEntryPoint, setEnableEntryPoint] = useState(true);
-    const [lastNDigits, setLastNDigits] = useState(5);
+    const [lastNDigits, setLastNDigits] = useState(2);
     const [entryCondition, setEntryCondition] = useState('most');
     const [whatToTrade, setWhatToTrade] = useState('most');
     const [predictionMode, setPredictionMode] = useState('most');
@@ -40,6 +41,7 @@ const Matches = observer(() => {
     const allDigits = useRef([]);
     const isSubscribed = useRef(false);
     const tickSubscription = useRef(null);
+    const lastTickEpoch = useRef(null);
     const pipSize = useRef(4);
     const autoTradingInterval = useRef(null);
     const contractSubscriptions = useRef([]);
@@ -47,6 +49,7 @@ const Matches = observer(() => {
     const isAutoTrading = useRef(false);
     const entryConditionMet = useRef(false);
     const isProcessingTrade = useRef(false);
+    const messageListener = useRef(null);
 
     // Store and API setup
     const store = useStore();
@@ -74,15 +77,19 @@ const Matches = observer(() => {
                 if (error) throw error;
                 const syn = (active_symbols || [])
                     .filter(s => {
-                        // Include Volatility markets
-                        const isVolatility = /Volatility/i.test(s.display_name) || /^R_/.test(s.symbol);
-                        // Include Jump Index markets
-                        const isJumpIndex = /Jump/i.test(s.display_name) || /^JD/.test(s.symbol);
-                        // Must be synthetic market
-                        const isSynthetic = /synthetic/i.test(s.market) || /^R_/.test(s.symbol) || /^JD/.test(s.symbol);
-                        return (isVolatility || isJumpIndex) && isSynthetic;
+                        // Include all Volatility Index markets, including standard and (1s) variants
+                        return /Volatility.*Index/i.test(s.display_name);
                     })
-                    .map(s => ({ symbol: s.symbol, display_name: s.display_name }));
+                    .map(s => ({ symbol: s.symbol, display_name: s.display_name }))
+                    // Sort by index size and put standard indices before 1s variants for the same number
+                    .sort((a, b) => {
+                        const numA = parseInt(a.display_name.match(/\d+/)?.[0]) || 0;
+                        const numB = parseInt(b.display_name.match(/\d+/)?.[0]) || 0;
+                        if (numA !== numB) return numA - numB;
+                        const isOneA = /\(1s\)/i.test(a.display_name);
+                        const isOneB = /\(1s\)/i.test(b.display_name);
+                        return Number(isOneA) - Number(isOneB);
+                    });
                 setSymbols(syn);
                 if (syn[0]?.symbol) {
                     setMarket(prev => prev || syn[0].symbol);
@@ -126,6 +133,23 @@ const Matches = observer(() => {
         };
     }, [active_tab]);
 
+    const getActiveContractAccountId = () => {
+        if (typeof window === 'undefined') return null;
+        return localStorage.getItem('active_loginid');
+    };
+
+    const normalizeContractEvent = contract => {
+        if (!contract || typeof contract !== 'object') return contract;
+        const normalized = { ...contract };
+        if (!normalized.accountID && normalized.account_id) {
+            normalized.accountID = normalized.account_id;
+        }
+        if (!normalized.accountID) {
+            normalized.accountID = getActiveContractAccountId();
+        }
+        return normalized;
+    };
+
     // Update predictions when default stake changes
     useEffect(() => {
         if (useDefaultStake) {
@@ -147,7 +171,7 @@ const Matches = observer(() => {
                 setPredictionMode('least');
                 selectDigits('least');
             } else if (whatToTrade === 'opposite') {
-                const mode = entryCondition === 'most' ? 'least' : 'most';
+                const mode = entryCondition === 'most' ? 'least' : entryCondition === 'least' ? 'most' : 'most';
                 setPredictionMode(mode);
                 selectDigits(mode);
             } else {
@@ -164,6 +188,14 @@ const Matches = observer(() => {
         if (market && ticks && apiRef.current) {
             subscribeToTicks();
             return () => {
+                if (messageListener.current && apiRef.current?.connection) {
+                    try {
+                        apiRef.current.connection.removeEventListener('message', messageListener.current);
+                    } catch (e) {
+                        console.error('Error removing message listener:', e);
+                    }
+                    messageListener.current = null;
+                }
                 if (tickSubscription.current) {
                     try {
                         if (typeof tickSubscription.current === 'string' && apiRef.current) {
@@ -192,7 +224,16 @@ const Matches = observer(() => {
 
         const api = apiRef.current;
 
-        // Clean up existing subscription
+        // Clean up existing subscription and listener
+        if (messageListener.current && api.connection) {
+            try {
+                api.connection.removeEventListener('message', messageListener.current);
+            } catch (e) {
+                console.error('Error removing message listener:', e);
+            }
+            messageListener.current = null;
+        }
+
         if (tickSubscription.current) {
             try {
                 if (typeof tickSubscription.current === 'string') {
@@ -207,6 +248,10 @@ const Matches = observer(() => {
         }
         isSubscribed.current = false;
         allDigits.current = [];
+        recentDigits.current = [];
+        lastTickEpoch.current = null;
+        setCurrentPrice('--');
+        setCurrentDigit('--');
 
         const tickCount = typeof ticks === 'string' ? parseInt(ticks) : ticks;
         if (!tickCount || tickCount < 1) {
@@ -225,10 +270,16 @@ const Matches = observer(() => {
                 try {
                     const data = JSON.parse(evt.data);
                     if (data?.msg_type === 'tick' && data?.tick?.symbol === market) {
+                        const epoch = data.tick.epoch || data.tick.tick_time || null;
+                        if (epoch && lastTickEpoch.current === epoch) {
+                            return;
+                        }
                         const quote = data.tick.quote;
                         const formattedPrice = parseFloat(quote).toFixed(pipSize.current || 4);
                         const digit = parseInt(formattedPrice[formattedPrice.length - 1]);
 
+                        lastTickEpoch.current = epoch;
+                        setCurrentPrice(formattedPrice);
                         setCurrentDigit(digit);
                         allDigits.current.push(digit);
                         recentDigits.current.push(digit);
@@ -246,8 +297,9 @@ const Matches = observer(() => {
                     // Ignore parse errors
                 }
             };
-
             api.connection?.addEventListener('message', onMsg);
+            // track the current listener so we can remove it reliably on resubscribe/unmount
+            messageListener.current = onMsg;
             isSubscribed.current = true;
 
             // Also fetch historical ticks for initial analysis
@@ -333,6 +385,10 @@ const Matches = observer(() => {
             const allMost = lastN.every(d => mostDigits.includes(d));
             const allLeast = lastN.every(d => leastDigits.includes(d));
             return allMost || allLeast;
+        } else if (entryCondition === 'odd') {
+            return lastN.every(d => d % 2 === 1);
+        } else if (entryCondition === 'even') {
+            return lastN.every(d => d % 2 === 0);
         } else {
             const targetDigits = entryCondition === 'most' ? mostDigits : leastDigits;
             return lastN.every(d => targetDigits.includes(d));
@@ -423,6 +479,7 @@ const Matches = observer(() => {
                             if (transactions?.onBotContractEvent) {
                                 transactions.onBotContractEvent({
                                     contract_id: buy.contract_id,
+                                    accountID: getActiveContractAccountId(),
                                     transaction_ids: { buy: buy.transaction_id },
                                     buy_price: buy.buy_price,
                                     currency: curr,
@@ -456,7 +513,7 @@ const Matches = observer(() => {
                             // Push initial snapshot if present
                             if (pocInit && String(pocInit?.contract_id || '') === String(buy.contract_id)) {
                                 if (transactions?.onBotContractEvent) {
-                                    transactions.onBotContractEvent(pocInit);
+                                    transactions.onBotContractEvent(normalizeContractEvent(pocInit));
                                 }
                                 if (run_panel) {
                                     run_panel.setHasOpenContract(true);
@@ -471,7 +528,7 @@ const Matches = observer(() => {
                                         const poc = data.proposal_open_contract;
                                         if (String(poc?.contract_id || '') === String(buy.contract_id)) {
                                             if (transactions?.onBotContractEvent) {
-                                                transactions.onBotContractEvent(poc);
+                                                transactions.onBotContractEvent(normalizeContractEvent(poc));
                                             }
                                             if (run_panel) {
                                                 run_panel.setHasOpenContract(true);
@@ -602,7 +659,13 @@ const Matches = observer(() => {
                 const allMost = lastN.every(d => mostDigits.includes(d));
                 selectDigits(allMost ? 'least' : 'most');
             } else if (enableEntryPoint && whatToTrade === 'opposite') {
-                selectDigits(entryCondition === 'most' ? 'least' : 'most');
+                if (entryCondition === 'most') {
+                    selectDigits('least');
+                } else if (entryCondition === 'least') {
+                    selectDigits('most');
+                } else {
+                    selectDigits(predictionMode === 'most' ? 'least' : 'most');
+                }
             } else if (predictionMode !== 'custom') {
                 selectDigits(predictionMode === 'most' || predictionMode === 'least' ? predictionMode : 'most');
             }
@@ -654,6 +717,7 @@ const Matches = observer(() => {
                             if (transactions?.onBotContractEvent) {
                                 transactions.onBotContractEvent({
                                     contract_id: buy.contract_id,
+                                    accountID: getActiveContractAccountId(),
                                     transaction_ids: { buy: buy.transaction_id },
                                     buy_price: buy.buy_price,
                                     currency: curr,
@@ -687,7 +751,7 @@ const Matches = observer(() => {
                             // Push initial snapshot if present
                             if (pocInit && String(pocInit?.contract_id || '') === String(contractId)) {
                                 if (transactions?.onBotContractEvent) {
-                                    transactions.onBotContractEvent(pocInit);
+                                    transactions.onBotContractEvent(normalizeContractEvent(pocInit));
                                 }
                                 if (run_panel) {
                                     run_panel.setHasOpenContract(true);
@@ -702,7 +766,7 @@ const Matches = observer(() => {
                                         const poc = data.proposal_open_contract;
                                         if (String(poc?.contract_id || '') === String(contractId)) {
                                             if (transactions?.onBotContractEvent) {
-                                                transactions.onBotContractEvent(poc);
+                                                transactions.onBotContractEvent(normalizeContractEvent(poc));
                                             }
                                             if (run_panel) {
                                                 run_panel.setHasOpenContract(true);
@@ -809,55 +873,68 @@ const Matches = observer(() => {
             {/* Header with Title */}
             <div className='matches-header'>
                 <div className='matches-title'>
-                    <h2>{localize('MATCHES GAME CHANGER🔥')}</h2>
+                    <h2>{localize('Extra Doh Matches Tool')}</h2>
                 </div>
 
                 {/* Controls */}
                 <div className='matches-controls'>
-                    <div className='control-group'>
-                        <label>{localize('Market')}:</label>
-                        <select
-                            value={market}
-                            onChange={e => setMarket(e.target.value)}
-                            disabled={isPlacingTrades || isAutoTradingGlobal}
-                        >
-                            {symbols.map(symbol => (
-                                <option key={symbol.symbol} value={symbol.symbol}>
-                                    {symbol.display_name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    <div className='top-controls'>
+                        <div className='control-group market-control'>
+                            <label>{localize('Market')}:</label>
+                            <select
+                                value={market}
+                                onChange={e => setMarket(e.target.value)}
+                                disabled={isPlacingTrades || isAutoTradingGlobal}
+                            >
+                                {symbols.map(symbol => (
+                                    <option key={symbol.symbol} value={symbol.symbol}>
+                                        {symbol.display_name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
 
-                    <div className='control-group'>
-                        <label>{localize('Ticks')}:</label>
-                        <input
-                            type='number'
-                            value={ticks}
-                            onChange={e => {
-                                const value = e.target.value;
-                                if (value === '') setTicks('');
-                                else {
-                                    const num = parseInt(value);
-                                    if (!isNaN(num) && num >= 1 && num <= 5000) {
-                                        setTicks(num);
+                        <div className='control-group digit-control'>
+                            <div className='current-price'>
+                                {currentPrice === '--' ? (
+                                    <span className='current-price-placeholder'>--</span>
+                                ) : (
+                                    <>
+                                        <span className='price-prefix'>{currentPrice.slice(0, -1)}</span>
+                                        <span className='price-last-digit current-digit-blue'>
+                                            {currentPrice.slice(-1)}
+                                        </span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className='control-group ticks-control'>
+                            <label>{localize('Ticks')}:</label>
+                            <input
+                                type='number'
+                                value={ticks}
+                                onChange={e => {
+                                    const value = e.target.value;
+                                    if (value === '') setTicks('');
+                                    else {
+                                        const num = parseInt(value);
+                                        if (!isNaN(num) && num >= 1 && num <= 5000) {
+                                            setTicks(num);
+                                        }
                                     }
-                                }
-                            }}
-                            onBlur={e => {
-                                if (e.target.value === '' || parseInt(e.target.value) < 1) {
-                                    setTicks(1000);
-                                }
-                            }}
-                            min={1}
-                            max={5000}
-                            placeholder='1000'
-                            disabled={isPlacingTrades || isAutoTradingGlobal}
-                        />
-                    </div>
-
-                    <div className='control-group'>
-                        <span className='current-digit current-digit-blue'>{currentDigit}</span>
+                                }}
+                                onBlur={e => {
+                                    if (e.target.value === '' || parseInt(e.target.value) < 1) {
+                                        setTicks(1000);
+                                    }
+                                }}
+                                min={1}
+                                max={5000}
+                                placeholder='1000'
+                                disabled={isPlacingTrades || isAutoTradingGlobal}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -919,69 +996,71 @@ const Matches = observer(() => {
                     {localize('Predictions')} ({enabledCount}/10 Active)
                 </h3>
 
-                {/* Stake Control */}
-                <div className='stake-control'>
-                    <div className='toggle-container'>
-                        <span className='toggle-label'>{localize('Use Default Stake')}:</span>
-                        <label className='toggle-switch'>
+                <div className='top-card-row'>
+                    {/* Stake Control */}
+                    <div className='stake-control'>
+                        <div className='toggle-container'>
+                            <span className='toggle-label'>{localize('Use Default Stake')}:</span>
+                            <label className='toggle-switch'>
+                                <input
+                                    type='checkbox'
+                                    checked={useDefaultStake}
+                                    onChange={e => setUseDefaultStake(e.target.checked)}
+                                    disabled={isPlacingTrades || isAutoTradingGlobal}
+                                />
+                                <span className='slider'></span>
+                            </label>
+                        </div>
+
+                        <div className='default-stake-input'>
+                            <label>{localize('Default Stake')}:</label>
                             <input
-                                type='checkbox'
-                                checked={useDefaultStake}
-                                onChange={e => setUseDefaultStake(e.target.checked)}
+                                type='number'
+                                value={defaultStake}
+                                onChange={e => setDefaultStake(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                step={0.01}
                                 disabled={isPlacingTrades || isAutoTradingGlobal}
                             />
-                            <span className='slider'></span>
-                        </label>
+                        </div>
                     </div>
 
-                    <div className='default-stake-input'>
-                        <label>{localize('Default Stake')}:</label>
-                        <input
-                            type='number'
-                            value={defaultStake}
-                            onChange={e => setDefaultStake(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                            step={0.01}
-                            disabled={isPlacingTrades || isAutoTradingGlobal}
-                        />
-                    </div>
-                </div>
+                    {/* Advanced Controls */}
+                    <div className='advanced-controls'>
+                        <div className='toggle-container'>
+                            <span className='toggle-label'>{localize('Alternating Mode')}:</span>
+                            <label className='toggle-switch'>
+                                <input
+                                    type='checkbox'
+                                    checked={alternatingMode}
+                                    onChange={e => setAlternatingMode(e.target.checked)}
+                                    disabled={isPlacingTrades || isAutoTradingGlobal}
+                                />
+                                <span className='slider'></span>
+                            </label>
+                            <span className='alternating-hint'>
+                                (Most ↔ Least)
+                                {alternatingMode && (
+                                    <span className='current-mode'>
+                                        {' '}
+                                        - Current: <strong>{alternatingModeState === 'most' ? 'MOST' : 'LEAST'}</strong>
+                                    </span>
+                                )}
+                            </span>
+                        </div>
 
-                {/* Advanced Controls */}
-                <div className='advanced-controls'>
-                    <div className='toggle-container'>
-                        <span className='toggle-label'>{localize('Alternating Mode')}:</span>
-                        <label className='toggle-switch'>
-                            <input
-                                type='checkbox'
-                                checked={alternatingMode}
-                                onChange={e => setAlternatingMode(e.target.checked)}
-                                disabled={isPlacingTrades || isAutoTradingGlobal}
-                            />
-                            <span className='slider'></span>
-                        </label>
-                        <span className='alternating-hint'>
-                            (Most ↔ Least)
-                            {alternatingMode && (
-                                <span className='current-mode'>
-                                    {' '}
-                                    - Current: <strong>{alternatingModeState === 'most' ? 'MOST' : 'LEAST'}</strong>
-                                </span>
-                            )}
-                        </span>
-                    </div>
-
-                    <div className='toggle-container'>
-                        <span className='toggle-label'>{localize('Enable Entry Point')}:</span>
-                        <label className='toggle-switch'>
-                            <input
-                                type='checkbox'
-                                checked={enableEntryPoint}
-                                onChange={e => setEnableEntryPoint(e.target.checked)}
-                                disabled={isPlacingTrades || isAutoTradingGlobal}
-                            />
-                            <span className='slider'></span>
-                        </label>
-                        <span className='alternating-hint'>(Wait for condition before trading)</span>
+                        <div className='toggle-container'>
+                            <span className='toggle-label'>{localize('Enable Entry Point')}:</span>
+                            <label className='toggle-switch'>
+                                <input
+                                    type='checkbox'
+                                    checked={enableEntryPoint}
+                                    onChange={e => setEnableEntryPoint(e.target.checked)}
+                                    disabled={isPlacingTrades || isAutoTradingGlobal}
+                                />
+                                <span className='slider'></span>
+                            </label>
+                            <span className='alternating-hint'>(Wait for condition before trading)</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1007,7 +1086,7 @@ const Matches = observer(() => {
                                     }}
                                     onBlur={e => {
                                         if (e.target.value === '' || parseInt(e.target.value) < 1) {
-                                            setLastNDigits(5);
+                                            setLastNDigits(2);
                                         }
                                     }}
                                     min={1}
@@ -1025,11 +1104,13 @@ const Matches = observer(() => {
                                 >
                                     <option value='most'>{localize('All Most Appearing')}</option>
                                     <option value='least'>{localize('All Least Appearing')}</option>
+                                    <option value='odd'>{localize('All Are Odd')}</option>
+                                    <option value='even'>{localize('All Are Even')}</option>
                                     <option value='both'>{localize('All Most OR All Least (Trade Opposite)')}</option>
                                 </select>
                             </div>
 
-                            {(entryCondition === 'most' || entryCondition === 'least') && (
+                            {entryCondition !== 'both' && (
                                 <div className='control-group'>
                                     <label>{localize('What to Trade')}:</label>
                                     <select

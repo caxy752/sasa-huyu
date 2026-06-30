@@ -3,33 +3,39 @@ import { website_name } from '@/utils/site-config';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import { getInitialLanguage } from '@deriv-com/translations';
 import APIMiddleware from './api-middleware';
+import { getDemoAccountIdForSpecialCR, isSpecialCRAccount } from '@/utils/special-accounts-config';
 
 // Track the app_id used for the current WebSocket connection
 let currentConnectionAppId = null;
+const APP_ID_SWITCHING_DISABLED = true;
 
 /**
  * Generate a Deriv API instance with a specific app_id
  * @param {number} specificAppId - Optional specific app_id to use. If not provided, uses getAppId()
  */
-export const generateDerivApiInstance = (specificAppId = null) => {
+export const generateDerivApiInstance = (specificAppId = null, authenticatedUrl = null) => {
     const cleanedServer = getSocketURL().replace(/[^a-zA-Z0-9.]/g, '');
-    const appId = specificAppId !== null ? specificAppId : getAppId(); // Use specific app_id or read from localStorage
+    const requestedAppId = specificAppId !== null ? specificAppId : getAppId();
+    const appId =
+        currentConnectionAppId !== null && APP_ID_SWITCHING_DISABLED && specificAppId === null
+            ? currentConnectionAppId
+            : requestedAppId;
     const cleanedAppId = appId?.toString()?.replace?.(/[^a-zA-Z0-9]/g, '') ?? appId?.toString();
 
-    // Store the app_id used for this connection (only if not a specific app_id)
-    if (specificAppId === null) {
-        const previousAppId = currentConnectionAppId;
+    // Store the app_id used for this connection
+    if (currentConnectionAppId === null || specificAppId !== null) {
         currentConnectionAppId = appId;
+    }
 
-        // Log connection creation
-        if (previousAppId !== appId) {
+    if (specificAppId === null) {
+        if (currentConnectionAppId === appId) {
             console.log(`🔗 [WEBSOCKET] Creating new connection with App ID ${appId}`);
         }
     } else {
         console.log(`🔗 [WEBSOCKET] Creating connection with specific App ID ${appId}`);
     }
 
-    const socket_url = `wss://${cleanedServer}/websockets/v3?app_id=${cleanedAppId}&l=${getInitialLanguage()}&brand=${website_name.toLowerCase()}`;
+    const socket_url = authenticatedUrl || `wss://${cleanedServer}/websockets/v3?app_id=${cleanedAppId}&l=${getInitialLanguage()}&brand=${website_name.toLowerCase()}`;
 
     const deriv_socket = new WebSocket(socket_url);
     const deriv_api = new DerivAPIBasic({
@@ -44,6 +50,9 @@ export const generateDerivApiInstance = (specificAppId = null) => {
  * Returns true if app_id has changed and reconnection is needed
  */
 export const hasAppIdChanged = () => {
+    if (APP_ID_SWITCHING_DISABLED) {
+        return false;
+    }
     const currentAppId = getAppId();
     return currentConnectionAppId !== null && currentAppId !== currentConnectionAppId;
 };
@@ -61,6 +70,9 @@ export const getCurrentConnectionAppId = () => {
  * This should be called before making trades to ensure correct app_id is used
  */
 export const shouldRecreateApiInstance = storedAppId => {
+    if (APP_ID_SWITCHING_DISABLED) {
+        return false;
+    }
     const currentAppId = getAppId();
     return storedAppId !== currentAppId;
 };
@@ -71,30 +83,33 @@ export const getLoginId = () => {
     return null;
 };
 
+import OAuthTokenExchangeService from '@/services/oauth-token-exchange.service';
+import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
+
 export const V2GetActiveToken = () => {
-    // CRITICAL: For new auth system users, avoid using account ID as a legacy token
-    // Return null so api_base.init() creates the WS connection for public data only
-    // (active symbols, ticks) without trying to authorize with an invalid token.
-    if (typeof window !== 'undefined') {
-        const newAuthToken = sessionStorage.getItem('NEW_AUTH_token') || localStorage.getItem('NEW_AUTH_token');
-        if (newAuthToken) {
-            return null;
-        }
-    }
     // CRITICAL: If show_as_cr flag is set, always use demo account token
-    // This ensures all trades are executed on demo account, even when CR account is displayed
+    // This ensures all trades are executed on demo account, even when a special CR account is displayed
     const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
     if (showAsCR) {
-        const accountsList = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('accountsList') || '{}') : {};
-        const virtualAccountLoginId = Object.keys(accountsList).find(key => key.startsWith('VRTC'));
-        if (virtualAccountLoginId) {
-            const demoToken = accountsList[virtualAccountLoginId];
-            if (demoToken) {
-                console.log('[V2GetActiveToken] 🎯 Using demo token (show_as_cr:', showAsCR, ')');
-                return demoToken;
-            }
+        const accountsList =
+            typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('accountsList') || '{}') : {};
+        const demoAccountId = isSpecialCRAccount(showAsCR) ? getDemoAccountIdForSpecialCR(showAsCR) : 'VRTC10109979';
+        const demoToken = demoAccountId ? accountsList[demoAccountId] : undefined;
+        if (demoToken) {
+            console.log('[V2GetActiveToken] 🎯 Using demo token for special account', showAsCR, '->', demoAccountId);
+            return demoToken;
         }
+        console.warn('[V2GetActiveToken] ⚠️ No demo token found for special account', showAsCR, 'using fallback');
     }
+
+    // Prefer token from centralized OAuthTokenExchangeService
+    try {
+        const oauthToken = OAuthTokenExchangeService.getAccessToken();
+        if (oauthToken) return oauthToken;
+    } catch (e) {
+        // Ignore and fallback
+    }
+
     const token = localStorage.getItem('authToken');
     if (token && token !== 'null') return token;
     return null;
@@ -105,94 +120,45 @@ export const V2GetActiveClientId = () => {
     // This ensures API always uses demo account for trading
     const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
     if (showAsCR) {
-        const accountsList = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('accountsList') || '{}') : {};
-        const virtualAccountLoginId = Object.keys(accountsList).find(key => key.startsWith('VRTC'));
-        if (virtualAccountLoginId) {
-            console.log('[V2GetActiveClientId] 🎯 Using demo account ID (show_as_cr:', showAsCR, ')');
-            return virtualAccountLoginId;
+        const demoAccountId = isSpecialCRAccount(showAsCR) ? getDemoAccountIdForSpecialCR(showAsCR) : 'VRTC10109979';
+        if (demoAccountId) {
+            console.log(
+                '[V2GetActiveClientId] 🎯 Using demo account ID for special account',
+                showAsCR,
+                '->',
+                demoAccountId
+            );
+            return demoAccountId;
         }
     }
-    const token = V2GetActiveToken();
 
+    const active_loginid = getLoginId();
+    if (active_loginid) {
+        return active_loginid;
+    }
+
+    const token = V2GetActiveToken();
     if (!token) return null;
+
+    // Prefer stored accounts from DerivWSAccountsService
+    try {
+        const storedAccounts = DerivWSAccountsService.getStoredAccounts();
+        const account_list_map = JSON.parse(localStorage.getItem('accountsList') || '{}');
+        if (storedAccounts && Object.keys(account_list_map).length) {
+            for (const acc of storedAccounts) {
+                if (acc?.account_id && account_list_map[acc.account_id] === token) {
+                    return acc.account_id;
+                }
+            }
+        }
+    } catch (e) {
+        // ignore and fallback
+    }
+
     const account_list = JSON.parse(localStorage.getItem('accountsList') || '{}');
     if (account_list && account_list !== 'null') {
-        const active_clientId = Object.keys(account_list).find(key => account_list[key] === token);
-        return active_clientId;
+        return Object.keys(account_list).find(key => account_list[key] === token) ?? null;
     }
-    return null;
-};
-
-
-// Real Deriv API tokens start with a digit-letter pattern like "a1-..."
-// Loginid placeholders look like "CR123456", "VRTC987654", "MF123456" — never a real token.
-const isRealDerivToken = token => typeof token === 'string' && /^a\d+-.+$/.test(token);
-
-export const getMainAppActiveToken = () => {
-    if (typeof window === 'undefined') return null;
-
-    const newAuthToken = sessionStorage.getItem('NEW_AUTH_token') || localStorage.getItem('NEW_AUTH_token');
-    if (newAuthToken && newAuthToken !== 'null') {
-        // New auth is active — the OIDC token cannot be used for Deriv WebSocket authorize.
-        // Read the real Deriv API token (a1-xxx) stored by useTMB.processTokens() instead.
-        // For new-auth users, createNewWebSocket() stores the loginid as a placeholder token
-        // (not a real a1-xxx token), so we validate before returning.
-        const activeLoginId = localStorage.getItem('active_loginid');
-        if (activeLoginId && activeLoginId !== 'null') {
-            try {
-                const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
-                const candidate = Array.isArray(clientAccounts)
-                    ? clientAccounts.find(a => a.loginid === activeLoginId)?.token
-                    : clientAccounts[activeLoginId]?.token;
-                if (isRealDerivToken(candidate)) return candidate;
-            } catch (_) {}
-
-            try {
-                const accountsList = JSON.parse(localStorage.getItem('accountsList') || '{}');
-                const candidate = accountsList[activeLoginId];
-                if (isRealDerivToken(candidate)) return candidate;
-            } catch (_) {}
-        }
-        // No real a1-xxx token found for new-auth user — return null so callers
-        // (e.g. DTrader iframe) can fall back to their own auth flow rather than
-        // sending an invalid token that triggers "Input validation failed: authorize".
-        return null;
-    }
-
-    const legacyToken = V2GetActiveToken();
-    if (legacyToken && legacyToken !== 'null') return legacyToken;
-
-    const authToken = localStorage.getItem('authToken');
-    if (isRealDerivToken(authToken)) return authToken;
-
-    return null;
-};
-
-export const getMainAppActiveLoginId = () => {
-    if (typeof window === 'undefined') return null;
-
-    const activeLoginId = localStorage.getItem('active_loginid');
-    if (activeLoginId && activeLoginId !== 'null') return activeLoginId;
-
-    const v2LoginId = V2GetActiveClientId();
-    if (v2LoginId && v2LoginId !== 'null') return v2LoginId;
-
-    try {
-        const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
-        const firstLoginId = Object.keys(clientAccounts || {}).find(Boolean);
-        if (firstLoginId) return firstLoginId;
-    } catch (_) {
-        // Ignore malformed stored account metadata and continue to the next source.
-    }
-
-    try {
-        const accountsList = JSON.parse(localStorage.getItem('accountsList') || '{}');
-        const firstLoginId = Object.keys(accountsList || {}).find(Boolean);
-        if (firstLoginId) return firstLoginId;
-    } catch (_) {
-        // Ignore malformed stored account metadata and continue to the next source.
-    }
-
     return null;
 };
 

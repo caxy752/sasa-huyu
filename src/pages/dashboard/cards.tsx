@@ -2,7 +2,6 @@
 import React from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
-import { BiHdd, BiCloud, BiBot, BiBoltCircle, BiTrendingUp } from 'react-icons/bi';
 import GoogleDrive from '@/components/load-modal/google-drive';
 import Dialog from '@/components/shared_ui/dialog';
 import MobileFullPageModal from '@/components/shared_ui/mobile-full-page-modal';
@@ -56,7 +55,11 @@ const Cards = observer(({ is_mobile, has_dashboard_strategies }: TCardProps) => 
     const actions: TCardArray[] = [
         {
             id: 'my-computer',
-            icon: <BiHdd size={52} style={{ color: '#60a5fa' }} />,
+            icon: is_mobile ? (
+                <DerivLightLocalDeviceIcon height='48px' width='48px' />
+            ) : (
+                <DerivLightMyComputerIcon height='48px' width='48px' />
+            ),
             content: is_mobile ? <Localize i18n_default_text='Local' /> : <Localize i18n_default_text='My computer' />,
             callback: () => {
                 openFileLoader();
@@ -70,7 +73,7 @@ const Cards = observer(({ is_mobile, has_dashboard_strategies }: TCardProps) => 
         },
         {
             id: 'google-drive',
-            icon: <BiCloud size={52} style={{ color: '#f97316' }} />,
+            icon: <DerivLightGoogleDriveIcon height='48px' width='48px' />,
             content: <Localize i18n_default_text='Google Drive' />,
             callback: () => {
                 openGoogleDriveDialog();
@@ -84,7 +87,7 @@ const Cards = observer(({ is_mobile, has_dashboard_strategies }: TCardProps) => 
         },
         {
             id: 'bot-builder',
-            icon: <BiBot size={52} style={{ color: '#a78bfa' }} />,
+            icon: <DerivLightBotBuilderIcon height='48px' width='48px' />,
             content: <Localize i18n_default_text='Bot builder' />,
             callback: () => {
                 setActiveTab(DBOT_TABS.BOT_BUILDER);
@@ -96,7 +99,7 @@ const Cards = observer(({ is_mobile, has_dashboard_strategies }: TCardProps) => 
         },
         {
             id: 'quick-strategy',
-            icon: <BiBoltCircle size={52} style={{ color: '#facc15' }} />,
+            icon: <DerivLightQuickStrategyIcon height='48px' width='48px' />,
             content: <Localize i18n_default_text='Quick strategy' />,
             callback: () => {
                 setActiveTab(DBOT_TABS.BOT_BUILDER);
@@ -106,14 +109,6 @@ const Cards = observer(({ is_mobile, has_dashboard_strategies }: TCardProps) => 
                     subform_source: 'dashboard',
                     subform_name: 'quick_strategy',
                 });
-            },
-        },
-        {
-            id: 'accum',
-            icon: <BiTrendingUp size={52} style={{ color: '#22c55e' }} />,
-            content: <Localize i18n_default_text='ACCUM' />,
-            callback: () => {
-                window.open('https://accumulator.vercel.app', '_blank');
             },
         },
     ];

@@ -254,8 +254,6 @@ export const help_content_config = (public_path: string) => {
             { type: TEXT },
             { type: TEXT },
             { type: TEXT },
-            { type: TEXT },
-            { type: TEXT },
             { type: BLOCK },
         ],
         trade_definition_tradeoptions: [{ type: TEXT }, { type: BLOCK }],

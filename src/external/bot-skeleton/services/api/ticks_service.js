@@ -161,22 +161,13 @@ export default class TicksService {
     }
 
     unsubscribeAllAndSubscribeListeners(symbol) {
-        const tickSubscription = this.subscriptions.getIn(['tick', symbol]);
         const ohlcSubscriptions = this.subscriptions.getIn(['ohlc', symbol]);
 
-        const subscriptions = [
-            ...(tickSubscription ? [tickSubscription] : []),
-            ...(ohlcSubscriptions ? Array.from(ohlcSubscriptions.values()) : []),
-        ];
+        const subscription = [...(ohlcSubscriptions ? Array.from(ohlcSubscriptions.values()) : [])];
 
-        // Ensure all forget calls complete before updating subscriptions
-        return Promise.all(subscriptions.map(id => doUntilDone(() => api_base.api.forget(id)))).then(() => {
-            this.subscriptions = this.subscriptions.deleteIn(['tick', symbol]).deleteIn(['ohlc', symbol]);
-        }).catch((err) => {
-            // Log but don't throw; cleanup should never block
-            console.warn(`Forget subscription for ${symbol} warning:`, err);
-            this.subscriptions = this.subscriptions.deleteIn(['tick', symbol]).deleteIn(['ohlc', symbol]);
-        });
+        Promise.all(subscription.map(id => doUntilDone(() => api_base.api.forget(id))));
+
+        this.subscriptions = new Map();
     }
 
     updateTicksAndCallListeners(symbol, ticks) {
@@ -330,33 +321,17 @@ export default class TicksService {
     };
 
     unsubscribeFromTicksService() {
-        // Clear all cached state immediately to prevent reuse on next run
-        this.ticks = new Map();
-        this.candles = new Map();
-        this.tickListeners = new Map();
-        this.ohlcListeners = new Map();
-        this.subscriptions = new Map();
-        this.ticks_history_promise = null;
-        this.candles_promise = null;
-
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             this.forget()
                 .then(() => {
                     this.forgetCandleSubscription()
                         .then(() => {
                             resolve();
                         })
-                        .catch((err) => {
-                            // Log but don't reject; cleanup should never block the next run
-                            console.warn('Candle subscription cleanup warning:', err);
-                            resolve();
-                        });
+                        .catch(reject);
                 })
-                .catch((err) => {
-                    // Log but don't reject; cleanup should never block the next run
-                    console.warn('Tick cleanup warning:', err);
-                    resolve();
-                });
+                .catch(reject);
+            this.ticks_history_promise = null;
         });
     }
 }

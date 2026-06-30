@@ -14,14 +14,12 @@
 
     &__list {
         width: 100%;
-        line-height: 40px;
+        line-height: 38px;
         display: flex;
         position: relative;
-        background: var(--general-main-1);
-        border-bottom: 1px solid var(--general-section-1);
 
         @include mobile-or-tablet-screen {
-            justify-content: flex-start;
+            justify-content: center;
         }
 
         &--overflow-hidden {
@@ -30,7 +28,7 @@
         }
 
         &--border-bottom {
-            border-bottom: 1px solid var(--general-section-1);
+            border-bottom: 2px solid var(--general-section-1);
         }
 
         &--top {
@@ -39,7 +37,7 @@
 
         &--bottom {
             order: 1;
-            border-top: 1px solid var(--general-section-1);
+            border-top: 2px solid var(--general-section-1);
         }
 
         &--center {
@@ -68,7 +66,7 @@
         }
 
         &:not(&--header-fit-content) {
-            justify-content: flex-start;
+            justify-content: center;
         }
 
         &--full-width {
@@ -78,22 +76,61 @@
 
     &__item {
         list-style: none;
-        font-size: 1.4rem;
-        font-weight: 400;
+        font-size: 14px !important;
+        font-weight: 500 !important; // Medium weight for inactive tabs
         text-align: center;
         white-space: nowrap;
-        color: var(--text-general);
-        cursor: pointer;
+        color: #ffffff !important; // White text for all navigation items
+        font-family:
+            Arial,
+            Helvetica,
+            -apple-system,
+            BlinkMacSystemFont,
+            'Segoe UI',
+            sans-serif !important;
         -webkit-touch-callout: none;
         -webkit-tap-highlight-color: transparent;
-        transition: background-color 0.15s ease, color 0.15s ease;
 
+        // Tab text - white for all navigation items
         * {
-            color: inherit;
+            color: #ffffff !important;
+            font-weight: 500 !important;
+            font-family:
+                Arial,
+                Helvetica,
+                -apple-system,
+                BlinkMacSystemFont,
+                'Segoe UI',
+                sans-serif !important;
         }
 
+        span,
+        div,
+        p,
+        label {
+            color: #ffffff !important;
+            font-weight: 500 !important;
+            font-family:
+                Arial,
+                Helvetica,
+                -apple-system,
+                BlinkMacSystemFont,
+                'Segoe UI',
+                sans-serif !important;
+        }
+
+        // Tab icons - light blue for all navigation items
         svg {
-            fill: currentColor;
+            fill: #60a5fa !important; // Light blue icons - override any inline fill attributes
+        }
+
+        svg,
+        svg > path,
+        svg > g > path,
+        svg > * {
+            fill: #60a5fa !important; // Light blue icons
+            stroke: none !important;
+            filter: none !important;
         }
 
         &__counter {
@@ -132,19 +169,71 @@
         }
 
         &:not(.dc-tabs__active) {
-            background-color: var(--general-main-1);
-            color: var(--text-general);
+            cursor: pointer;
+            color: #ffffff !important; // White text for all navigation items
 
+            // Non-active tab text - white
             * {
-                color: var(--text-general);
+                color: #ffffff !important;
+                font-weight: 500 !important;
+                font-family:
+                    Arial,
+                    Helvetica,
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    'Segoe UI',
+                    sans-serif !important;
+            }
+
+            span,
+            div,
+            p,
+            label {
+                color: #ffffff !important;
+                font-weight: 500 !important;
+                font-family:
+                    Arial,
+                    Helvetica,
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    'Segoe UI',
+                    sans-serif !important;
+            }
+
+            // Non-active tab icons - light blue
+            svg {
+                fill: #60a5fa !important; // Light blue icons - override any inline fill attributes
+            }
+
+            svg,
+            svg > path,
+            svg > g > path,
+            svg > * {
+                fill: #60a5fa !important; // Light blue icons
+                stroke: none !important;
+                filter: none !important;
             }
 
             &:hover {
-                background-color: var(--state-hover);
-                color: var(--text-general);
+                color: #ffffff !important; // White text
+                background: rgba(255, 255, 255, 0.1) !important; // Slight white hover on dark blue
 
                 * {
-                    color: var(--text-general);
+                    color: #ffffff !important;
+                    font-weight: 500 !important;
+                }
+
+                svg {
+                    fill: #60a5fa !important; // Light blue icons on hover
+                }
+
+                svg,
+                svg > path,
+                svg > g > path,
+                svg > * {
+                    fill: #60a5fa !important; // Light blue icons on hover
+                    stroke: none !important;
+                    filter: none !important;
                 }
             }
         }
@@ -155,25 +244,236 @@
     }
 
     &__active {
-        font-weight: 700;
-        color: #ffffff !important;
-        background-color: #0075c6 !important;
-        cursor: default;
+        font-weight: bold !important;
+        color: #ffffff !important; // White text
+        background-color: #3b82f6 !important; // Lighter blue background for active tab
+        font-family:
+            Arial,
+            Helvetica,
+            -apple-system,
+            BlinkMacSystemFont,
+            'Segoe UI',
+            sans-serif !important;
+        font-size: 14px !important;
 
+        // Active tab text - white and bold
         * {
             color: #ffffff !important;
+            font-weight: bold !important;
+            font-family:
+                Arial,
+                Helvetica,
+                -apple-system,
+                BlinkMacSystemFont,
+                'Segoe UI',
+                sans-serif !important;
         }
 
-        svg {
-            fill: #ffffff !important;
+        span,
+        div,
+        p,
+        label {
+            color: #ffffff !important;
+            font-weight: bold !important;
+            font-family:
+                Arial,
+                Helvetica,
+                -apple-system,
+                BlinkMacSystemFont,
+                'Segoe UI',
+                sans-serif !important;
         }
 
+        // Override any theme-based active states
         &:hover {
-            background-color: #0075c6 !important;
+            color: #ffffff !important;
+            background-color: #2563eb !important; // Slightly darker blue on hover
+
+            * {
+                color: #ffffff !important;
+                font-weight: bold !important;
+            }
+
+            span,
+            div,
+            p,
+            label {
+                color: #ffffff !important;
+                font-weight: bold !important;
+            }
+        }
+
+        // Active tab icons - white
+        svg {
+            fill: #ffffff !important; // White icons - override any inline fill attributes
+        }
+
+        svg,
+        svg > path,
+        svg > g > path,
+        svg > * {
+            fill: #ffffff !important; // White icons
+            stroke: none !important;
         }
     }
 
     &__active-line {
-        display: none;
+        display: block;
+        position: absolute;
+
+        /* rtl:begin:ignore */
+        left: 0;
+
+        /* rtl:end:ignore */
+        height: 2px;
+        background: var(--text-prominent) !important;
+        transition: all ease-in-out 0.3s;
+
+        &--top {
+            bottom: -2px;
+        }
+
+        &--bottom {
+            top: -2px;
+        }
+
+        &--is-hidden {
+            display: none;
+        }
+
+        &--fit-content {
+            @include mobile-or-tablet-screen {
+                width: 120px;
+            }
+        }
+
+        &:not(&--header-fit-content) {
+            width: var(--tab-width);
+        }
+    }
+}
+
+// Force theme-responsive text for run panel tabs - highest specificity
+.run-panel .dc-tabs__item,
+.run-panel .dc-tabs__active,
+.run-panel .dc-tabs__item:not(.dc-tabs__active) {
+    color: var(--text-prominent) !important;
+    font-weight: bold !important;
+
+    * {
+        color: var(--text-prominent) !important;
+        font-weight: bold !important;
+    }
+
+    span,
+    div,
+    p,
+    label {
+        color: var(--text-prominent) !important;
+        font-weight: bold !important;
+    }
+}
+
+// Specifically target non-active tabs in run panel
+.run-panel .dc-tabs__item:not(.dc-tabs__active) {
+    color: var(--text-prominent) !important;
+    font-weight: bold !important;
+
+    * {
+        color: var(--text-prominent) !important;
+        font-weight: bold !important;
+    }
+
+    span,
+    div,
+    p,
+    label {
+        color: var(--text-prominent) !important;
+        font-weight: bold !important;
+    }
+}
+
+// Specifically target ACTIVE tabs in run panel - highest priority
+.run-panel .dc-tabs__item.dc-tabs__active {
+    color: var(--text-prominent) !important;
+    font-weight: bold !important;
+
+    * {
+        color: var(--text-prominent) !important;
+        font-weight: bold !important;
+    }
+
+    span,
+    div,
+    p,
+    label {
+        color: var(--text-prominent) !important;
+        font-weight: bold !important;
+    }
+
+    // Override any active state styling
+    &:hover,
+    &:focus,
+    &:active {
+        color: var(--text-prominent) !important;
+
+        * {
+            color: var(--text-prominent) !important;
+            font-weight: bold !important;
+        }
+
+        span,
+        div,
+        p,
+        label {
+            color: var(--text-prominent) !important;
+            font-weight: bold !important;
+        }
+    }
+}
+
+// Force theme-responsive text for reset button - highest specificity
+.run-panel__footer-button,
+.run-panel__clear-button,
+.run-panel .dc-btn--secondary {
+    color: var(--text-prominent) !important;
+    font-weight: bold !important;
+
+    * {
+        color: var(--text-prominent) !important;
+        font-weight: bold !important;
+    }
+
+    .dc-btn__text,
+    .dc-btn__icon,
+    span,
+    div,
+    p,
+    label {
+        color: var(--text-prominent) !important;
+        font-weight: bold !important;
+    }
+
+    // Override all button states
+    &:hover,
+    &:focus,
+    &:active,
+    &:visited {
+        color: var(--text-prominent) !important;
+
+        * {
+            color: var(--text-prominent) !important;
+            font-weight: bold !important;
+        }
+
+        .dc-btn__text,
+        .dc-btn__icon,
+        span,
+        div,
+        p,
+        label {
+            color: var(--text-prominent) !important;
+            font-weight: bold !important;
+        }
     }
 }

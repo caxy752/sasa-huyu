@@ -190,41 +190,6 @@ $COLOR_DARK_GRAY_3: #555975;
 $COLOR_DARK_GRAY_4: #999;
 /* stylelint-enable color-no-hex */
 
-/* ------------------------------------*
- *  # Captain Peter Trading Hub Theme
- *------------------------------------ */
-
-/* Dark navy palette */
-$color-hub-navy-darkest: #0a122c;           // deepest background (rgba 10,18,44)
-$color-hub-navy-dark: #1e3a8a;              // toolbox / tab bar
-$color-hub-navy-mid: rgba(10, 18, 44, 0.96);   // semi-opaque overlay
-$color-hub-navy-light: rgba(30, 58, 138, 0.4); // subtle section fill
-
-/* Gold accent */
-$color-hub-gold: #f5c542;                   // icons, highlights
-$color-hub-gold-border: rgba(255, 215, 0, 0.35); // borders
-$color-hub-gold-border-light: rgba(255, 215, 0, 0.18); // subtle borders
-$color-hub-gold-label: rgba(255, 215, 0, 0.85);  // header text
-
-/* Blue accent */
-$color-hub-blue: #3b82f6;                   // active tab, CTA buttons
-$color-hub-blue-hover: #2563eb;             // hover state
-$color-hub-blue-glow: rgba(59, 130, 246, 0.12); // row hover fill
-
-/* Status (theme-aligned) */
-$color-hub-profit: #4ade80;                 // wins / positive
-$color-hub-loss: #f87171;                   // losses / negative
-$color-hub-warn: #fbbf24;                   // warnings
-$color-hub-info: #60a5fa;                   // info messages
-
-/* Box shadows */
-$shadow-hub-gold:
-    0 0 0 1px rgba(255, 215, 0, 0.18),
-    inset 0 0 1px rgba(255, 215, 0, 0.1);
-$shadow-hub-panel:
-    0 4px 24px 0 rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(255, 215, 0, 0.12);
-
 $BORDER_RADIUS: 4px;
 $BORDER_RADIUS_2: 8px;
 $MAX_CONTAINER_WIDTH: 1440px;

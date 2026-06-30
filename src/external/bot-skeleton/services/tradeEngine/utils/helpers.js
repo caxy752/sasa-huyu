@@ -309,7 +309,7 @@ export const createDetails = contract => {
     // This function is used by Bot.readDetails() which martingale strategies rely on
     // Never use displayProfit or displayCurrency here - only use real API values
     const { sell_price: sellPrice, buy_price: buyPrice, currency, profit: contractProfit } = contract;
-    
+
     // Use contract.profit if available (most reliable), otherwise calculate from sell_price - buy_price
     let profit;
     if (contractProfit !== undefined && contractProfit !== null) {
@@ -319,22 +319,22 @@ export const createDetails = contract => {
     } else {
         profit = getRoundedNumber(0, currency);
     }
-    
+
     const result = profit < 0 ? 'loss' : 'win';
-    
+
     // Log for debugging martingale issues
     console.log('[createDetails] 💰 Profit for bot (REAL API):', profit, 'Result:', result);
 
     return [
-        contract.transaction_ids?.buy || '',
-        +(contract.buy_price || 0),
-        +(contract.sell_price || 0),
+        contract.transaction_ids.buy,
+        +contract.buy_price,
+        +contract.sell_price,
         profit,
-        contract.contract_type || '',
-        contract.entry_tick_time ? formatTime(parseInt(`${contract.entry_tick_time}000`), 'HH:mm:ss') : '',
-        +(contract.entry_tick || 0),
-        contract.exit_tick_time ? formatTime(parseInt(`${contract.exit_tick_time}000`), 'HH:mm:ss') : '',
-        +(contract.exit_tick || 0),
+        contract.contract_type,
+        formatTime(parseInt(`${contract.entry_tick_time}000`), 'HH:mm:ss'),
+        +contract.entry_tick,
+        formatTime(parseInt(`${contract.exit_tick_time}000`), 'HH:mm:ss'),
+        +contract.exit_tick,
         +(contract.barrier ? contract.barrier : 0),
         result,
     ];

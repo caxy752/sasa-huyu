@@ -1,13 +1,13 @@
 .risk-disclaimer-button {
     position: fixed;
-    bottom: 20px;
-    left: 20px;
     z-index: 1000;
     animation: slide-in-left 0.5s ease-out;
+    touch-action: none;
+    cursor: grab;
 
     &__btn {
-        background: #ffd700 !important; // Bright golden yellow
-        color: #000000 !important; // Black text for contrast
+        background: #1f6feb !important;
+        color: #ffffff !important;
         border: none !important;
         padding: 8px 16px !important;
         border-radius: 4px !important;
@@ -17,7 +17,7 @@
         transition: all 0.3s ease !important;
 
         &:hover {
-            background: #ffc107 !important; // Darker golden yellow on hover
+            background: #1957d6 !important;
             transform: translateY(-1px) !important;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
         }
@@ -40,20 +40,48 @@
     }
 
     &__text {
-        line-height: 1.6;
-        margin-bottom: 16px;
-        text-align: justify;
+        line-height: 1.8;
+        margin-bottom: 20px;
+        text-align: left;
+    }
+
+    &__points {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    &__point {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+
+        span {
+            color: var(--brand-red-coral);
+            font-weight: bold;
+            line-height: 1.4;
+            margin-top: 2px;
+        }
+    }
+
+    &__footer {
+        display: block;
+        margin-bottom: 24px;
+        line-height: 1.7;
     }
 
     &__actions {
         display: flex;
         justify-content: center;
+        gap: 16px;
         margin-top: 24px;
+        flex-wrap: wrap;
     }
 
     &__understand-btn {
-        background: #ffd700 !important; // Bright golden yellow
-        color: #000000 !important; // Black text for contrast
+        background: #1f6feb !important;
+        color: #ffffff !important;
         border: none !important;
         padding: 12px 32px !important;
         border-radius: 4px !important;
@@ -61,7 +89,21 @@
         min-width: 150px;
 
         &:hover {
-            background: #ffc107 !important; // Darker golden yellow on hover
+            background: #1957d6 !important;
+        }
+    }
+
+    &__dont-show-btn {
+        background: #d64545 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 12px 32px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+        min-width: 150px;
+
+        &:hover {
+            background: #b63232 !important;
         }
     }
 }
@@ -69,8 +111,6 @@
 // Mobile optimizations
 @media (max-width: 768px) {
     .risk-disclaimer-button {
-        bottom: 100px; // Account for mobile navigation and scrolling
-        left: 16px;
         z-index: 1001; // Ensure it stays above content
 
         &__btn {

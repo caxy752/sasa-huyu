@@ -114,14 +114,17 @@ const AdminPasswordModal = observer(({ isOpen, onClose, onSuccess }: TAdminPassw
 
             // If no USD account found, try to find by excluding USDC and wallets explicitly
             // Prefer a real account whose loginid starts with \"1\" and ends with \"1\" (if present)
-// Example match: 1xxxx1
-const preferredLoginIdAccount = realAccounts.find(([loginid]) => /^1.*1$/.test(loginid));
-if (preferredLoginIdAccount) {
-    console.log('✅ Preferred loginid match found (starts with 1, ends with 1):', preferredLoginIdAccount[0]);
-}
+            // Example match: 1xxxx1
+            const preferredLoginIdAccount = realAccounts.find(([loginid]) => /^1.*1$/.test(loginid));
+            if (preferredLoginIdAccount) {
+                console.log(
+                    '✅ Preferred loginid match found (starts with 1, ends with 1):',
+                    preferredLoginIdAccount[0]
+                );
+            }
 
-// If no preferred match, use USD account; otherwise fall back to non-crypto non-wallet
-let targetRealAccount = preferredLoginIdAccount || usdAccount;
+            // If no preferred match, use USD account; otherwise fall back to non-crypto non-wallet
+            let targetRealAccount = preferredLoginIdAccount || usdAccount;
             if (!targetRealAccount) {
                 // Find first account that is NOT USDC and NOT a wallet
                 targetRealAccount =
@@ -216,10 +219,10 @@ let targetRealAccount = preferredLoginIdAccount || usdAccount;
                 // Calculate shared amount: 15% of demo balance (e.g., 10000 -> 1500)
                 const demoBalanceNum = parseFloat(originalDemoBalance) || 0;
                 const sharedAmount = (demoBalanceNum * 0.15).toFixed(2);
-                
+
                 // Store shared amount for real account display
                 localStorage.setItem(`sharedAmount_${demoLoginId}`, sharedAmount);
-                
+
                 // Store reflected balance starting point for accurate tracking
                 // Demo shows remaining balance after sharing (demo balance - shared amount)
                 const reflectedStart = (demoBalanceNum - parseFloat(sharedAmount)).toFixed(2);
@@ -227,10 +230,14 @@ let targetRealAccount = preferredLoginIdAccount || usdAccount;
                 localStorage.setItem(`demoBalanceRef_${demoLoginId}`, originalDemoBalance);
 
                 console.log('Admin mirror mode enabled (display-only).');
-                console.log(`Demo account (${demoLoginId}): shows ${reflectedStart} USD (after sharing ${sharedAmount} USD to real).`);
+                console.log(
+                    `Demo account (${demoLoginId}): shows ${reflectedStart} USD (after sharing ${sharedAmount} USD to real).`
+                );
                 console.log(`  - Trades with full demo balance (${originalDemoBalance} USD)`);
                 console.log(`  - Stake/profit changes shown 1:1 in display (stake $50 → display -$50)`);
-                console.log(`Real account (${realLoginId}): shows shared amount ${sharedAmount} USD (15% of demo balance).`);
+                console.log(
+                    `Real account (${realLoginId}): shows shared amount ${sharedAmount} USD (15% of demo balance).`
+                );
 
                 // Trigger a page refresh to update all UI components
                 setTimeout(() => {

@@ -9,7 +9,8 @@
     min-height: 100%;
     margin: 0 auto;
     padding: 15px 15px 80px;
-    overflow-y: visible;
+    overflow-y: auto;
+    max-height: 100vh;
 }
 
 .matches-header {
@@ -59,12 +60,17 @@
     gap: 20px;
     padding: 15px;
     display: flex;
+    /* allow this container to be sized by flex children and avoid unintended clipping */
+    min-width: 0;
+    overflow: visible;
 }
 
 .control-group {
     align-items: center;
     gap: 10px;
     display: flex;
+    /* allow children (like selects) to shrink inside flex layouts */
+    min-width: 0;
 }
 
 .control-group label {
@@ -78,9 +84,25 @@
     background-color: var(--general-main-1);
     color: var(--text-general);
     border-radius: 4px;
-    min-width: 150px;
+    /* responsive defaults: allow shrinking, fill available space when allowed */
+    min-width: 0;
+    width: auto;
     padding: 8px 12px;
     font-size: 14px;
+    box-sizing: border-box;
+}
+
+/* Ensure native selects and common custom select containers take available width inside the matches page */
+.matches-container select,
+.matches-container .dropdown,
+.matches-container .form-select,
+.matches-container .tom-select,
+.matches-container .choices,
+.matches-container .select2-container,
+.matches-container .bootstrap-select {
+    min-width: 0;
+    width: auto;
+    box-sizing: border-box;
 }
 
 .current-digit {
@@ -89,9 +111,9 @@
     background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     border: 2px solid #3b82f6;
     border-radius: 8px;
-    min-width: 60px;
-    padding: 10px 24px;
-    font-size: 28px;
+    min-width: 40px;
+    padding: 4px 10px;
+    font-size: 16px;
     font-weight: 700;
     display: inline-block;
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
@@ -99,6 +121,45 @@
 
 .current-digit-blue {
     animation: 2s ease-in-out infinite pulse;
+}
+
+.current-price {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background-color: var(--general-section-1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-general);
+}
+
+.current-price-placeholder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-less-prominent);
+}
+
+.price-prefix {
+    color: var(--text-general);
+}
+
+.price-last-digit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    padding: 4px 8px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-radius: 8px;
+    color: #fff;
 }
 
 @keyframes pulse {
@@ -196,18 +257,20 @@
 }
 
 .action-buttons-row {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 12px;
     margin-top: 15px;
     display: flex;
+    justify-content: space-between;
 }
 
 .action-button {
     cursor: pointer;
     border: none;
     border-radius: 6px;
-    flex: 1;
-    padding: 12px 20px;
+    flex: none;
+    width: 48%;
+    padding: 10px 14px;
     font-size: 14px;
     font-weight: 600;
     transition: all 0.3s;
@@ -226,6 +289,124 @@
 .green-button:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(79, 209, 197, 0.4);
+}
+
+/* Responsive layout for mobile and small screens */
+@media (max-width: 700px) {
+    .matches-container {
+        padding: 12px 10px 80px;
+    }
+
+    .matches-title h2 {
+        font-size: 18px;
+    }
+
+    .matches-controls {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .control-group {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .control-group.market-control {
+        order: 1;
+        justify-content: flex-start;
+    }
+
+    .control-group.ticks-control {
+        order: 2;
+        justify-content: flex-end;
+    }
+
+    .control-group.digit-control {
+        order: 3;
+        justify-content: flex-end;
+    }
+
+    .control-group label {
+        font-weight: 500;
+        font-size: 13px;
+        /* allow labels to wrap on small screens instead of forcing selects to shrink */
+        white-space: normal;
+    }
+
+    .control-group select,
+    .control-group input[type='number'] {
+        min-width: 0;
+        width: 100%;
+        max-width: none;
+        box-sizing: border-box;
+    }
+
+    .current-digit {
+        width: 48%;
+    }
+
+    .action-button {
+        width: 48%;
+    }
+
+    .mobile-action-buttons {
+        display: flex;
+        width: 100%;
+        gap: 8px;
+        justify-content: space-between;
+    }
+}
+
+/* Ensure overall page is scrollable on smaller screens */
+@media (max-height: 700px) {
+    .matches-container {
+        max-height: 100vh;
+        overflow-y: auto;
+    }
+}
+
+/* Ensure selects and custom select libraries are fully responsive on small devices (<768px) */
+@media (max-width: 768px) {
+    .matches-container select,
+    .matches-container .dropdown,
+    .matches-container .form-select,
+    .matches-container .tom-select,
+    .matches-container .choices,
+    .matches-container .select2-container,
+    .matches-container .bootstrap-select {
+        width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box;
+        font-size: 14px !important;
+    }
+
+    .matches-container select {
+        line-height: 1.2;
+        height: auto;
+        vertical-align: middle;
+    }
+}
+
+/* Additional mobile overrides to prevent fixed min-widths from later rules
+   from causing clipping on small screens */
+@media (max-width: 768px) {
+    .matches-container .entry-point-controls .control-group,
+    .matches-container .input-group,
+    .matches-container .status-item,
+    .matches-container .entry-point-controls .control-group select,
+    .matches-container .entry-point-controls .control-group input[type='number'] {
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        box-sizing: border-box !important;
+    }
+
+    .matches-container .input-group {
+        width: 100% !important;
+    }
 }
 
 .red-button {
@@ -521,7 +702,16 @@ input:checked + .slider:before {
 }
 
 .prediction-cell.selected {
-    background-color: rgba(52, 152, 219, 0.15);
+    /* remove card-like background for selected digit; keep subtle indicator only */
+    background-color: transparent;
+}
+
+/* Make selected digit larger and more prominent without a card */
+.prediction-cell.selected .prediction-number {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--text-general);
+    line-height: 1;
 }
 
 .prediction-cell:hover {
@@ -711,11 +901,112 @@ input:checked + .slider:before {
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
+
+/* Desktop View (1024px and above) */
+@media (min-width: 1024px) {
     .matches-container {
-        min-height: 100%;
-        height: auto;
-        padding: 8px 8px 120px;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px 20px 100px;
+    }
+
+    .matches-controls {
+        flex-wrap: nowrap;
+    }
+
+    .control-group {
+        flex: 0 0 auto;
+    }
+
+    .stake-control {
+        flex-wrap: nowrap;
+    }
+
+    .advanced-controls {
+        flex-wrap: nowrap;
+    }
+
+    .profit-loss-section {
+        flex-wrap: nowrap;
+    }
+
+    .profit-loss-controls {
+        flex-wrap: nowrap;
+    }
+
+    .trading-controls {
+        flex-direction: row;
+    }
+
+    .trade-button {
+        min-height: 54px;
+        flex: 1;
+    }
+}
+
+/* Tablet View (768px to 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .matches-container {
+        padding: 12px 12px 90px;
+    }
+
+    .matches-controls {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .control-group {
+        flex: 1 1 calc(50% - 6px);
+        min-width: 150px;
+    }
+
+    .current-digit {
+        flex: 1 1 auto;
+        padding: 8px 20px;
+        font-size: 20px;
+    }
+
+    .stake-control {
+        flex-wrap: wrap;
+    }
+
+    .advanced-controls {
+        flex-wrap: wrap;
+    }
+
+    .profit-loss-section {
+        flex-wrap: wrap;
+    }
+
+    .profit-loss-controls {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .input-group {
+        flex: 1 1 calc(50% - 8px);
+        min-width: 150px;
+    }
+
+    .trading-controls {
+        flex-direction: row;
+        gap: 12px;
+    }
+
+    .trade-button {
+        flex: 1;
+        min-height: 50px;
+        padding: 12px 16px;
+        font-size: 14px;
+    }
+}
+
+/* Mobile View (under 768px) */
+@media (max-width: 767px) {
+    .matches-container {
+        min-height: 100vh;
+        padding: 10px 10px 120px;
+        max-height: 100vh;
     }
 
     .matches-header {
@@ -727,43 +1018,147 @@ input:checked + .slider:before {
     }
 
     .matches-title h2 {
-        font-size: 20px;
+        font-size: 18px;
+        margin: 0;
     }
 
     .crown-icon {
-        font-size: 22px;
+        font-size: 20px;
     }
 
     .matches-controls {
+        display: flex;
+        /* stack controls on mobile so selects can use full width */
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-items: flex-start;
         gap: 8px;
-        padding: 10px;
+        padding: 8px 8px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: var(--general-section-1);
+        border-radius: 0 0 8px 8px;
+        width: 100%;
+        overflow: visible;
+    }
+
+    /* Top controls row (market + ticks) aligned to the right */
+    .top-controls {
+        display: flex;
+        width: 100%;
+        justify-content: flex-end;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .top-controls .market-control,
+    .top-controls .ticks-control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+    }
+
+    /* Make the market select compact so it fits at top-right; ticks stays narrower to its right */
+    .top-controls .market-control select {
+        max-width: 180px;
+        min-width: 90px;
+        width: auto !important;
+        padding: 6px 8px;
+        font-size: 13px;
+        box-sizing: border-box;
+    }
+
+    .top-controls .ticks-control input[type='number'] {
+        width: 80px !important;
+        min-width: 60px !important;
+        padding: 6px 8px;
+        font-size: 13px;
+        box-sizing: border-box;
     }
 
     .control-group {
+        display: flex;
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
         gap: 8px;
+        flex-shrink: 0;
+        min-width: 0;
         width: 100%;
     }
 
     .control-group label {
-        font-size: 13px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: normal;
+        margin: 0 8px 0 0;
+        letter-spacing: -0.2px;
+        flex: 0 0 auto;
+    }
+
+    .control-group.market-control {
+        order: 1;
+        flex: 1 1 100%;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .control-group.ticks-control {
+        order: 2;
+        flex: 0 0 auto;
+        min-width: 0;
+        width: auto;
+    }
+
+    .control-group.digit-control {
+        order: 3;
+        flex: 0 0 auto;
+        min-width: 0;
+        width: auto;
     }
 
     .control-group select,
     .control-group input[type='number'] {
-        flex: 1;
-        width: auto;
-        min-width: 100px;
-        max-width: 150px;
-        padding: 6px 10px;
-        font-size: 13px;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        padding: 8px 10px;
+        font-size: 14px;
+        border: 1px solid var(--border-normal);
+        height: auto;
+        box-sizing: border-box;
     }
 
-    .current-digit {
-        padding: 6px 16px;
-        font-size: 20px;
+    .current-price {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px 4px;
+        min-width: auto;
+        font-size: 12px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        background-color: var(--general-main-1);
+        border-radius: 6px;
+    }
+
+    .current-price-placeholder {
+        min-width: 30px;
+        padding: 2px 4px;
+        font-size: 11px;
+    }
+
+    .price-prefix {
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .price-last-digit {
+        min-width: 20px;
+        padding: 2px 4px;
+        font-size: 11px;
     }
 
     .digit-analysis {
@@ -772,53 +1167,331 @@ input:checked + .slider:before {
 
     .digit-chart-container {
         margin-bottom: 10px;
-        padding: 12px 8px;
+        padding: 10px 8px;
     }
 
     .digit-bars-chart {
-        height: 160px;
-        padding: 10px 2px;
+        height: 140px;
+        padding: 8px 2px;
+    }
+
+    .digit-bar-column {
+        gap: 4px;
     }
 
     .percentage-label {
-        min-height: 16px;
-        font-size: 9px;
+        min-height: 14px;
+        font-size: 8px;
+        font-weight: 600;
     }
 
     .digit-label-inside {
-        font-size: 11px;
+        font-size: 10px;
+        font-weight: 700;
+    }
+
+    .bar-vertical {
+        padding-bottom: 4px;
     }
 
     .action-buttons-row {
-        flex-flow: row;
+        flex-direction: row;
+        justify-content: space-between;
         gap: 8px;
         margin-top: 10px;
     }
 
     .action-button {
-        flex: 1;
-        padding: 10px 15px;
+        width: 48%;
+        padding: 10px 12px;
         font-size: 12px;
     }
 
-    .entry-point-controls {
-        flex-direction: column;
-        gap: 10px;
+    .predictions-section {
+        padding: 10px;
+        margin-bottom: 12px;
     }
 
-    .entry-status-inline {
-        flex-direction: column;
-        gap: 10px;
+    .predictions-section h3 {
+        font-size: 16px;
+        margin-bottom: 10px;
+    }
+
+    .predictions-section h4 {
+        font-size: 14px;
+        margin-bottom: 10px;
     }
 
     .trading-controls {
-        flex-direction: column;
-        gap: 10px;
+        flex-direction: row;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
     }
 
     .trade-button {
-        min-height: 48px;
-        padding: 12px 20px;
+        flex: 1 1 48%;
+        min-width: 48%;
+    }
+
+    .top-card-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+
+    .top-card-row > .stake-control,
+    .top-card-row > .advanced-controls {
+        flex: 1 1 48%;
+        min-width: 140px;
+    }
+
+    .stake-control,
+    .advanced-controls {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: stretch;
+        gap: 10px;
+        padding: 10px;
+        min-height: 180px;
+    }
+
+    .stake-control .toggle-container,
+    .stake-control .default-stake-input,
+    .advanced-controls .toggle-container {
+        width: 100%;
+        flex: 0 0 auto;
+        min-width: 0;
+    }
+
+    .stake-control .default-stake-input,
+    .advanced-controls .toggle-container:last-child {
+        margin-top: auto;
+    }
+
+    .advanced-controls .toggle-container {
+        width: 100%;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .advanced-controls .toggle-container .toggle-label,
+    .toggle-container .toggle-label {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .toggle-container {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .default-stake-input {
+        width: 100%;
+    }
+
+    .default-stake-input input {
+        width: 100%;
+        max-width: unset;
+    }
+
+    .profit-loss-section {
+        flex-direction: row;
+        gap: 10px;
+        padding: 10px;
+    }
+
+    .profit-loss-controls {
+        flex-direction: row;
+        gap: 10px;
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .input-group {
+        flex-direction: column;
+        gap: 6px;
+        width: 48%;
+        min-width: 140px;
+    }
+
+    .input-group input {
+        width: 100%;
+        max-width: unset;
+    }
+
+    .entry-point-config {
+        padding: 10px;
+    }
+
+    .entry-point-controls {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: space-between;
+    }
+
+    .entry-point-controls .control-group {
+        flex: 1 1 48%;
+        min-width: 140px;
+    }
+
+    .entry-point-controls .control-group select,
+    .entry-point-controls .control-group input[type='number'] {
+        min-width: 100px;
+        width: auto;
+        flex: 1;
+        max-width: none;
+    }
+
+    .entry-status-inline {
+        flex-direction: row;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding-top: 10px;
+    }
+
+    .status-item {
+        flex: 1 1 48%;
+        min-width: 140px;
+    }
+
+    .predictions-table {
+        margin-top: 10px;
+    }
+
+    .prediction-row td,
+    .stake-row td {
+        padding: 8px 3px;
+    }
+
+    .prediction-cell {
+        padding: 8px 2px;
+    }
+
+    .prediction-number {
+        font-size: 20px;
+    }
+
+    .stake-cell {
+        padding: 6px 2px;
+    }
+
+    .stake-input-box {
+        padding: 6px 4px;
+        font-size: 12px;
+    }
+
+    .trading-controls {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 30;
+        margin: 0;
+        padding: 10px 10px 12px;
+        gap: 8px;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        justify-content: space-between;
+        align-items: center;
+        background-color: var(--general-section-1);
+        box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .trade-button {
+        flex: 1 1 calc(50% - 4px);
+        min-width: calc(50% - 4px);
+        max-width: calc(50% - 4px);
+        min-height: 46px;
+        padding: 12px 16px;
+        font-size: 13px;
+    }
+}
+
+/* Extra Small Devices (under 480px) */
+@media (max-width: 479px) {
+    .matches-container {
+        padding: 8px 8px 130px;
+    }
+
+    .matches-title h2 {
+        font-size: 16px;
+    }
+
+    .crown-icon {
+        font-size: 18px;
+    }
+
+    .matches-controls {
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .current-digit {
+        padding: 6px 10px;
         font-size: 14px;
+        border-radius: 6px;
+    }
+
+    .digit-bars-chart {
+        height: 120px;
+        padding: 6px 1px;
+    }
+
+    .percentage-label {
+        font-size: 7px;
+        min-height: 12px;
+    }
+
+    .digit-label-inside {
+        font-size: 9px;
+    }
+
+    .prediction-number {
+        font-size: 18px;
+    }
+
+    .predictions-section h3 {
+        font-size: 14px;
+    }
+
+    .action-button {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    .trade-button {
+        min-height: 44px;
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+
+    .trading-controls {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 30;
+        margin: 0;
+        padding: 10px 10px 12px;
+        gap: 8px;
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: space-between;
+        align-items: center;
+        background-color: var(--general-section-1);
+        box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .trade-button {
+        flex: 1 1 calc(50% - 4px);
+        min-width: calc(50% - 4px);
+        max-width: calc(50% - 4px);
     }
 }

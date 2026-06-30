@@ -81,20 +81,19 @@
         }
 
         &--light {
-            background: rgba(255, 255, 255, 0.06) !important;
-            color: #7fa0be !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            background: #ffffff !important;
+            color: #1e3a8a !important;
+            border: 1px solid #e5e7eb !important;
 
             &:hover {
-                background: rgba(255, 255, 255, 0.1) !important;
+                background: #f9fafb !important;
             }
 
             &.trading-bots__card--active {
-                background: rgba(59, 130, 246, 0.18) !important;
+                background: #ffffff !important;
                 border-color: #3b82f6 !important;
                 border-width: 2px !important;
-                color: #60a5fa !important;
-                box-shadow: 0 2px 12px rgba(59, 130, 246, 0.25) !important;
+                box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3) !important;
             }
         }
 
@@ -110,14 +109,17 @@
             font-weight: 600;
             text-align: center;
             white-space: nowrap;
-            color: inherit;
+
+            .trading-bots__card--light.trading-bots__card--active & {
+                color: #3b82f6 !important;
+            }
         }
 
         &--light.trading-bots__card--active {
             svg,
             svg > path,
             svg > g > path {
-                fill: #60a5fa !important;
+                fill: #3b82f6 !important;
             }
         }
 
@@ -125,11 +127,11 @@
             svg,
             svg > path,
             svg > g > path {
-                fill: #7fa0be !important;
+                fill: #1e3a8a !important;
             }
 
             .trading-bots__card-label {
-                color: #7fa0be !important;
+                color: #1e3a8a !important;
             }
         }
     }

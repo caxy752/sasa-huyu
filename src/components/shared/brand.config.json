@@ -75,5 +75,25 @@
             "icon": "",
             "availability": ""
         }
+    },
+    "oauth": {
+        "server_base_url": "https://auth.deriv.com",
+        "authorization_path": "/oauth2/auth",
+        "token_url": "https://auth.deriv.com/oauth2/token",
+        "redirect_uri": "https://dbotprov.vercel.app/api/oauth/callback",
+        "client_id": "33xD5lqNn16dXdKNver3",
+        "app_id": "113830",
+        "scope": "trade account_manage"
+    },
+    "platform": {
+        "derivws": {
+            "url": {
+                "production": "https://api.derivws.com/trading/v1/options/",
+                "staging": "https://staging-api.derivws.com/trading/v1/options/"
+            },
+            "directories": {
+                "options": ""
+            }
+        }
     }
 }

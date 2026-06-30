@@ -1,28 +1,10 @@
 @use 'components/shared/styles/constants' as *;
 @use 'components/shared/styles/mixins' as *;
 
-// Dramatic glow pulse + subtle lift for active tab
-@keyframes tabGlow {
-    0%, 100% {
-        box-shadow: 0 0 8px rgba(0, 124, 240, 0.6), 0 0 16px rgba(0, 223, 216, 0.5);
-        transform: scale(1);
-    }
-    50% {
-        box-shadow: 0 0 20px rgba(0, 124, 240, 0.9), 0 0 40px rgba(0, 223, 216, 0.7), 0 0 60px rgba(0, 124, 240, 0.4);
-        transform: scale(1.04);
-    }
-}
-
 .run-panel {
+    // fix for the RTL issue on tab active line
     .dc-tabs__active-line {
         right: auto;
-    }
-}
-
-// Animate tab highlight movement
-.main__container .dc-tabs__header {
-    .dc-tabs__active-line {
-        transition: left 0.3s ease-out, width 0.3s ease-out;
     }
 }
 
@@ -40,25 +22,6 @@
         padding: 0;
     }
 
-    // Scrollable tab content for custom full-page tools
-    &[data-active-tab='over_under'],
-    &[data-active-tab='makoti_magic'],
-    &[data-active-tab='signal_zone'],
-    &[data-active-tab='elite_prime_ai'],
-    &[data-active-tab='smart_trader'] {
-        .dc-tabs__content {
-            overflow-y: auto !important;
-            overflow-x: hidden !important;
-        }
-    }
-
-    // Full-height no-scroll tabs (manage their own scroll internally)
-    &[data-active-tab='overlord_2026'] {
-        .dc-tabs__content {
-            overflow: hidden !important;
-        }
-    }
-
     &__container {
         position: relative;
         border: none;
@@ -69,35 +32,11 @@
         flex-direction: column;
 
         @include mobile-or-tablet-screen {
-            padding-bottom: 0; // No fixed footer on mobile
+            padding-bottom: var(--mobile-footer-height, 6rem); // Space for fixed footer
         }
 
         &.no-scroll {
             overflow: hidden;
-        }
-
-        .main__tabs {
-            .dc-tabs__list {
-                background: rgba(10, 18, 44, 0.96) !important;
-                border: 1px solid rgba(255, 215, 0, 0.35) !important;
-                box-shadow:
-                    0 0 0 1px rgba(255, 215, 0, 0.18),
-                    inset 0 0 1px rgba(255, 215, 0, 0.1) !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                gap: 0 !important;
-                border-bottom: 1px solid rgba(255, 215, 0, 0.35) !important;
-                justify-content: flex-start !important;
-            }
-
-            .dc-tabs__item__icon,
-            .dc-tabs__item__icon svg {
-                fill: #f5c542 !important;
-            }
-
-            .dc-tabs__item {
-                color: #ffffff !important;
-            }
         }
 
         &--active {
@@ -116,74 +55,55 @@
         }
 
         .dc-tabs {
-            @include mobile-or-tablet-screen {
-                height: 100%;
-                min-height: 0;
-            }
-
             &__active-line {
-                display: none !important;
+                display: none !important; // hide default line, we'll draw our own
             }
 
             &__active {
-                background: #3b82f6 !important;
-                box-shadow: none !important;
-                color: #ffffff !important;
+                background: #3b82f6 !important; // Lighter blue background for active tab like screenshot
+                color: #ffffff !important; // White text for active tab
                 position: relative;
                 border-radius: 4px !important;
-                margin: 0.25rem !important;
+                margin: 0 0.25rem !important;
                 padding: 0.5rem 1rem !important;
                 border: none !important;
-                border-bottom: none !important;
-                overflow: hidden;
-                animation: none !important;
-                will-change: auto;
+                box-shadow: none !important;
 
+                // active text/icon color - white
                 * {
                     color: #ffffff !important;
                 }
 
+                // active icons - white
                 svg,
                 svg > path,
                 svg > g > path {
                     fill: #ffffff !important;
-                    stroke: none !important;
                 }
 
+                // Remove animated underline for Binarytool style
                 &::after {
                     display: none !important;
                 }
             }
 
             &__list {
-                background: #1e3a8a !important;
-                justify-content: flex-start !important;
-                border-bottom: none !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                gap: 0 !important;
+                background: #1e3a8a !important; // Dark blue background like screenshot
+                justify-content: flex-start; // Start from left like friend's design
+                border-bottom: none !important; // Remove border
+                padding: 0; // Remove all padding to eliminate space
+                margin: 0; // Remove any margins
+                gap: 0; // Remove gaps between items
 
+                // Override tab width calculation to be more compact
                 .dc-tabs__item {
-                    width: auto !important;
-                    padding: 0.5rem 1.2rem !important;
-                    margin: 0.25rem !important;
-                    flex-shrink: 0;
-                    border-radius: 4px !important;
-                    transition: background-color 0.2s ease !important;
-                    color: #ffffff !important;
-                    border: none !important;
-                    background: transparent !important;
-
-                    svg,
-                    svg > path,
-                    svg > g > path {
-                        fill: #f5c542 !important;
-                        stroke: #f5c542 !important;
-                    }
-
-                    &:last-child {
-                        border-right: none !important;
-                    }
+                    width: auto !important; // Let tabs size naturally
+                    padding: 0.5rem 1.2rem !important; // Padding for all tabs
+                    margin: 0.25rem 0.25rem !important; // Small margin for spacing
+                    flex-shrink: 0; // Prevent shrinking
+                    border-radius: 8px !important; // Rounded corners for all tabs
+                    transition: background-color 0.2s ease !important; // Smooth transition
+                    color: #ffffff !important; // White text for all navigation items
                 }
 
                 // Override the default justify-content: center from tabs.scss
@@ -249,12 +169,8 @@
 
                 @include mobile-or-tablet-screen {
                     width: 100%;
-                    height: 100%;
-                    min-height: 0;
-                    overflow-x: hidden;
-                    overflow-y: auto;
-                    -webkit-overflow-scrolling: touch;
-                    padding-bottom: 0;
+                    overflow-x: auto;
+                    padding-bottom: 6rem; // Space for fixed footer
 
                     // Allow scrolling for Strategies on mobile
                     &:has(.strategies--standalone),
@@ -262,16 +178,18 @@
                         overflow-y: auto !important;
                         overflow-x: hidden !important;
                         -webkit-overflow-scrolling: touch;
-                        height: auto !important; // Let content flow naturally
-                        max-height: none !important;
+                        height: calc(
+                            100vh - 3.5rem - 6rem
+                        ) !important; // Account for mobile header (3.5rem) and footer (6rem)
+                        max-height: calc(100vh - 3.5rem - 6rem) !important;
                         padding-bottom: 0 !important; // Remove padding from container, let content handle it
                     }
 
                     .strategies--standalone {
                         height: auto !important;
-                        min-height: auto !important;
+                        min-height: calc(100% + 20rem) !important; // Ensure content extends beyond viewport
                         width: 100%;
-                        padding-bottom: 8rem !important;
+                        padding-bottom: 25rem !important; // Very large padding to ensure last card button is fully visible
                         box-sizing: border-box;
                     }
 
@@ -531,14 +449,12 @@
         transition: all 0.4s;
 
         @include mobile-or-tablet-screen {
-            height: calc(100svh - 14rem);
-            min-height: 320px;
+            height: var(--tab-content-height-mobile);
             padding-bottom: 6rem; // Space for fixed footer
             background: var(--general-main-1);
 
             .smartcharts {
                 height: calc(100% - 4rem);
-                min-height: 280px;
                 z-index: 1;
 
                 &:has(.stxMenuActive) {
@@ -1009,7 +925,28 @@
     justify-content: center;
 }
 
-// Navigation tabs styling to match screenshot - dark blue background, white text, light blue icons
+// Navigation tabs styling to match screenshot - dark blue background, white text, golden icons
+.main__container .main__tabs .dc-tabs__list {
+    line-height: 35px !important;
+    min-height: 35px !important;
+    background: rgba(10, 18, 44, 0.96) !important;
+    border: 1px solid rgba(255, 215, 0, 0.35) !important;
+    border-radius: 0 !important;
+    box-shadow:
+        0 0 0 1px rgba(255, 215, 0, 0.18),
+        inset 0 0 1px rgba(255, 215, 0, 0.1);
+}
+
+.main__container .main__tabs .dc-tabs__item__icon,
+.main__container .main__tabs .dc-tabs__item__icon svg,
+.main__container .main__tabs .dc-tabs__item__icon svg * {
+    width: 28px !important;
+    height: 28px !important;
+    fill: #f5c542 !important;
+    stroke: #f5c542 !important;
+    filter: drop-shadow(0 0 5px rgba(245, 197, 66, 0.35));
+}
+
 .main__container .main__tabs .dc-tabs__item {
     // All navigation items use white text
     color: #ffffff !important; // White text for all navigation items
@@ -1051,11 +988,11 @@
             sans-serif !important;
     }
 
-    // Remove glowing effects
+    // Icon styling for all navigation items
     svg {
         position: relative;
         filter: none;
-        fill: #E6E6FA !important; // Light purple icons
+        fill: #f5c542 !important; // Golden icons - override any inline fill attributes
 
         &::before {
             display: none;
@@ -1066,20 +1003,16 @@
     svg > path,
     svg > g > path,
     svg > * {
-        fill: #E6E6FA !important; // Light purple icons
-        stroke: none !important;
+        fill: #f5c542 !important; // Golden icons for all navigation items
+        stroke: #f5c542 !important;
         filter: none !important;
     }
 
+    // Active tab - lighter blue background with white text
     &.dc-tabs__active {
-        background: linear-gradient(145deg, #007cf0, #00dfd8) !important;
-        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important;
-        color: #ffffff !important;
+        background: #3b82f6 !important; // Lighter blue background for active tab
+        color: #ffffff !important; // White text
         font-weight: bold !important;
-        border-bottom: none !important;
-        overflow: hidden;
-        animation: tabGlow 3s ease-in-out infinite;
-        will-change: transform, box-shadow;
         font-family:
             Arial,
             Helvetica,
@@ -1118,7 +1051,7 @@
 
         svg {
             filter: none;
-            fill: #ffffff !important; // White icons for active tab - override any inline fill attributes
+            fill: #f5c542 !important; // Golden icons for active tab - override any inline fill attributes
 
             &::before {
                 display: none;
@@ -1129,8 +1062,8 @@
         svg > path,
         svg > g > path,
         svg > * {
-            fill: #ffffff !important; // White icons for active tab
-            stroke: none !important;
+            fill: #f5c542 !important; // Golden icons for active tab
+            stroke: #f5c542 !important;
             filter: none !important;
         }
     }
@@ -1138,7 +1071,7 @@
     // Hover effect for inactive tabs
     &:hover:not(.dc-tabs__active) {
         color: #ffffff !important;
-        background: rgba(255, 255, 255, 0.1) !important; // Slight white hover on dark brown
+        background: rgba(255, 255, 255, 0.1) !important; // Slight white hover on dark blue
         transition: all 0.2s ease;
 
         * {
@@ -1161,8 +1094,8 @@
         svg,
         svg > path,
         svg > g > path {
-            fill: #E6E6FA !important; // Light purple icons on hover
-            stroke: none !important;
+            fill: #f5c542 !important; // Golden icons on hover
+            stroke: #f5c542 !important;
             filter: none !important;
         }
     }
@@ -1199,7 +1132,7 @@
     svg {
         position: relative;
         filter: none;
-        fill: #E6E6FA !important; // Light purple icons
+        fill: #f5c542 !important; // Golden icons - override any inline fill attributes
 
         &::before {
             display: none;
@@ -1210,8 +1143,8 @@
     svg *,
     svg > path,
     svg > g > path {
-        fill: #E6E6FA !important; // Light purple icons
-        stroke: none !important;
+        fill: #f5c542 !important; // Golden icons for all navigation items
+        stroke: #f5c542 !important;
         filter: none !important;
     }
 
@@ -1219,12 +1152,7 @@
     &.dc-tabs__active {
         color: #ffffff !important;
         font-weight: bold !important;
-        background: linear-gradient(145deg, #007cf0, #00dfd8) !important;
-        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important;
-        border-bottom: none !important;
-        overflow: hidden;
-        animation: tabGlow 3s ease-in-out infinite;
-        will-change: transform, box-shadow;
+        background: #3b82f6 !important; // Lighter blue background for active tab
 
         span,
         div,
@@ -1268,14 +1196,14 @@ body.theme--dark .dc-tabs__item {
     }
 
     svg {
-        fill: #E6E6FA !important; // Light purple icons
+        fill: #f5c542 !important; // Golden icons - override any inline fill attributes
     }
 
     svg,
     svg *,
     svg > path,
     svg > g > path {
-        fill: #E6E6FA !important; // Light purple icons
+        fill: #f5c542 !important; // Golden icons for all navigation items
         stroke: none !important;
         filter: none !important;
     }
@@ -1284,12 +1212,7 @@ body.theme--dark .dc-tabs__item {
     &.dc-tabs__active {
         color: #ffffff !important;
         font-weight: bold !important;
-        background: linear-gradient(145deg, #007cf0, #00dfd8) !important;
-        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important;
-        border-bottom: none !important;
-        overflow: hidden;
-        animation: tabGlow 3s ease-in-out infinite;
-        will-change: transform, box-shadow;
+        background: #3b82f6 !important; // Lighter blue background for active tab
 
         span,
         div,
@@ -1300,95 +1223,27 @@ body.theme--dark .dc-tabs__item {
         }
 
         svg {
-            fill: #ffffff !important; // White icons for active tab - override any inline fill attributes
+            fill: #f5c542 !important; // Golden icons for active tab - override any inline fill attributes
         }
 
         svg,
         svg *,
         svg > path,
         svg > g > path {
-            fill: #ffffff !important; // White icons for active tab
+            fill: #f5c542 !important; // Golden icons for active tab
         }
     }
 }
 
-// ─── CUSTOM TAB CENTERING & FULL-WIDTH FIX ───────────────────────────────────
-// ElitePremium.css and SmartTrader.css use width: calc(100vw - 400px) — built
-// for a layout with a 400px sidebar that doesn't exist here. Override without
-// touching the zip source files.
-
-// 1. ElitePremium root shell
-.epf-shell {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
+// Main tab bar gold icon override (stronger specificity, placed after all tab overrides)
+.main__container .main__tabs .dc-tabs__item .dc-tabs__item__icon,
+.main__container .main__tabs .dc-tabs__item .dc-tabs__item__icon svg,
+.main__container .main__tabs .dc-tabs__item .dc-tabs__item__icon svg *,
+.main__container .main__tabs .dc-tabs__item.dc-tabs__active .dc-tabs__item__icon svg,
+.main__container .main__tabs .dc-tabs__item.dc-tabs__active .dc-tabs__item__icon svg * {
+    width: 28px !important;
+    height: 28px !important;
+    fill: #f5c542 !important;
+    stroke: #f5c542 !important;
+    filter: drop-shadow(0 0 6px rgba(245, 197, 66, 0.35)) !important;
 }
-
-// 2. SmartTrader root container
-.overall-container {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-}
-
-// 3. dc-tabs fills its flex parent so content panels get full height
-.main__container > div > .dc-tabs,
-.main__container .dc-tabs {
-    flex: 1;
-    min-height: 0;
-    height: 100%;
-}
-
-// 4. All custom tabs: content panel stretches full-width, scrolls vertically
-.main[data-active-tab='overlord_2026'],
-.main[data-active-tab='elite_prime_ai'],
-.main[data-active-tab='signal_zone'],
-.main[data-active-tab='smart_trader'],
-.main[data-active-tab='trading_bots'],
-.main[data-active-tab='strategies'],
-.main[data-active-tab='copy_trading'],
-.main[data-active-tab='dtrader'],
-.main[data-active-tab='tradingview'],
-.main[data-active-tab='over_under'],
-.main[data-active-tab='makoti_magic'],
-.main[data-active-tab='analysis_tool'] {
-    .dc-tabs__content {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: stretch !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-
-        > div {
-            width: 100% !important;
-            box-sizing: border-box !important;
-            flex-shrink: 0;
-        }
-    }
-}
-
-// 5. Mobile: all custom components go full-width, no horizontal overflow
-@media (max-width: 768px) {
-    .epf-shell,
-    .overall-container,
-    .sh-main-container,
-    .dash-container,
-    .ai-bots-page {
-        width: 100% !important;
-        max-width: 100% !important;
-        box-sizing: border-box !important;
-        overflow-x: hidden !important;
-    }
-
-    .epf-shell .epf-monitor-grid {
-        grid-template-columns: 1fr !important;
-    }
-
-    .overall-container .pro-master-wrapper {
-        flex-direction: column !important;
-        width: 100% !important;
-    }
-}
-// ─────────────────────────────────────────────────────────────────────────────

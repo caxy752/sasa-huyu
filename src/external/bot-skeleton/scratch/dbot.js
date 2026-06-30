@@ -212,17 +212,17 @@ class DBot {
                     loadStrategyIntoWorkspace();
                 } else {
                     // Load CMV PRO as default bot when there are no recent files
-                    fetch('/xml/THE CMV PRO.xml')
+                    fetch('/xml/EVEN ODD SPEEDY.xml')
                         .then(cmvResponse => {
                             if (cmvResponse.ok) {
                                 return cmvResponse.text();
                             }
-                            throw new Error('Failed to fetch CMV bot');
+                            throw new Error('Failed to fetch default bot');
                         })
                         .then(cmvXml => {
                             window.Blockly.derivWorkspace.strategy_to_load = cmvXml;
                             window.Blockly.getMainWorkspace().strategy_to_load = cmvXml;
-                            file_name = 'THE CMV PRO';
+                            file_name = 'EVEN ODD SPEEDY';
                             const cmvId = window.Blockly.utils.idGenerator.genUid();
                             window.Blockly.derivWorkspace.current_strategy_id = cmvId;
                             window.Blockly.getMainWorkspace().current_strategy_id = cmvId;

@@ -72,67 +72,67 @@ export default function DesktopTransactionTable({
                 )}
             >
                 <TableHeader columns={transaction_columns} />
-                {transactions?.map((transaction, index) => {
+                {transactions?.map(transaction => {
                     const { data, type } = transaction;
-                    if (type === transaction_elements.CONTRACT && data) {
-                        const contract_data = data as any;
-                        const buy_id = contract_data?.display_transaction_ids?.buy ?? contract_data?.transaction_ids?.buy ?? `virtual-${index}`;
-                        
+                    if (type === transaction_elements.CONTRACT) {
                         return (
-                            <div className={`${PARENT_CLASS}__table-row`} key={buy_id}>
+                            <div
+                                className={`${PARENT_CLASS}__table-row`}
+                                key={data?.display_transaction_ids?.buy ?? data?.transaction_ids?.buy}
+                            >
                                 <TableCell
                                     label={
-                                        contract_data?.date_start ?
+                                        data?.date_start &&
                                         convertDateFormat(
-                                            contract_data?.date_start,
+                                            data?.date_start,
                                             'YYYY-M-D HH:mm:ss [GMT]',
                                             'YYYY-MM-DD HH:mm:ss [GMT]'
-                                        ) : ''
+                                        )
                                     }
                                     extra_classes={[`${PARENT_CLASS}__table-cell--grow-big`]}
                                 />
                                 <TableCell
-                                    label={buy_id}
+                                    label={data?.display_transaction_ids?.buy ?? data?.transaction_ids?.buy}
                                     extra_classes={[`${PARENT_CLASS}__table-cell--grow-mid`]}
                                 />
                                 <TableCell
                                     label={
                                         <IconWrapper
-                                            message={contract_data?.display_name ?? ''}
-                                            icon={<MarketIcon type={contract_data?.underlying} size='sm' />}
+                                            message={data?.display_name}
+                                            icon={<MarketIcon type={data?.underlying} size='sm' />}
                                         />
                                     }
                                 />
                                 <TableCell
                                     label={
                                         <IconWrapper
-                                            message={getContractTypeName(contract_data)}
-                                            icon={<TradeTypeIcon type={contract_data?.contract_type} size='sm' />}
+                                            message={getContractTypeName(data)}
+                                            icon={<TradeTypeIcon type={data?.contract_type} size='sm' />}
                                         />
                                     }
                                 />
-                                <TableCell label={contract_data?.entry_tick} loader={!contract_data?.entry_tick} />
-                                <TableCell label={contract_data?.exit_tick} loader={!contract_data?.exit_tick} />
-                                <TableCell label={Math.abs(contract_data?.buy_price ?? 0).toFixed(2)} />
+                                <TableCell label={data?.entry_tick} loader={!data?.entry_tick} />
+                                <TableCell label={data?.exit_tick} loader={!data.exit_tick} />
+                                <TableCell label={Math.abs(data?.buy_price ?? 0).toFixed(2)} />
                                 <TableCell
                                     label={
                                         <div
                                             className={classNames({
-                                                [`${PARENT_CLASS}__profit--win`]: contract_data?.profit > 0,
-                                                [`${PARENT_CLASS}__profit--loss`]: contract_data?.profit < 0,
+                                                [`${PARENT_CLASS}__profit--win`]: data?.profit > 0,
+                                                [`${PARENT_CLASS}__profit--loss`]: data?.profit < 0,
                                             })}
                                         >
-                                            {Math.abs(contract_data?.profit ?? 0).toFixed(2)}
+                                            {Math.abs(data?.profit ?? 0).toFixed(2)}
                                         </div>
                                     }
-                                    loader={!contract_data?.is_completed}
+                                    loader={!data.is_completed}
                                 />
                             </div>
                         );
                     }
 
                     return (
-                        <div className={`${PARENT_CLASS}__table-row`} key={`transaction-row-divider-${index}`}>
+                        <div className={`${PARENT_CLASS}__table-row`} key={`transaction-row-divider-${data}`}>
                             <div className={`${PARENT_CLASS}__divider`}>
                                 <div className='transactions__divider-line' />
                             </div>

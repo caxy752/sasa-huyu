@@ -39,6 +39,10 @@ window.Blockly.Blocks.vh_toggle = {
 window.Blockly.JavaScript.javascriptGenerator.forBlock.vh_toggle = function (block) {
     const state = block.getFieldValue('STATE');
     const enabled = state === 'enable';
-    const code = `Bot.setVirtualHook({ enabled: ${enabled} });\n`;
+    const code = `
+// Virtual Hook: toggle
+if (!window.__VH__) window.__VH__ = { enabled: false, config: {} };
+window.__VH__.enabled = ${enabled};
+`;
     return code;
 };

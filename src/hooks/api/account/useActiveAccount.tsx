@@ -12,37 +12,43 @@ const useActiveAccount = ({ allBalanceData }: { allBalanceData: Balance | null }
 
     // Check if show_as_cr flag is set - if so, we want to display CR6779123 instead of demo
     const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-    
+
     // Determine which loginid to use for finding the active account
     // If show_as_cr is set, use CR6779123 for display, otherwise use activeLoginid from API
     const displayLoginId = showAsCR || activeLoginid;
 
-    const activeAccount = useMemo(
-        () => {
-            // If show_as_cr is set, find CR6779123 account, otherwise find by activeLoginid
-            if (showAsCR) {
-                const crAccount = accountList?.find(account => account.loginid === showAsCR);
-                if (crAccount) {
-                    console.log('[useActiveAccount] 🎯 Using CR account for display:', showAsCR);
-                    return crAccount;
-                }
+    const activeAccount = useMemo(() => {
+        // If show_as_cr is set, find CR6779123 account, otherwise find by activeLoginid
+        if (showAsCR) {
+            const crAccount = accountList?.find(account => account.loginid === showAsCR);
+            if (crAccount) {
+                console.log('[useActiveAccount] 🎯 Using CR account for display:', showAsCR);
+                return crAccount;
             }
-            return accountList?.find(account => account.loginid === activeLoginid);
-        },
-        [activeLoginid, accountList, showAsCR]
-    );
+        }
+        return accountList?.find(account => account.loginid === activeLoginid);
+    }, [activeLoginid, accountList, showAsCR]);
 
     // For balance lookup, use CR6779123 if show_as_cr is set, otherwise use activeAccount loginid
     // Note: The balance for CR6779123 should already be calculated in setAllAccountsBalance
-    const balanceLookupLoginId = showAsCR || activeAccount?.loginid;
-    const currentBalanceData = allBalanceData?.accounts?.[balanceLookupLoginId ?? ''];
-    
-    console.log('[useActiveAccount] Balance lookup:', {
+    const activeAccountLoginId = activeAccount?.loginid || activeAccount?.account_id;
+    const balanceLookupLoginId = showAsCR || activeAccountLoginId;
+    const isValidLoginId = !!(
+        balanceLookupLoginId &&
+        balanceLookupLoginId !== 'undefined' &&
+        balanceLookupLoginId !== 'null' &&
+        balanceLookupLoginId.trim() !== ''
+    );
+    const currentBalanceData = (allBalanceData && isValidLoginId) ? allBalanceData.accounts?.[balanceLookupLoginId] : undefined;
+
+    console.log('[useActiveAccount] Balance lookup diagnostics:', {
         showAsCR,
         balanceLookupLoginId,
-        activeAccountLoginId: activeAccount?.loginid,
+        activeAccountLoginId,
+        isValidLoginId,
+        hasAllBalanceData: !!allBalanceData,
         hasBalanceData: !!currentBalanceData,
-        balance: currentBalanceData?.balance
+        balance: currentBalanceData?.balance,
     });
 
     const modifiedAccount = useMemo(() => {
@@ -62,7 +68,12 @@ const useActiveAccount = ({ allBalanceData }: { allBalanceData: Balance | null }
         // Get swapped/mirrored balance if swap is active
         // Pass allBalanceData to get live demo balance for mirroring
         // Pass true for isActiveAccount since this is the active account
-        const accountDisplay = getAccountDisplayInfo(activeAccount.loginid, accountDataWithBalance, allBalanceData, true);
+        const accountDisplay = getAccountDisplayInfo(
+            activeAccount.loginid,
+            accountDataWithBalance,
+            allBalanceData,
+            true
+        );
 
         // Get the display balance - if swapped, use swapped balance, otherwise use original
         let displayBalance: number;
@@ -78,36 +89,36 @@ const useActiveAccount = ({ allBalanceData }: { allBalanceData: Balance | null }
         }
 
         // Check if we're using demo account but displaying as real account (admin mode)
-        const adminRealAccountUsingDemo = 
+        const adminRealAccountUsingDemo =
             typeof window !== 'undefined' && localStorage.getItem('adminRealAccountUsingDemo') === 'true';
-        const adminRealAccountDisplayLoginId = 
+        const adminRealAccountDisplayLoginId =
             typeof window !== 'undefined' ? localStorage.getItem('adminRealAccountDisplayLoginId') : null;
-        
+
         // Check if mirror mode is active - if so, show real account flag when using demo
         const adminMirrorModeEnabled =
             typeof window !== 'undefined' && localStorage.getItem('adminMirrorModeEnabled') === 'true';
         const swapState = getBalanceSwapState();
-        
+
         // TEMPORARILY DISABLED: Admin mirror mode - showing real flags for now
         // TODO: Re-enable admin mirror mode later
         const ADMIN_MIRROR_MODE_DISABLED = true;
-        
-        const isMirrorModeActive = adminMirrorModeEnabled && swapState?.isSwapped && swapState?.isMirrorMode && !ADMIN_MIRROR_MODE_DISABLED;
+
+        const isMirrorModeActive =
+            adminMirrorModeEnabled && swapState?.isSwapped && swapState?.isMirrorMode && !ADMIN_MIRROR_MODE_DISABLED;
         const isViewingDemo = Boolean(activeAccount?.is_virtual);
 
         // If using demo account but displaying as real account, show real flag
-        const displayIsVirtual = showAsCR
-            ? false // Account trick active: always show as real account
-            : (!ADMIN_MIRROR_MODE_DISABLED && adminRealAccountUsingDemo)
+        const displayIsVirtual =
+            !ADMIN_MIRROR_MODE_DISABLED && adminRealAccountUsingDemo
                 ? false // Show real flag when using demo but displaying as real
-                : (!ADMIN_MIRROR_MODE_DISABLED && isMirrorModeActive && isViewingDemo
-                    ? false // Show real flag (US flag) even when viewing demo in mirror mode
-                    : Boolean(activeAccount?.is_virtual));
+                : !ADMIN_MIRROR_MODE_DISABLED && isMirrorModeActive && isViewingDemo
+                  ? false // Show real flag (US flag) even when viewing demo in mirror mode
+                  : Boolean(activeAccount?.is_virtual);
 
         // Get the real account currency for the flag if displaying as real
         let displayCurrency = activeAccount?.currency?.toLowerCase();
         let displayCurrencyLabel = displayIsVirtual ? localize('Demo') : activeAccount?.currency;
-        
+
         if (adminRealAccountUsingDemo && adminRealAccountDisplayLoginId) {
             // Find the real account we're displaying as
             const realAccount = accountList?.find(acc => acc.loginid === adminRealAccountDisplayLoginId);
@@ -125,9 +136,7 @@ const useActiveAccount = ({ allBalanceData }: { allBalanceData: Balance | null }
         }
 
         // For isActive check, if show_as_cr is set, consider it active if the account matches
-        const isActive = showAsCR 
-            ? activeAccount?.loginid === showAsCR
-            : activeAccount?.loginid === activeLoginid;
+        const isActive = showAsCR ? activeAccount?.loginid === showAsCR : activeAccount?.loginid === activeLoginid;
 
         return {
             ...activeAccount,

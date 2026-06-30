@@ -9,7 +9,7 @@ const CommunityModal: React.FC = () => {
         // Don't show modal on page refresh - only show on first visit
         // Check if this is a page refresh by checking if we have session data
         const hasSessionData = sessionStorage.getItem('has_visited') === 'true';
-        
+
         if (!hasSessionData) {
             // First visit - show modal and mark as visited
             sessionStorage.setItem('has_visited', 'true');
@@ -121,59 +121,44 @@ const CommunityModal: React.FC = () => {
                     </div>
 
                     <div className='community-modal__actions'>
-                        <a
-                            href='https://www.whatsapp.com/channel/0029VaNRPYr5PO0tpuZ0u02j'
-                            target='_blank'
-                            rel='noopener noreferrer'
+                        <button
+                            type='button'
+                            disabled
                             className='community-modal__button community-modal__button--whatsapp'
+                            aria-label='WhatsApp channel disabled'
                         >
                             Join WhatsApp Channel
-                        </a>
-                        <a
-                            href='https://t.me/greenprintfx'
-                            target='_blank'
-                            rel='noopener noreferrer'
+                        </button>
+                        <button
+                            type='button'
+                            disabled
                             className='community-modal__button community-modal__button--telegram'
+                            aria-label='Telegram channel disabled'
                         >
                             Join Telegram
-                        </a>
-                        <a
-                            href='https://youtube.com/@greenprintfx?si=wQi2-5t4HWWs4db7'
-                            target='_blank'
-                            rel='noopener noreferrer'
+                        </button>
+                        <button
+                            type='button'
+                            disabled
                             className='community-modal__button community-modal__button--youtube'
+                            aria-label='YouTube channel disabled'
                         >
                             Subscribe YouTube
-                        </a>
+                        </button>
                     </div>
 
                     <div className='community-modal__info'>
                         <p>Get access to strategies, bots and guides sent earlier on our channels</p>
                         <div className='community-modal__links'>
-                            <a
-                                href='https://www.whatsapp.com/channel/0029VaNRPYr5PO0tpuZ0u02j'
-                                target='_blank'
-                                rel='noopener noreferrer'
-                                className='community-modal__link'
-                            >
+                            <span className='community-modal__link' aria-disabled='true'>
                                 WhatsApp Channel
-                            </a>
-                            <a
-                                href='https://t.me/greenprintfx'
-                                target='_blank'
-                                rel='noopener noreferrer'
-                                className='community-modal__link'
-                            >
+                            </span>
+                            <span className='community-modal__link' aria-disabled='true'>
                                 Telegram Channel
-                            </a>
-                            <a
-                                href='https://youtube.com/@greenprintfx?si=wQi2-5t4HWWs4db7'
-                                target='_blank'
-                                rel='noopener noreferrer'
-                                className='community-modal__link'
-                            >
+                            </span>
+                            <span className='community-modal__link' aria-disabled='true'>
                                 YouTube Channel
-                            </a>
+                            </span>
                         </div>
                     </div>
 

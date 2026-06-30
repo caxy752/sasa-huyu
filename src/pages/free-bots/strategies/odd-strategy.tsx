@@ -1,5 +1,6 @@
 import React from 'react';
 import { Localize } from '@deriv-com/translations';
+import { getBrandLabel } from '@/components/shared/utils/brand/brand';
 import './strategy-viewer.scss';
 
 interface OddStrategyProps {
@@ -7,6 +8,8 @@ interface OddStrategyProps {
 }
 
 const OddStrategy: React.FC<OddStrategyProps> = ({ onBack }) => {
+    const brandLabel = getBrandLabel();
+
     const handleDownload = () => {
         const content = `ODD STRATEGY
 
@@ -22,7 +25,7 @@ NB: AFTER 3 TO 7 RUNS MAX ON PROFITS, STOP THE BOT TO CONFIRM THE MARKET CONDITI
 BARS COLOR KEY:
 RED: LEAST APPEARING DIGIT, YELLOW: 2ND LEAST APPEARING, GREEN: MOST APPEARING, BLUE: 2ND MOST APPEARING.
 
-USE captainpetertradinghub.com TO TRADE`;
+USE ${brandLabel.toUpperCase()} TO TRADE`;
 
         const blob = new Blob([content], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
@@ -75,7 +78,13 @@ USE captainpetertradinghub.com TO TRADE`;
                 {onBack && (
                     <button className='strategy-viewer__back-button' onClick={onBack}>
                         <svg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>
-                            <path d='M19 12H5M5 12L12 19M5 12L12 5' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
+                            <path
+                                d='M19 12H5M5 12L12 19M5 12L12 5'
+                                stroke='currentColor'
+                                strokeWidth='2'
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                            />
                         </svg>
                         <Localize i18n_default_text='Back to Strategies' />
                     </button>
@@ -88,20 +97,27 @@ USE captainpetertradinghub.com TO TRADE`;
 
                         <div className='strategy-subsection'>
                             <div className='strategy-detail'>
-                                <h5 className='strategy-detail__title'>1. GREEN & BLUE BARS SHOULD BOTH BE ON ODD DIGITS HAVING 11%+</h5>
+                                <h5 className='strategy-detail__title'>
+                                    1. GREEN & BLUE BARS SHOULD BOTH BE ON ODD DIGITS HAVING 11%+
+                                </h5>
                                 <p className='strategy-text'>
-                                    Both the green (most appearing) and blue (2nd most appearing) bars must be positioned on odd digits (1, 3, 5, 7, 9) and each should have a percentage of 11% or higher.
+                                    Both the green (most appearing) and blue (2nd most appearing) bars must be
+                                    positioned on odd digits (1, 3, 5, 7, 9) and each should have a percentage of 11% or
+                                    higher.
                                 </p>
                             </div>
 
                             <div className='strategy-detail'>
-                                <h5 className='strategy-detail__title'>2. RED & YELLOW BARS SHOULD BOTH BE ON EVEN DIGIT</h5>
+                                <h5 className='strategy-detail__title'>
+                                    2. RED & YELLOW BARS SHOULD BOTH BE ON EVEN DIGIT
+                                </h5>
                                 <ul className='strategy-list'>
                                     <li>RED BAR %GE: 8.6 AND BELOW</li>
                                     <li>YELLOW BAR %GE: 9.5 AND BELOW</li>
                                 </ul>
                                 <p className='strategy-text'>
-                                    Both the red (least appearing) and yellow (2nd least appearing) bars must be positioned on even digits (0, 2, 4, 6, 8).
+                                    Both the red (least appearing) and yellow (2nd least appearing) bars must be
+                                    positioned on even digits (0, 2, 4, 6, 8).
                                 </p>
                             </div>
                         </div>
@@ -111,12 +127,16 @@ USE captainpetertradinghub.com TO TRADE`;
                         <h2 className='strategy-section__number'>ENTRY POINT</h2>
                         <div className='strategy-subsection'>
                             <p className='strategy-text'>
-                                <strong>WAIT FOR THE TICK POINTER TO PICK THE LEAST APPEARING DIGIT AMONG THE R & Y,</strong> then wait for{' '}
-                                <strong>CONSECUTIVE 2 ODDS APPEAR WITHIN THE NEXT 5 TICK</strong> then enter immediately.
+                                <strong>
+                                    WAIT FOR THE TICK POINTER TO PICK THE LEAST APPEARING DIGIT AMONG THE R & Y,
+                                </strong>{' '}
+                                then wait for <strong>CONSECUTIVE 2 ODDS APPEAR WITHIN THE NEXT 5 TICK</strong> then
+                                enter immediately.
                             </p>
 
                             <div className='strategy-note'>
-                                <strong>NB:</strong> AFTER 3 TO 7 RUNS MAX ON PROFITS, STOP THE BOT TO CONFIRM THE MARKET CONDITIONS AND WAIT FOR ANOTHER ENTRY TRIGGER.
+                                <strong>NB:</strong> AFTER 3 TO 7 RUNS MAX ON PROFITS, STOP THE BOT TO CONFIRM THE
+                                MARKET CONDITIONS AND WAIT FOR ANOTHER ENTRY TRIGGER.
                             </div>
                         </div>
                     </section>
@@ -142,7 +162,7 @@ USE captainpetertradinghub.com TO TRADE`;
                     </section>
 
                     <div className='strategy-footer'>
-                        <p className='strategy-footer__text'>USE captainpetertradinghub.com TO TRADE</p>
+                        <p className='strategy-footer__text'>USE {brandLabel.toUpperCase()} TO TRADE</p>
                     </div>
                 </div>
             </div>

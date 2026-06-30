@@ -33,4 +33,3 @@ export * from './utils/types';
 export * from './utils/url';
 export * from './utils/validation';
 export * from './utils/validator';
-export { WS_SERVERS, isProduction } from './utils/config/config';

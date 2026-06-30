@@ -63,7 +63,14 @@ export default class ToolbarStore implements IToolbarStore {
     };
 
     onResetOkButtonClick = (): void => {
-        this.root_store.transactions.clear();
+        this.setResetButtonState(true);
+        runGroupedEvents(
+            false,
+            () => {
+                this.resetDefaultStrategy();
+            },
+            'reset'
+        );
         this.is_dialog_open = false;
     };
 

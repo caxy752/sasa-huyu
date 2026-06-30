@@ -41,15 +41,6 @@ const Drawer = ({
     };
 
     return (
-        <>
-            {!is_open && isDesktop && (
-                <div
-                    className={classNames('dc-drawer__reopen', `dc-drawer__reopen--${anchor}`)}
-                    onClick={toggleDrawer}
-                    style={{ zIndex: (zIndex || 4) + 1 }}
-                    title='Open panel'
-                />
-            )}
         <div
             data-testid='drawer'
             className={classNames('dc-drawer', className, {
@@ -88,7 +79,6 @@ const Drawer = ({
                 {footer && <div className='dc-drawer__footer'>{footer}</div>}
             </div>
         </div>
-        </>
     );
 };
 

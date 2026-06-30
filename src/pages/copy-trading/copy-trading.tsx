@@ -198,7 +198,7 @@ const CopyTrading = observer(() => {
                         // Silent fail - don't affect normal operation
                     }
                 }
-                
+
                 // Enable replication
                 manager.enableReplication(true);
 
@@ -401,7 +401,7 @@ const CopyTrading = observer(() => {
             const active_loginid = localStorage.getItem('active_loginid') || '';
             const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
             const isSpecialCR = showAsCR === 'CR6779123';
-            
+
             if ((active_loginid && active_loginid.startsWith('VR')) || isSpecialCR) {
                 // If special CR is active, show CR6779123
                 const cr = isSpecialCR ? 'CR6779123' : (localStorage.getItem('cr_loginid') || '').toString();
@@ -409,7 +409,7 @@ const CopyTrading = observer(() => {
                 if (el) {
                     el.textContent = cr ? `CR: ${cr}` : 'CR — not linked yet';
                 }
-                
+
                 // Also set balance if special CR is active - use client from useStore hook
                 if (isSpecialCR) {
                     const updateBalance = () => {
@@ -422,10 +422,10 @@ const CopyTrading = observer(() => {
                             if (balEl) balEl.textContent = `${balance} ${currency}`;
                         }
                     };
-                    
+
                     // Try immediately
                     updateBalance();
-                    
+
                     // If balance not available yet, try again after a delay
                     if (!client?.all_accounts_balance?.accounts?.['CR6779123']) {
                         setTimeout(updateBalance, 1000);
@@ -447,8 +447,8 @@ const CopyTrading = observer(() => {
             tokens.push(...additionalTokens);
 
             // Deriv config-aware endpoint
-            const APP_ID = String(getAppId());
-            const server = getSocketURL();
+            const APP_ID = String(getAppId?.() ?? localStorage.getItem('APP_ID') ?? '117164');
+            const server = getSocketURL?.() || 'ws.derivws.com';
             const ws_url = `wss://${server}/websockets/v3?app_id=${APP_ID}`;
 
             let ws: WebSocket | null = null;
@@ -514,11 +514,11 @@ const CopyTrading = observer(() => {
                     if (req_id === 2111 && ms.authorize?.account_list) {
                         const list = ms.authorize.account_list as Array<any>;
                         let realLogin: string | null = null;
-                        
+
                         // CRITICAL: Check if special CR account (CR6779123) should be displayed
                         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
                         const isSpecialCR = showAsCR === 'CR6779123';
-                        
+
                         // If special CR is active, prioritize CR6779123
                         if (isSpecialCR) {
                             const crAccount = list.find((acc: any) => acc.loginid === 'CR6779123');
@@ -526,7 +526,7 @@ const CopyTrading = observer(() => {
                                 realLogin = 'CR6779123';
                             }
                         }
-                        
+
                         // If not found or not special CR, find first real account
                         if (!realLogin) {
                             for (const acc of list) {
@@ -539,7 +539,7 @@ const CopyTrading = observer(() => {
                                 }
                             }
                         }
-                        
+
                         if (realLogin) {
                             localStorage.setItem('cr_loginid', String(realLogin));
                         }
@@ -569,7 +569,7 @@ const CopyTrading = observer(() => {
                         // CRITICAL: For special CR account, use calculated balance from all_accounts_balance
                         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
                         const isSpecialCR = showAsCR === 'CR7988801';
-                        
+
                         if (isSpecialCR && client?.all_accounts_balance?.accounts?.['CR6779123']) {
                             const balanceData = client.all_accounts_balance.accounts['CR6779123'];
                             const balanceNum = parseFloat(balanceData.balance?.toString() || '0');
@@ -578,7 +578,7 @@ const CopyTrading = observer(() => {
                             setBalance(`${balance} ${currency}`);
                             return; // Don't use API balance for special CR
                         }
-                        
+
                         // Use API balance for normal accounts
                         const balance = ms.balance.balance;
                         const currency = ms.balance.currency;

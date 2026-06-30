@@ -29,14 +29,16 @@ const Toolbar = observer(() => {
             <div className='toolbar dashboard__toolbar' data-testid='dt_dashboard_toolbar'>
                 <div className='toolbar__section'>
                     {!isDesktop && (
-                        <ToolbarButton
-                            popover_message={localize('Click here to start building your Deriv Bot.')}
-                            button_id='db-toolbar__get-started-button'
-                            button_classname='toolbar__btn toolbar__btn--icon toolbar__btn--start'
-                            buttonOnClick={handleQuickStrategyOpen}
-                            button_text={localize('Quick strategy')}
-                            is_bot_running={is_running}
-                        />
+                        <>
+                            <ToolbarButton
+                                popover_message={localize('Click here to start building your Deriv Bot.')}
+                                button_id='db-toolbar__get-started-button'
+                                button_classname='toolbar__btn toolbar__btn--icon toolbar__btn--start'
+                                buttonOnClick={handleQuickStrategyOpen}
+                                button_text={localize('Quick strategy')}
+                                is_bot_running={is_running}
+                            />
+                        </>
                     )}
                     {isDesktop && <WorkspaceGroup />}
                 </div>

@@ -98,28 +98,6 @@
     }
 }
 
-// Pause button shown next to the progress bar when bot is running
-.animation__pause-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    margin: 4px auto;
-    padding: 4px 12px;
-    border: 1px solid #c9a227;
-    border-radius: 4px;
-    background: transparent;
-    color: #c9a227;
-    font-size: 1.2rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s;
-
-    &:hover {
-        background: #c9a227;
-        color: #1a1302;
-    }
-}
-
 // Adjust the button to match the right side height
 .animation__run-button {
     height: 40px !important;

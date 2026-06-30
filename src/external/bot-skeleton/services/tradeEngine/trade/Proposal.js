@@ -52,10 +52,6 @@ export default Engine =>
             const { proposals } = this.data;
 
             if (proposals.length === 0) {
-                console.log('⏳ [PROPOSAL] Proposals not ready, checking templates...');
-                if (this.proposal_templates && this.proposal_templates.length > 0) {
-                    this.requestProposals();
-                }
                 throw Error(localize('Proposals are not ready'));
             }
 
@@ -64,11 +60,10 @@ export default Engine =>
                     proposal.contract_type === contract_type &&
                     proposal.purchase_reference === this.getPurchaseReference()
                 ) {
-                    // Bypass balance/validation errors for virtual trades
-                    if (this.vh_state.enabled && this.vh_state.is_virtual) {
-                        return proposal;
-                    }
-
+                    // Below happens when a user has had one of the proposals return
+                    // with a ContractBuyValidationError. We allow the logic to continue
+                    // to here cause the opposite proposal may still be valid. Only once
+                    // they attempt to purchase the errored proposal we will intervene.
                     if (proposal.error) {
                         throw proposal.error;
                     }
@@ -82,26 +77,10 @@ export default Engine =>
             if (!to_buy) {
                 throw new Error(localize('Selected proposal does not exist'));
             }
-            // Use isolated VH stake if in virtual mode
-            let askPrice = Number(to_buy.ask_price);
-            if (this.vh_state.enabled) {
-                if (this.vh_state.is_virtual) {
-                    // In virtual mode, use the tracked VH stake (which should be the original stake)
-                    if (this.vh_state.current_stake) {
-                        askPrice = Number(this.vh_state.current_stake);
-                    }
-                    console.log(`🤖 [VIRTUAL HOOK] Virtual mode: Using stake ${askPrice}`);
-                } else {
-                    // In real mode, use the original stake from trade options
-                    // This ensures we don't use any multiplied stake from previous trades
-                    askPrice = Number(this.tradeOptions.amount);
-                    console.log(`🤖 [VIRTUAL HOOK] Real mode: Using original stake ${askPrice}`);
-                }
-            }
 
             return {
                 id: to_buy.id,
-                askPrice: askPrice,
+                askPrice: to_buy.ask_price,
             };
         }
 

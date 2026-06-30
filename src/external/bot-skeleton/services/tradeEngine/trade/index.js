@@ -50,7 +50,7 @@ const watchScope = ({ store, stopScope, passScope, passFlag }) => {
             if (newState.newTick === prevTick) return;
             prevTick = newState.newTick;
 
-            if (newState.scope === passScope && (passFlag === undefined || newState[passFlag])) {
+            if (newState.scope === passScope && newState[passFlag]) {
                 unsubscribe();
                 resolve(true);
             }
@@ -76,32 +76,6 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
         this.subscription_id_for_accumulators = null;
         this.is_proposal_requested_for_accumulators = false;
         this.store = createStore(rootReducer, applyMiddleware(thunk));
-        this.vh_state = {
-            is_virtual: false,
-            loss_count: 0,
-            enabled: false,
-            threshold: 0,
-            martingaleFactor: 1.5,
-            maxSteps: 3,
-            minTradesOnReal: 1,
-            takeProfit: 50,
-            stopLoss: 5,
-            current_stake: 0,
-            initial_stake: 0,
-            step_count: 0,
-            // Tick-driven virtual trade fields
-            virtual_trade_active: false,
-            virtual_entry_digit: null,
-            virtual_tick_count: 0,
-            virtual_target_duration: 0,
-            virtual_contract_type: null,
-            virtual_prediction: null,
-            virtual_entry_spot: null,
-            virtual_entry_epoch: null,
-            virtual_resolve: null,
-            virtual_reject: null,
-            virtual_timeout: null,
-        };
     }
 
     init(...args) {
@@ -110,12 +84,6 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
 
         this.initArgs = args;
         this.options = options;
-        if (options.virtualHook) {
-            this.vh_state.enabled = options.virtualHook.enabled;
-            this.vh_state.threshold = Number(options.virtualHook.threshold);
-            this.vh_state.is_virtual = this.vh_state.enabled;
-            this.vh_state.loss_count = 0;
-        }
         this.startPromise = this.loginAndGetBalance(token);
 
         if (!this.checkTicksPromiseExists()) this.watchTicks(symbol);
@@ -131,7 +99,7 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
         const currentLoginId = api_base.account_info?.loginid || this.accountInfo?.loginid;
         const displayedAccount = showAsCR || currentLoginId;
-        
+
         // Only check if it's a special CR account - don't interfere with normal accounts
         if (showAsCR && typeof isSpecialCRAccount === 'function') {
             const isSpecialCR = isSpecialCRAccount(displayedAccount);
@@ -206,11 +174,6 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
 
     makeDirectPurchaseDecision() {
         const { has_payout_block, is_basis_payout } = checkBlocksForProposalRequest();
-        // Virtual trades do NOT need proposals — they compute results purely from
-        // tick data + tradeOptions. Proposals are only needed when the bot's Before
-        // Purchase block uses getAskPrice/getPayout blocks, or when basis is payout.
-        // When virtual hook switches to real trades it uses the direct buy path which
-        // also doesn't require a prior proposal (sends buy parameters directly).
         this.is_proposal_subscription_required = has_payout_block || is_basis_payout;
 
         if (this.is_proposal_subscription_required) {

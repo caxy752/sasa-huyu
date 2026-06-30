@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import AnalysisTool from './analysis-tool';
 import DpTools from '../dp-tools';
 import Dcircles from '../dtrader/dcircles/dcircles';
 import AllAnalysis from './all-analysis';
 import Signals from '../signals';
 import TickAnalyser from './tick-analyser';
+import IframeWrapper from '@/components/iframe-wrapper';
 import { useStore } from '@/hooks/useStore';
 import { ApiHelpers } from '@/external/bot-skeleton';
 import './analysis-tools.scss';
@@ -11,7 +13,9 @@ import './analysis-tools.scss';
 type AnalysisToolSubTab =
     | 'dcircles'
     | 'signals'
+    | 'analysis-tool'
     | 'dp-tools'
+    | 'smart-analysis'
     | 'all-analysis'
     | 'tick-analyser';
 
@@ -653,12 +657,24 @@ const AnalysisTools: React.FC = () => {
                 return <Dcircles />;
             case 'signals':
                 return <Signals />;
+            case 'analysis-tool':
+                return <AnalysisTool />;
             case 'dp-tools':
                 return <DpTools />;
+            case 'smart-analysis':
+                return (
+                    <IframeWrapper
+                        src='https://www.smartanalysistool.com/signal-center'
+                        title='Smart Analysis'
+                        className='smart-analysis-container'
+                    />
+                );
             case 'all-analysis':
                 return <AllAnalysis />;
             case 'tick-analyser':
                 return <TickAnalyser />;
+            case 'xenon-ai':
+                return <IframeWrapper src='/xenon-ai.html' title='Xenon AI' className='xenon-ai-container' />;
             default:
                 return null;
         }
@@ -672,7 +688,7 @@ const AnalysisTools: React.FC = () => {
                     onClick={() => handleCardClick('dcircles')}
                 >
                     <div className='analysis-tools__card-content'>
-                        <span className='analysis-tools__card-label'>Dcircles</span>
+                        <span className='analysis-tools__card-label'>DCIRCLES</span>
                     </div>
                 </div>
                 <div
@@ -684,19 +700,19 @@ const AnalysisTools: React.FC = () => {
                     </div>
                 </div>
                 <div
-                    className={`analysis-tools__card analysis-tools__card--light ${active_tool === 'dp-tools' ? 'analysis-tools__card--active' : ''}`}
-                    onClick={() => handleCardClick('dp-tools')}
-                >
-                    <div className='analysis-tools__card-content'>
-                        <span className='analysis-tools__card-label'>DP Tools</span>
-                    </div>
-                </div>
-                <div
                     className={`analysis-tools__card analysis-tools__card--light ${active_tool === 'all-analysis' ? 'analysis-tools__card--active' : ''}`}
                     onClick={() => handleCardClick('all-analysis')}
                 >
                     <div className='analysis-tools__card-content'>
                         <span className='analysis-tools__card-label'>All Analysis</span>
+                    </div>
+                </div>
+                <div
+                    className={`analysis-tools__card analysis-tools__card--light ${active_tool === 'dp-tools' ? 'analysis-tools__card--active' : ''}`}
+                    onClick={() => handleCardClick('dp-tools')}
+                >
+                    <div className='analysis-tools__card-content'>
+                        <span className='analysis-tools__card-label'>DP Tools</span>
                     </div>
                 </div>
                 <div
@@ -710,17 +726,8 @@ const AnalysisTools: React.FC = () => {
             </div>
             <div className='analysis-tools__actions'>
                 <button type='button' className='analysis-tools__trade-button' onClick={() => setShowTradeConfig(true)}>
-                    Trading Configuration
+                    Trade Set_UP
                 </button>
-                {active_tool === 'tick-analyser' && (
-                    <button
-                        type='button'
-                        className='analysis-tools__results-button'
-                        onClick={() => run_panel.setActiveTab('journal')}
-                    >
-                        Trade Results
-                    </button>
-                )}
             </div>
             {active_tool && <div className='analysis-tools__content'>{renderContent()}</div>}
             {show_trade_config && (
@@ -730,10 +737,10 @@ const AnalysisTools: React.FC = () => {
                         onClick={e => e.stopPropagation()}
                         role='dialog'
                         aria-modal='true'
-                        aria-label='Trading Configuration'
+                        aria-label='Trade Set_UP'
                     >
                         <div className='analysis-tools__trade-modal-header'>
-                            <span>Trading Configuration</span>
+                            <span>Trade Set_UP</span>
                             <button
                                 type='button'
                                 className='analysis-tools__trade-close'

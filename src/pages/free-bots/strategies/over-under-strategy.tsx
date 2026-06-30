@@ -1,5 +1,6 @@
 import React from 'react';
 import { Localize } from '@deriv-com/translations';
+import { getBrandLabel } from '@/components/shared/utils/brand/brand';
 import './strategy-viewer.scss';
 
 interface OverUnderStrategyProps {
@@ -7,6 +8,8 @@ interface OverUnderStrategyProps {
 }
 
 const OverUnderStrategy: React.FC<OverUnderStrategyProps> = ({ onBack }) => {
+    const brandLabel = getBrandLabel();
+
     const handleDownload = () => {
         const content = `OVER/UNDER STRATEGIES
 
@@ -18,7 +21,7 @@ CONDITIONS FOR OVER PREDICTION:
 
 ENTRY POINT: Wait for the tick pointer to pick the least appearing among digit 1,2 & 3, if within the next 1 tick the pointer picks any digit from 4 to 9, enter immediately.
 
-USE captainpetertradinghub.com TO TRADE
+USE ${brandLabel.toUpperCase()} TO TRADE
 
 2. UNDER 8,7,6 STRATEGY
 
@@ -33,7 +36,7 @@ ENTRY POINT: Wait for the tick pointer to pick the least appearing among digit 8
 Proverbs 21:5
 "The plans of the diligent lead surely to abundance, but everyone who is hasty comes only to poverty."
 
-USE captainpetertradinghub.com TO TRADE`;
+USE ${brandLabel.toUpperCase()} TO TRADE`;
 
         const blob = new Blob([content], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
@@ -86,7 +89,13 @@ USE captainpetertradinghub.com TO TRADE`;
                 {onBack && (
                     <button className='strategy-viewer__back-button' onClick={onBack}>
                         <svg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>
-                            <path d='M19 12H5M5 12L12 19M5 12L12 5' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
+                            <path
+                                d='M19 12H5M5 12L12 19M5 12L12 5'
+                                stroke='currentColor'
+                                strokeWidth='2'
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                            />
                         </svg>
                         <Localize i18n_default_text='Back to Strategies' />
                     </button>
@@ -119,7 +128,7 @@ USE captainpetertradinghub.com TO TRADE`;
                                 </p>
                             </div>
 
-                            <p className='strategy-bots'>USE captainpetertradinghub.com TO TRADE</p>
+                            <p className='strategy-bots'>USE {brandLabel.toUpperCase()} TO TRADE</p>
                         </div>
                     </section>
 
@@ -148,7 +157,7 @@ USE captainpetertradinghub.com TO TRADE`;
                                 </p>
                             </div>
 
-                            <p className='strategy-bots'>USE captainpetertradinghub.com TO TRADE</p>
+                            <p className='strategy-bots'>USE {brandLabel.toUpperCase()} TO TRADE</p>
                         </div>
                     </section>
 
@@ -157,7 +166,10 @@ USE captainpetertradinghub.com TO TRADE`;
                             "The strategy gives you direction, but discipline gives you results. Practice patiently,
                             execute cleanly, and trust the process."
                         </p>
-                        <p className='strategy-text' style={{ color: '#ffffff', margin: '0.5rem 0', fontStyle: 'italic' }}>
+                        <p
+                            className='strategy-text'
+                            style={{ color: '#ffffff', margin: '0.5rem 0', fontStyle: 'italic' }}
+                        >
                             Proverbs 21:5
                         </p>
                         <p className='strategy-text' style={{ color: '#ffffff', margin: '0.5rem 0' }}>
@@ -172,4 +184,3 @@ USE captainpetertradinghub.com TO TRADE`;
 };
 
 export default OverUnderStrategy;
-

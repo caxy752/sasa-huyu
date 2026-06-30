@@ -6,7 +6,6 @@
     width: calc(100vw - 3.2rem);
     height: var(--bot-content-height);
     top: 0;
-    background: $color-hub-navy-mid;
 
     @include mobile-or-tablet-screen {
         width: 100%;
@@ -21,80 +20,6 @@
     line-height: 1.43;
     letter-spacing: normal;
     fill: $color-white;
-}
-
-.blocklyTreeLabel {
-    color: $color-white !important;
-}
-
-.blocklyTreeRow {
-    transition: background-color 0.15s ease;
-
-    &:hover {
-        background-color: $color-hub-blue-glow !important;
-    }
-
-    &.blocklyTreeSelected {
-        background-color: $color-hub-blue !important;
-
-        .blocklyTreeLabel {
-            color: $color-white !important;
-        }
-    }
-}
-
-.blocklyFlyoutBackground {
-    fill: $color-hub-navy-darkest !important;
-    fill-opacity: 1;
-}
-
-.blocklyFlyout {
-    border-right: 1px solid $color-hub-gold-border;
-}
-
-.blocklyToolboxDiv {
-    background: $color-hub-navy-mid !important;
-    border-right: 1px solid rgba(255, 215, 0, 0.3) !important;
-    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.4) !important;
-    color: $color-white !important;
-}
-
-.blocklyTreeIcon {
-    opacity: 0.7;
-}
-
-// Root/entry block headers — dark navy with gold stroke
-.blocklyDraggable:has(.blocklyTextRootBlockHeader) > .blocklyPath {
-    fill: $color-hub-navy-dark !important;
-    stroke: $color-hub-gold-border !important;
-}
-
-.blocklyDraggable:has(.blocklyTextRootBlockHeaderCollapsed) > .blocklyPath {
-    fill: $color-hub-navy-dark !important;
-    stroke: $color-hub-gold-border !important;
-}
-
-// Selected root block — gold highlight
-.blocklySelected:has(.blocklyTextRootBlockHeader) > .blocklyPath,
-.blocklySelected:has(.blocklyTextRootBlockHeaderCollapsed) > .blocklyPath {
-    stroke: $color-hub-gold !important;
-    stroke-width: 3px !important;
-}
-
-// Workspace canvas background
-svg.blocklySvg {
-    background: $color-hub-navy-mid !important;
-}
-
-.blocklyMainBackground {
-    fill: $color-hub-navy-mid !important;
-}
-
-// Grid dots on the workspace
-.blocklyGridPattern {
-    path {
-        stroke: rgba(255, 215, 0, 0.08) !important;
-    }
 }
 
 .blocklyMainWorkspaceScrollbar {

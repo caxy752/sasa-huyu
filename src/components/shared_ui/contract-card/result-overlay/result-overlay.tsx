@@ -25,25 +25,22 @@ type TResultStatusIcon = {
     is_contract_won?: boolean;
 };
 
-export const ResultStatusIcon = ({ getCardLabels, is_contract_won, result }: TResultStatusIcon & { result?: string }) => {
-    const is_virtual = result?.toLowerCase().includes('virtual');
-    return (
-        <span
-            className={classNames('dc-result__caption', {
-                'dc-result__caption--won': is_contract_won,
-                'dc-result__caption--lost': !is_contract_won,
-            })}
-        >
-            <div className='dc-result__icon'>
-                <StandaloneFlagCheckeredFillIcon
-                    iconSize='sm'
-                    fill={is_contract_won ? 'var(--text-profit-success)' : 'var(--text-loss-danger)'}
-                />
-            </div>
-            {is_virtual ? result : getCardLabels().CLOSED}
-        </span>
-    );
-};
+export const ResultStatusIcon = ({ getCardLabels, is_contract_won }: TResultStatusIcon) => (
+    <span
+        className={classNames('dc-result__caption', {
+            'dc-result__caption--won': is_contract_won,
+            'dc-result__caption--lost': !is_contract_won,
+        })}
+    >
+        <div className='dc-result__icon'>
+            <StandaloneFlagCheckeredFillIcon
+                iconSize='sm'
+                fill={is_contract_won ? 'var(--text-profit-success)' : 'var(--text-loss-danger)'}
+            />
+        </div>
+        {getCardLabels().CLOSED}
+    </span>
+);
 
 const ResultOverlay = ({
     currency,
@@ -56,7 +53,7 @@ const ResultOverlay = ({
     payout_info,
     result,
 }: TResultOverlayProps) => {
-    const is_contract_won = result === 'won' || (result?.toLowerCase().includes('virtual') && payout_info >= 0);
+    const is_contract_won = result === 'won';
 
     return (
         <React.Fragment>
@@ -91,7 +88,7 @@ const ResultOverlay = ({
                         <NavLink className='dc-result__caption-wrapper' to={getContractPath(contract_id)} />
                     )}
                     <div className='dc-result__content'>
-                        <ResultStatusIcon getCardLabels={getCardLabels} is_contract_won={is_contract_won} result={result} />
+                        <ResultStatusIcon getCardLabels={getCardLabels} is_contract_won={is_contract_won} />
                         <Text
                             weight='bold'
                             size='s'

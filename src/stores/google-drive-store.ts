@@ -97,7 +97,10 @@ export default class GoogleDriveStore {
     };
 
     initialiseClient = () => {
-        if (!this.client_id) return;
+        if (!this.client_id) {
+            console.warn('Google Drive: GD_CLIENT_ID is missing, skipping initialisation');
+            return;
+        }
         this.client = google.accounts.oauth2.initTokenClient({
             client_id: this.client_id,
             scope: this.scope,
@@ -133,6 +136,10 @@ export default class GoogleDriveStore {
     };
 
     async signIn() {
+        if (!this.client) {
+            console.warn('Google Drive: Cannot sign in, client not initialised (missing GD_CLIENT_ID)');
+            return;
+        }
         if (!this.is_authorised) {
             await this.client.requestAccessToken();
         }

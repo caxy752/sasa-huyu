@@ -174,7 +174,6 @@ window.Blockly.JavaScript.javascriptGenerator.forBlock.trade_definition = block 
     const candle_interval_block = block.getChildByType('trade_definition_candleinterval');
     const restart_on_error_block = block.getChildByType('trade_definition_restartonerror');
     const restart_on_buy_sell_block = block.getChildByType('trade_definition_restartbuysell');
-    const trade_options_block = block.getChildByType('trade_definition_tradeoptions');
 
     const symbol = market_block.getFieldValue('SYMBOL_LIST');
     const trade_type = trade_type_block.getFieldValue('TRADETYPE_LIST');
@@ -182,10 +181,6 @@ window.Blockly.JavaScript.javascriptGenerator.forBlock.trade_definition = block 
     const candle_interval = candle_interval_block.getFieldValue('CANDLEINTERVAL_LIST');
     const should_restart_on_error = restart_on_error_block.getFieldValue('RESTARTONERROR') !== 'FALSE';
     const should_restart_on_buy_sell = restart_on_buy_sell_block.getFieldValue('TIME_MACHINE_ENABLED') !== 'FALSE';
-
-    const vh_enabled = trade_options_block?.getFieldValue('VIRTUAL_HOOK_ENABLED') === 'TRUE';
-    const vh_threshold_block = trade_options_block?.getInputTargetBlock('VIRTUAL_HOOK_THRESHOLD');
-    const vh_threshold = vh_threshold_block ? window.Blockly.JavaScript.javascriptGenerator.valueToCode(trade_options_block, 'VIRTUAL_HOOK_THRESHOLD', window.Blockly.JavaScript.javascriptGenerator.ORDER_ATOMIC) || '1' : '1';
 
     const { opposites } = config();
     const contract_type_list =
@@ -204,10 +199,6 @@ window.Blockly.JavaScript.javascriptGenerator.forBlock.trade_definition = block 
           candleInterval      : '${candle_interval || 'FALSE'}',
           shouldRestartOnError: ${should_restart_on_error},
           timeMachineEnabled  : ${should_restart_on_buy_sell},
-          virtualHook: {
-              enabled: ${vh_enabled},
-              threshold: ${vh_threshold},
-          },
         });
         ${initialization.trim()}
     };

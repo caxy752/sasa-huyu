@@ -7,7 +7,6 @@ import {
     REVERSE_D_ALEMBERT,
     REVERSE_MARTINGALE,
     STRATEGY_1_3_2_6,
-    MAKOTI_V3_RISE_FALL,
 } from '../../../constants/quick-strategies';
 import { LocalizeHTMLForSellConditions } from './localize_html';
 import { TConfigItem, TStrategies, TValidationItem } from './types';
@@ -664,34 +663,6 @@ export const STRATEGIES = (): TStrategies => ({
                 TICK_COUNT(),
                 CHECKBOX_MAX_STAKE(),
                 MAX_STAKE(),
-            ],
-        ],
-    },
-    MAKOTI_V3_RISE_FALL: {
-        name: 'MAKOTIV3RISE_FALL',
-        label: localize('MAKOTI V3 RISE FALL'),
-        rs_strategy_name: 'MAKOTIV3RISE_FALL',
-        description: MAKOTI_V3_RISE_FALL(),
-        fields: [
-            [
-                LABEL_SYMBOL(),
-                SYMBOL(),
-                LABEL_TRADETYPE(),
-                TRADETYPE(),
-                LABEL_PURCHASE_TYPE(),
-                PURCHASE_TYPE(),
-                LABEL_STAKE(),
-                STAKE(),
-                LABEL_DURATION(),
-                DURATION_TYPE(),
-                DURATION(),
-            ],
-            [
-                LABEL_PROFIT(),
-                PROFIT(),
-                LABEL_LOSS(),
-                LOSS(),
-                SIZE(),
             ],
         ],
     },

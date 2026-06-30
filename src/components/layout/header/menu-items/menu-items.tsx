@@ -25,7 +25,7 @@ export const MenuItems = observer(() => {
     // Check if special CR account is active
     const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
     const isSpecialCR = showAsCR === 'CR6779123';
-    
+
     // Check if the account is a demo account
     // Use the URL parameter to determine if it's a demo account, as this will update when the account changes
     const urlParams = new URLSearchParams(window.location.search);
@@ -119,7 +119,7 @@ export const TradershubLink = observer(() => {
     // Check if special CR account is active
     const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
     const isSpecialCR = showAsCR === 'CR6779123';
-    
+
     // Check if the account is a demo account
     // Use the URL parameter to determine if it's a demo account, as this will update when the account changes
     const urlParams = new URLSearchParams(window.location.search);

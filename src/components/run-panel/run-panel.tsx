@@ -282,14 +282,6 @@ const RunPanel = observer(() => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const {
-        is_dialog_open,
-        dialog_options,
-        onOkButtonClick,
-        onCancelButtonClick,
-        onCloseDialog,
-    } = run_panel;
-
     const content = (
         <DrawerContent
             active_index={active_index}
@@ -319,16 +311,10 @@ const RunPanel = observer(() => {
         />
     );
 
-    // Tab positions in main.tsx (0-based child index):
-    // 0=Dashboard, 1=BotBuilder, 2=TradingBots, 3=OverUnder,
-    // 4=AnalysisTool, 5=CopyTrading, 6=DTrader, 7=Overlord, 8=ElitePrime, 9=SmartTrader
-    const OVERLORD_TAB = 7;
-    const ELITE_PRIME_TAB = 8;
-    const SMART_TRADER_TAB = 9;
-    const DTRADER_TAB = 6;
-    const show_run_panel = [BOT_BUILDER, CHART, TRADING_BOTS, DBOT_TABS.MAKOTI_MAGIC, DBOT_TABS.OVER_UNDER, OVERLORD_TAB, ELITE_PRIME_TAB, SMART_TRADER_TAB].includes(active_tab) || active_tour;
-    // DTrader tab uses manual trading only — RunPanel is also hidden by FULL_PAGE_TABS in main.tsx
-    if (active_tab === DTRADER_TAB) return null;
+    const show_run_panel = [BOT_BUILDER, CHART, TRADING_BOTS, ANALYSIS_TOOL].includes(active_tab) || active_tour;
+    // Don't show RunPanel on DTrader tab - manual trading only
+    const { DTRADER } = DBOT_TABS;
+    if (active_tab === DTRADER) return null;
     if ((!show_run_panel && isDesktop) || active_tour === 'bot_builder') return null;
 
     return (
@@ -358,37 +344,6 @@ const RunPanel = observer(() => {
                 is_statistics_info_modal_open={is_statistics_info_modal_open}
                 toggleStatisticsInfoModal={toggleStatisticsInfoModal}
             />
-            <Modal
-                className='confirmation-dialog'
-                title={dialog_options?.title || ''}
-                is_open={is_dialog_open}
-                toggleModal={onCloseDialog}
-                width={'440px'}
-            >
-                <Modal.Body>
-                    <Text as='p'>{dialog_options?.message || ''}</Text>
-                </Modal.Body>
-                <Modal.Footer>
-                    <Button
-                        secondary
-                        onClick={onCancelButtonClick || onCloseDialog}
-                        text={localize('Cancel')}
-                    />
-                    <Button
-                        primary
-                        onClick={() => {
-                            try {
-                                if (onOkButtonClick) {
-                                    onOkButtonClick();
-                                }
-                            } catch (error) {
-                                console.error('[Run Panel] Error in confirm button handler:', error);
-                            }
-                        }}
-                        text={localize('Confirm')}
-                    />
-                </Modal.Footer>
-            </Modal>
         </>
     );
 });

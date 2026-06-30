@@ -4,22 +4,18 @@ import Cookies from 'js-cookie';
 import { Outlet } from 'react-router-dom';
 import { api_base } from '@/external/bot-skeleton';
 import useTMB from '@/hooks/useTMB';
-import { handleOidcAuthFailure } from '@/utils/auth-utils';
-import { useApiBase } from '@/hooks/useApiBase';
-
+import { generateOAuthURL } from '@/components/shared';
 import { useDevice } from '@deriv-com/ui';
 import { crypto_currencies_display_order, fiat_currencies_display_order } from '../shared';
 import Footer from './footer';
 import AppHeader from './header';
 import Body from './main-body';
-import StandaloneLoginScreen from '@/components/login-screen/StandaloneLoginScreen';
 import './layout.scss';
 
 const Layout = () => {
     const { isDesktop } = useDevice();
-    const { activeLoginid } = useApiBase();
 
-    const isCallbackPage = window.location.pathname === '/callback';
+    const isCallbackPage = window.location.pathname === '/callback' || window.location.pathname === '/auth/callback';
     const { onRenderTMBCheck, is_tmb_enabled: tmb_enabled_from_hook, isTmbEnabled } = useTMB();
     const is_tmb_enabled = useMemo(
         () => window.is_tmb_enabled === true || tmb_enabled_from_hook,
@@ -31,6 +27,11 @@ const Layout = () => {
     const checkClientAccount = JSON.parse(localStorage.getItem('clientAccounts') ?? '{}');
     const getQueryParams = new URLSearchParams(window.location.search);
     const currency = getQueryParams.get('account') ?? '';
+    const isOAuthCallbackPage =
+        getQueryParams.has('code') ||
+        getQueryParams.has('state') ||
+        getQueryParams.has('error') ||
+        getQueryParams.has('error_description');
     const accountsList = JSON.parse(localStorage.getItem('accountsList') ?? '{}');
     const isClientAccountsPopulated = Object.keys(accountsList).length > 0;
     const ifClientAccountHasCurrency =
@@ -133,11 +134,8 @@ const Layout = () => {
             sessionStorage.setItem('query_param_currency', currency);
         }
 
-        // Only auto-redirect if the user was previously logged in (cookie present) but
-        // their account data is now missing — do NOT redirect fresh unauthenticated visitors
-        // so they can choose their login flow from the header buttons.
         const checkOIDCEnabledWithMissingAccount =
-            isLoggedInCookie && !isEndpointPage && !isCallbackPage && !clientHasCurrency;
+            !isEndpointPage && !isCallbackPage && !isOAuthCallbackPage && !clientHasCurrency;
         const shouldAuthenticate =
             (isLoggedInCookie && !isClientAccountsPopulated && !isEndpointPage && !isCallbackPage) ||
             checkOIDCEnabledWithMissingAccount;
@@ -160,12 +158,11 @@ const Layout = () => {
                         sessionStorage.setItem('query_param_currency', query_param_currency);
                     }
                     try {
-                        const { generateOAuthURL } = await import('@/components/shared');
-                        // For auto-auth, default to old account endpoint as it is the most common fallback
-                        window.location.replace(generateOAuthURL(false));
+                        sessionStorage.setItem('query_param_currency', query_param_currency);
+                        window.location.replace(await generateOAuthURL());
                     } catch (err) {
                         setIsAuthenticating(false);
-                        handleOidcAuthFailure(err);
+                        console.error('Authentication redirect failed:', err);
                     }
                 }
             } catch (err) {
@@ -181,11 +178,13 @@ const Layout = () => {
         isClientAccountsPopulated,
         isEndpointPage,
         isCallbackPage,
+        isOAuthCallbackPage,
         clientHasCurrency,
         tmb_enabled_from_hook,
         onRenderTMBCheck,
         currency,
         is_tmb_enabled,
+        isTmbEnabled,
     ]);
 
     // Add a state to track if initial authentication check is complete
@@ -203,11 +202,8 @@ const Layout = () => {
         }
     }, [isAuthenticating, isInitialAuthCheckComplete]);
 
-    const showLoginScreen = isInitialAuthCheckComplete && !activeLoginid && !isCallbackPage;
-
     return (
         <div className={clsx('layout', { responsive: isDesktop })}>
-            {showLoginScreen && <StandaloneLoginScreen />}
             {!isCallbackPage && <AppHeader isAuthenticating={isAuthenticating || !isInitialAuthCheckComplete} />}
             <Body>
                 <Outlet />

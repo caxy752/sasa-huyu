@@ -107,13 +107,13 @@ export function initReplicator(manager: CopyTradingManager) {
             // Check if special CR account is active (SPECIAL CR LOGIC)
             const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
             const isSpecialCR = showAsCR && isSpecialCRAccount(showAsCR);
-            
+
             // Get current user token
             // IMPORTANT: For normal CR accounts, getToken() works normally
             // For special CR (CR6779123), we need to use demo token since that's what API uses
             let currentToken: any = null;
             let masterToken: string | undefined = undefined;
-            
+
             if (isSpecialCR && showAsCR) {
                 // Special CR account mode: API uses demo token for trading
                 // Use demo token as master for copy trading
@@ -128,12 +128,16 @@ export function initReplicator(manager: CopyTradingManager) {
                     } else {
                         currentToken = getToken();
                         masterToken = currentToken?.token;
-                        console.log('[Replicator] ⚠️ Special CR mode but demo token not found, falling back to getToken()');
+                        console.log(
+                            '[Replicator] ⚠️ Special CR mode but demo token not found, falling back to getToken()'
+                        );
                     }
                 } else {
                     currentToken = getToken();
                     masterToken = currentToken?.token;
-                    console.log('[Replicator] ⚠️ Special CR mode but no demo account ID found, falling back to getToken()');
+                    console.log(
+                        '[Replicator] ⚠️ Special CR mode but no demo account ID found, falling back to getToken()'
+                    );
                 }
             } else {
                 // Normal CR accounts: use getToken() exactly like deriv insider

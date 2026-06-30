@@ -14,6 +14,11 @@ export const clearAuthData = (): void => {
     localStorage.removeItem('active_loginid');
     localStorage.removeItem('client.accounts');
     localStorage.removeItem('client.country');
+    sessionStorage.removeItem('auth_info');
+    sessionStorage.removeItem('oauth_csrf_token');
+    sessionStorage.removeItem('oauth_csrf_token_timestamp');
+    sessionStorage.removeItem('oauth_code_verifier');
+    sessionStorage.removeItem('oauth_code_verifier_timestamp');
     location.reload();
 };
 

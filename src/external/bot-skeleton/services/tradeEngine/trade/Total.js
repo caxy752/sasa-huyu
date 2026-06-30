@@ -38,7 +38,14 @@ export default Engine =>
             // CRITICAL: Always use REAL API contract data for statistics and martingale
             // Never use displayProfit or displayCurrency here - only use real API values
             // This is used by the bot's internal statistics which martingale strategies may rely on
-            const { sell_price: sellPrice, buy_price: buyPrice, currency, profit: contractProfit, payout, bid_price } = contract;
+            const {
+                sell_price: sellPrice,
+                buy_price: buyPrice,
+                currency,
+                profit: contractProfit,
+                payout,
+                bid_price,
+            } = contract;
 
             // Use contract.profit if available (most reliable)
             // Otherwise calculate from sell_price - buy_price

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import './iframe-wrapper.scss';
-import { getMainAppActiveToken, getMainAppActiveLoginId } from '@/external/bot-skeleton/services/api/appId';
+import { V2GetActiveToken, V2GetActiveClientId } from '@/external/bot-skeleton/services/api/appId';
 import { getAppId } from '@/components/shared/utils/config/config';
 import { useStore } from '@/hooks/useStore';
 import { contract_stages } from '@/constants/contract-stage';
@@ -39,8 +39,8 @@ const IframeWrapper: React.FC<IframeWrapperProps> = observer(({ src, title, clas
 
         // Function to send auth data to iframe
         const sendAuthData = () => {
-            const token = getMainAppActiveToken();
-            const loginid = getMainAppActiveLoginId();
+            const token = V2GetActiveToken();
+            const loginid = V2GetActiveClientId();
             const appId = getAppId(); // Get the current app ID
 
             if (token && loginid && iframe.contentWindow) {
@@ -109,10 +109,15 @@ const IframeWrapper: React.FC<IframeWrapperProps> = observer(({ src, title, clas
                     try {
                         const contractData = {
                             contract_id: tradeData.contract_id,
-                            transaction_ids: {
-                                buy: tradeData.transaction_id || tradeData.buy_transaction_id,
+                            transaction_ids: tradeData.transaction_ids || {
+                                buy:
+                                    tradeData.transaction_id ||
+                                    tradeData.buy_transaction_id ||
+                                    tradeData.buy_transaction_id,
+                                sell: tradeData.sell_transaction_id || tradeData.transaction_ids?.sell,
                             },
-                            buy_price: tradeData.buy_price || tradeData.price || 0,
+                            buy_price:
+                                tradeData.buy_price || tradeData.price || tradeData.stake || tradeData.amount || 0,
                             currency: tradeData.currency || client?.currency || 'USD',
                             contract_type:
                                 tradeData.contract_type ||
@@ -122,12 +127,26 @@ const IframeWrapper: React.FC<IframeWrapperProps> = observer(({ src, title, clas
                                       ? 'DIGITDIFF'
                                       : title.toLowerCase().includes('speedbot')
                                         ? 'DIGITUNDER'
-                                        : 'DIGITUNDER'), // Default based on bot type (SpeedBot can use DIGITUNDER, DIGITOVER, DIGITEVEN, DIGITODD, DIGITMATCH, DIGITDIFF)
+                                        : 'DIGITUNDER'),
                             underlying: tradeData.underlying || tradeData.symbol || '',
                             display_name: tradeData.display_name || tradeData.underlying || tradeData.symbol || '',
                             date_start: tradeData.date_start || Math.floor(Date.now() / 1000),
                             status: tradeData.status || 'open',
-                            is_virtual: tradeData.is_virtual || false,
+                            entry_tick_display_value:
+                                tradeData.entry_tick_display_value || tradeData.entry_spot_display_value ||
+                                tradeData.entry_tick || tradeData.entry_spot,
+                            exit_tick_display_value:
+                                tradeData.exit_tick_display_value || tradeData.exit_spot_display_value ||
+                                tradeData.exit_tick || tradeData.exit_spot,
+                            entry_tick_time: tradeData.entry_tick_time || tradeData.entry_spot_time,
+                            exit_tick_time: tradeData.exit_tick_time || tradeData.exit_spot_time,
+                            profit: tradeData.profit ?? tradeData.margin ?? tradeData.payout ?? undefined,
+                            sell_price: tradeData.sell_price || tradeData.bid_price,
+                            bid_price: tradeData.bid_price || tradeData.sell_price,
+                            is_expired: tradeData.is_expired,
+                            is_settleable: tradeData.is_settleable,
+                            is_valid_to_sell: tradeData.is_valid_to_sell,
+                            is_sold: tradeData.is_sold,
                         };
 
                         console.log(`📝 [${title}] Calling onBotContractEvent with:`, contractData);
@@ -183,11 +202,9 @@ const IframeWrapper: React.FC<IframeWrapperProps> = observer(({ src, title, clas
 
                 console.log(`🔄 [${title}] Received contract update from iframe:`, updateData);
 
-                // The transactions store should automatically update when contract completes
-                // But we can trigger a refresh if needed
-                if (updateData.contract_id && transactions) {
-                    // The store will handle updates via contract subscriptions
-                    // This is mainly for logging
+                if (updateData.contract_id && transactions?.onBotContractEvent) {
+                    console.log(`📝 [${title}] Forwarding contract update to transactions store for contract_id:`, updateData.contract_id);
+                    transactions.onBotContractEvent(updateData);
                 }
                 return;
             }
@@ -257,12 +274,12 @@ const IframeWrapper: React.FC<IframeWrapperProps> = observer(({ src, title, clas
         };
 
         // Monitor localStorage for auth token changes (login/logout)
-        let lastToken = getMainAppActiveToken();
-        let lastLoginId = getMainAppActiveLoginId();
+        let lastToken = V2GetActiveToken();
+        let lastLoginId = V2GetActiveClientId();
 
         const checkAuthChanges = () => {
-            const currentToken = getMainAppActiveToken();
-            const currentLoginId = getMainAppActiveLoginId();
+            const currentToken = V2GetActiveToken();
+            const currentLoginId = V2GetActiveClientId();
 
             // If token changed (login or logout), send immediately
             if (currentToken !== lastToken || currentLoginId !== lastLoginId) {

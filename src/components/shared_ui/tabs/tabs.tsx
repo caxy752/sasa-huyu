@@ -115,14 +115,6 @@ const Tabs = ({
             onTabItemClick?.(active_tab_index);
         }
         setActiveLineStyle();
-        // Auto-scroll active tab into the center of the tab list on mobile
-        if (active_tab_ref.current) {
-            active_tab_ref.current.scrollIntoView({
-                behavior: 'smooth',
-                block: 'nearest',
-                inline: 'center',
-            });
-        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active_tab_index, setActiveLineStyle]);
 

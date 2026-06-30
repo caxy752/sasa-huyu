@@ -242,9 +242,9 @@ export class CopyTradingManager {
         };
         this.copiers.push(copier);
         void this.saveState();
-        
+
         void this.saveTokenToSupabase(trimmed);
-        
+
         return copier;
     }
 

@@ -10,7 +10,9 @@
     height: 100%;
     justify-content: center;
     padding: 0 1.6rem 0 1.7rem;
-    width: max-content;
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
 
     &__preloader {
         position: absolute;
@@ -136,6 +138,9 @@
     &__balance {
         @include typeface(--title-center-bold-green, default);
 
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--text-prominent);
         line-height: 2.4rem;
         pointer-events: none;
         margin-right: 0.8rem;
@@ -145,6 +150,7 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
+        gap: 0.15rem;
         padding: 0 1rem 0.1rem 0;
         pointer-events: none;
     }
@@ -176,21 +182,23 @@
         }
     }
 
-    @include mobile-or-tablet-screen {
-        padding: 0 0.4rem;
-        margin-right: 0;
-        flex-shrink: 1;
+    @include mobile-screen {
+        padding: 0 0.8rem; // Reduce padding to prevent squeezing
+        margin-right: -0.8rem;
+        margin-left: auto;
+        flex-shrink: 0; // Prevent account switcher from shrinking
         min-width: 0;
-        overflow: hidden;
+        width: auto;
+        max-width: 100%;
+        justify-content: flex-end;
 
         &__balance {
-            font-size: 1.2rem;
-            white-space: nowrap;
-            flex-shrink: 1;
-            min-width: 0;
+            font-size: 1.4rem;
+            white-space: nowrap; // Prevent balance text from wrapping
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 80px;
+            flex-shrink: 0; // Prevent balance from shrinking
+            max-width: 12rem;
 
             &--no-currency {
                 white-space: nowrap;
@@ -198,8 +206,8 @@
         }
 
         &__wrapper {
-            min-width: 0;
-            flex-shrink: 1;
+            min-width: fit-content; // Ensure wrapper doesn't get squeezed
+            flex-shrink: 0; // Prevent wrapper from shrinking
         }
     }
 
@@ -428,8 +436,16 @@
                     font-weight: 700;
 
                     &--virtual:before {
-                        color: var(--text-prominent);
-                        border: 1px solid var(--text-prominent);
+                        font-size: 0.75rem;
+                        height: 1.35rem;
+                        line-height: 1.35rem;
+                        min-width: auto;
+                        padding: 0 0.45rem;
+                        margin-right: 0.4rem;
+                        color: var(--text-disabled);
+                        border: 1px solid var(--text-disabled-1);
+                        background: var(--general-section-1);
+                        border-radius: 1.25rem;
                     }
                 }
             }
@@ -488,8 +504,16 @@
                     @include typeface(--paragraph-left-bold-active);
 
                     &--virtual:before {
-                        color: var(--text-prominent);
-                        border: 1px solid var(--text-prominent);
+                        font-size: 0.75rem;
+                        height: 1.35rem;
+                        line-height: 1.35rem;
+                        min-width: auto;
+                        padding: 0 0.45rem;
+                        margin-right: 0.4rem;
+                        color: var(--text-disabled);
+                        border: 1px solid var(--text-disabled-1);
+                        background: var(--general-section-1);
+                        border-radius: 1.25rem;
                     }
                 }
 

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Matches from '../matches';
 import Hyperbot from '../hyperbot';
 import Diffbot from '../diffbot';
 import SpeedBot from '../speedbot';
@@ -7,10 +6,10 @@ import { Localize } from '@deriv-com/translations';
 import { LabelPairedPuzzlePieceTwoCaptionBoldIcon } from '@deriv/quill-icons/LabelPaired';
 import './hybrid-bots.scss';
 
-type HybridBotSubTab = 'matches' | 'diffbot' | 'hyperbot' | 'speedbot';
+type HybridBotSubTab = 'diffbot' | 'hyperbot' | 'speedbot';
 
 const HybridBots: React.FC = () => {
-    const [active_tool, setActiveTool] = useState<HybridBotSubTab>('matches');
+    const [active_tool, setActiveTool] = useState<HybridBotSubTab>('diffbot');
 
     const handleCardClick = (tool: HybridBotSubTab) => {
         setActiveTool(tool);
@@ -20,8 +19,6 @@ const HybridBots: React.FC = () => {
         if (!active_tool) return null;
 
         switch (active_tool) {
-            case 'matches':
-                return <Matches />;
             case 'diffbot':
                 return <Diffbot />;
             case 'hyperbot':
@@ -36,21 +33,6 @@ const HybridBots: React.FC = () => {
     return (
         <div className='hybrid-bots'>
             <div className='hybrid-bots__cards-container'>
-                <div
-                    className={`hybrid-bots__card hybrid-bots__card--light ${active_tool === 'matches' ? 'hybrid-bots__card--active' : ''}`}
-                    onClick={() => handleCardClick('matches')}
-                >
-                    <div className='hybrid-bots__card-content'>
-                        <LabelPairedPuzzlePieceTwoCaptionBoldIcon
-                            height='16px'
-                            width='16px'
-                            fill={active_tool === 'matches' ? '#3b82f6' : '#1e3a8a'}
-                        />
-                        <span className='hybrid-bots__card-label'>
-                            <Localize i18n_default_text='Matches' />
-                        </span>
-                    </div>
-                </div>
                 <div
                     className={`hybrid-bots__card hybrid-bots__card--light ${active_tool === 'diffbot' ? 'hybrid-bots__card--active' : ''}`}
                     onClick={() => handleCardClick('diffbot')}

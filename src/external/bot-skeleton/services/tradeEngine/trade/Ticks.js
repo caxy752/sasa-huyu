@@ -28,17 +28,6 @@ export default Engine =>
                     const lastTick = ticks.slice(-1)[0];
                     const { epoch } = lastTick;
                     this.store.dispatch({ type: constants.NEW_TICK, payload: epoch });
-
-                    // Process virtual trade on each tick (tick-driven, no loops)
-                    if (this.vh_state?.virtual_trade_active && this.processVirtualTick) {
-                        // Convert tick data to expected format
-                        const tickData = {
-                            quote: lastTick.quote || lastTick.price,
-                            symbol: this.symbol,
-                            epoch: lastTick.epoch || epoch,
-                        };
-                        this.processVirtualTick(tickData);
-                    }
                 };
 
                 const key = await ticksService.monitor({ symbol, callback });

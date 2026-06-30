@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Localize } from '@deriv-com/translations';
-import { getAppId, getSocketURL } from '@/components/shared';
 import './tick-analyser.scss';
 
 type ViewMode = 'summary' | 'detailed';
@@ -54,7 +53,7 @@ const TickAnalyser: React.FC = () => {
     ];
 
     useEffect(() => {
-        const ws = new WebSocket(`wss://${getSocketURL()}/websockets/v3?app_id=${getAppId()}`);
+        const ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=80058');
         wsRef.current = ws;
 
         ws.onopen = () => {

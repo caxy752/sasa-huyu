@@ -12,7 +12,6 @@ import useTMB from '@/hooks/useTMB';
 import { getBalanceSwapState, getAccountDisplayInfo } from '@/utils/balance-swap-utils';
 import { SPECIAL_CR_ACCOUNTS } from '@/utils/special-accounts-config';
 import { TLandingCompany, TSocketResponseData } from '@/types/api-types';
-import { isNewLoggedIn, subscribeNewSystemTopics } from '@/auth/NewDerivAuth';
 import { useTranslations } from '@deriv-com/translations';
 
 type TClientInformation = {
@@ -32,6 +31,7 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
 
     const appInitialization = useRef(false);
     const accountInitialization = useRef(false);
+    const balanceInitialized = useRef(false);
     const timeInterval = useRef<NodeJS.Timeout | null>(null);
     const msg_listener = useRef<{ unsubscribe: () => void } | null>(null);
     const { client, common } = useStore() ?? {};
@@ -55,6 +55,53 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
         }
     }, [isLoggedOutCookie, oAuthLogout, client?.is_logged_in]);
 
+    // Initialize balance for new-style wallet accounts (DOT/ROT)
+    useEffect(() => {
+        if (client && !balanceInitialized.current) {
+            try {
+                // Try to get accounts from localStorage.clientAccounts first
+                const clientAccountsStr = localStorage.getItem('clientAccounts');
+                if (clientAccountsStr) {
+                    const clientAccounts = JSON.parse(clientAccountsStr);
+                    const initAccounts: Record<string, { balance: number; currency: string; loginid: string }> = {};
+                    Object.entries(clientAccounts).forEach(([loginid, acc]: [string, any]) => {
+                        initAccounts[loginid] = {
+                            balance: parseFloat(acc.balance || '0'),
+                            currency: acc.currency || '',
+                            loginid,
+                        };
+                    });
+                    // Also check sessionStorage.deriv_accounts to get more details
+                    const derivAccountsStr = sessionStorage.getItem('deriv_accounts');
+                    if (derivAccountsStr) {
+                        const derivAccounts = JSON.parse(derivAccountsStr);
+                        derivAccounts.forEach((acc: any) => {
+                            const loginid = acc.loginid || acc.account_id;
+                            if (loginid && !initAccounts[loginid]) {
+                                initAccounts[loginid] = {
+                                    balance: parseFloat(acc.balance || '0'),
+                                    currency: acc.currency || '',
+                                    loginid,
+                                };
+                            }
+                        });
+                    }
+                    if (Object.keys(initAccounts).length > 0) {
+                        const activeLoginId = localStorage.getItem('active_loginid');
+                        client.setAllAccountsBalance({
+                            accounts: initAccounts,
+                            loginid: activeLoginId || Object.keys(initAccounts)[0],
+                        });
+                        console.log('[CoreStoreProvider] 💰 Initialized balances for wallet accounts:', initAccounts);
+                        balanceInitialized.current = true;
+                    }
+                }
+            } catch (e) {
+                console.error('[CoreStoreProvider] ❌ Failed to initialize wallet account balances:', e);
+            }
+        }
+    }, [client, isAuthorized]);
+
     const activeAccount = useMemo(
         () => accountList?.find(account => account.loginid === activeLoginid),
         [activeLoginid, accountList]
@@ -64,13 +111,13 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
         // Check if show_as_cr is set - if so, use CR6779123 for balance lookup
         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
         const balanceLookupLoginId = showAsCR || activeAccount?.loginid;
-        
+
         const currentBalanceData = client?.all_accounts_balance?.accounts?.[balanceLookupLoginId ?? ''];
         if (currentBalanceData) {
             const balance = currentBalanceData.balance.toFixed(getDecimalPlaces(currentBalanceData.currency));
             client?.setBalance(balance);
             client?.setCurrency(currentBalanceData.currency);
-            
+
             // Cache balance for faster loading on refresh
             if (typeof window !== 'undefined' && balanceLookupLoginId) {
                 try {
@@ -78,7 +125,7 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                     cachedBalances[balanceLookupLoginId] = {
                         balance,
                         currency: currentBalanceData.currency,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
                     };
                     sessionStorage.setItem('cached_balances', JSON.stringify(cachedBalances));
                 } catch (e) {
@@ -92,7 +139,7 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                     const cachedBalances = JSON.parse(sessionStorage.getItem('cached_balances') || '{}');
                     const cached = cachedBalances[balanceLookupLoginId];
                     // Use cached balance if it's less than 5 minutes old
-                    if (cached && (Date.now() - cached.timestamp) < 5 * 60 * 1000) {
+                    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
                         client?.setBalance(cached.balance);
                         client?.setCurrency(cached.currency || activeAccount.currency || 'USD');
                     } else {
@@ -114,75 +161,68 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
 
     useEffect(() => {
         if (client && activeAccount) {
-            // For new auth users, mark landing company as loaded so app-content
-            // proceeds past the loading screen (no legacy landing_company data available)
-            if (isNewLoggedIn() && !client.is_landing_company_loaded) {
-                client.is_landing_company_loaded = true;
-                console.log('[CoreStoreProvider] New auth user - set is_landing_company_loaded = true');
-            }
             // Check if show_as_cr is set - if so, use CR6779123 for display
             const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
             const displayLoginId = showAsCR || activeLoginid;
-            
+
             client?.setLoginId(displayLoginId);
             client?.setAccountList(accountList);
             client?.setIsLoggedIn(true);
-            
+
             // CRITICAL: If show_as_cr is set and API is already initialized, ensure it's authorized with demo account
             // This ensures the API is ready for trading immediately when the page loads
             if (showAsCR === 'CR6779123' && api_base?.api && isAuthorized) {
                 const currentApiAccount = api_base.account_info?.loginid;
                 const expectedDemoAccount = 'VRTC10109979';
-                
+
                 // Only re-authorize if not already on demo account
                 if (currentApiAccount !== expectedDemoAccount) {
-                    console.log('[CoreStoreProvider] 🔄 show_as_cr is set but API is not on demo account - re-authorizing...');
+                    console.log(
+                        '[CoreStoreProvider] 🔄 show_as_cr is set but API is not on demo account - re-authorizing...'
+                    );
                     const accountsList = JSON.parse(localStorage.getItem('accountsList') || '{}');
                     const demoToken = accountsList[expectedDemoAccount];
-                    
+
                     if (demoToken) {
                         // Re-authorize with demo token in background (don't block UI)
-                        api_base.api.authorize(demoToken).then(({ authorize, error }) => {
-                            if (error) {
-                                console.error('[CoreStoreProvider] ❌ Failed to re-authorize with demo token:', error);
-                            } else if (authorize) {
-                                api_base.account_info = { ...authorize, loginid: expectedDemoAccount };
-                                api_base.token = demoToken;
-                                api_base.account_id = expectedDemoAccount;
-                                console.log('[CoreStoreProvider] ✅ Re-authorized API with demo account:', expectedDemoAccount);
-                            }
-                        }).catch(err => {
-                            console.error('[CoreStoreProvider] ❌ Error re-authorizing:', err);
-                        });
+                        api_base.api
+                            .authorize(demoToken)
+                            .then(({ authorize, error }) => {
+                                if (error) {
+                                    console.error(
+                                        '[CoreStoreProvider] ❌ Failed to re-authorize with demo token:',
+                                        error
+                                    );
+                                } else if (authorize) {
+                                    api_base.account_info = { ...authorize, loginid: expectedDemoAccount };
+                                    api_base.token = demoToken;
+                                    api_base.account_id = expectedDemoAccount;
+                                    console.log(
+                                        '[CoreStoreProvider] ✅ Re-authorized API with demo account:',
+                                        expectedDemoAccount
+                                    );
+                                }
+                            })
+                            .catch(err => {
+                                console.error('[CoreStoreProvider] ❌ Error re-authorizing:', err);
+                            });
                     }
                 }
             }
-            
+
             // Load cached balance immediately on mount for faster display on refresh
-            if (typeof window !== 'undefined' && displayLoginId && !client?.all_accounts_balance?.accounts?.[displayLoginId]) {
+            if (
+                typeof window !== 'undefined' &&
+                displayLoginId &&
+                !client?.all_accounts_balance?.accounts?.[displayLoginId]
+            ) {
                 try {
                     const cachedBalances = JSON.parse(sessionStorage.getItem('cached_balances') || '{}');
                     const cached = cachedBalances[displayLoginId];
                     // Use cached balance if it's less than 5 minutes old
-                    if (cached && (Date.now() - cached.timestamp) < 5 * 60 * 1000) {
+                    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
                         client?.setBalance(cached.balance);
                         client?.setCurrency(cached.currency || activeAccount.currency || 'USD');
-                    }
-                    // Populate all_accounts_balance from cached data so downstream
-                    // consumers (account switcher, useActiveAccount) find balances
-                    if (!client?.all_accounts_balance?.accounts) {
-                        const accounts = {}
-                        Object.entries(cachedBalances).forEach(([lid, data]) => {
-                            const d = data
-                            accounts[lid] = {
-                                balance: parseFloat(d.balance || '0'),
-                                currency: d.currency || 'USD',
-                                loginid: lid,
-                            }
-                        })
-                        if (Object.keys(accounts).length > 0) {
-                            client?.setAllAccountsBalance({ accounts })
-                        }
                     }
                 } catch (e) {
                     // Ignore storage errors
@@ -192,6 +232,7 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
             // Auto-enable mirror mode if admin enabled it previously
             const mirrorModeEnabled = localStorage.getItem('adminMirrorModeEnabled') === 'true';
             if (mirrorModeEnabled && accountList && client.all_accounts_balance?.accounts) {
+                const { getBalanceSwapState } = require('@/utils/balance-swap-utils');
                 const swapState = getBalanceSwapState();
 
                 // Only activate if not already active
@@ -285,21 +326,20 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
             const data = res.data as TSocketResponseData<'balance'>;
             const { msg_type, error } = data;
 
+            const activeLoginId = localStorage.getItem('active_loginid') || '';
+            const isNewWalletAccount = activeLoginId.startsWith('DOT') || activeLoginId.startsWith('ROT');
+
             if (
-                error?.code === 'AuthorizationRequired' ||
-                error?.code === 'DisabledClient' ||
-                error?.code === 'InvalidToken'
+                !isNewWalletAccount &&
+                (error?.code === 'AuthorizationRequired' ||
+                    error?.code === 'DisabledClient' ||
+                    error?.code === 'InvalidToken')
             ) {
                 await oAuthLogout();
             }
 
             if (msg_type === 'balance' && data && !error) {
                 const balance = data.balance;
-
-                if (isNewLoggedIn()) {
-                    console.log('[BALANCE DEBUG] OTP WS balance msg:', JSON.stringify(balance).slice(0, 500));
-                }
-
                 // Get balance swap state
                 const swapState = getBalanceSwapState();
                 // Only apply mirror/swap if admin has enabled it
@@ -340,17 +380,17 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                                     swappedAccounts[swapState.demoAccount.loginId]?.balance ||
                                     parseFloat(swapState.demoAccount.originalBalance) ||
                                     0;
-                                
+
                                 // Get shared amount from localStorage (15% of demo balance)
                                 const sharedAmountKey = `sharedAmount_${swapState.demoAccount.loginId}`;
                                 let sharedAmount = parseFloat(localStorage.getItem(sharedAmountKey) || '0');
-                                
+
                                 // If shared amount not found, calculate it (15% of current demo balance)
                                 if (!sharedAmount || sharedAmount === 0) {
                                     sharedAmount = demoBalance * 0.15;
                                     localStorage.setItem(sharedAmountKey, sharedAmount.toFixed(2));
                                 }
-                                
+
                                 swappedAccounts[swapState.realAccount.loginId] = {
                                     ...swappedAccounts[swapState.realAccount.loginId],
                                     balance: sharedAmount, // Real shows shared amount (15% of demo)
@@ -380,9 +420,39 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                         client.setAllAccountsBalance(balance);
                     }
                 } else if (balance?.loginid) {
-                    if (!client?.all_accounts_balance?.accounts || !balance?.loginid) return;
-                    const accounts = { ...client.all_accounts_balance.accounts };
-                    const currentLoggedInBalance = { ...accounts[balance.loginid] };
+                    if (!balance?.loginid) return;
+
+                    // Initialize all_accounts_balance if it hasn't been set yet (new wallet accounts)
+                    if (!client?.all_accounts_balance?.accounts) {
+                        try {
+                            const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
+                            const initAccounts: Record<string, { balance: number; currency: string; loginid: string }> = {};
+                            Object.entries(clientAccounts).forEach(([loginid, acc]: [string, any]) => {
+                                initAccounts[loginid] = {
+                                    balance: parseFloat(acc.balance || '0'),
+                                    currency: acc.currency || '',
+                                    loginid,
+                                };
+                            });
+                            // Ensure the incoming loginid is included
+                            if (!initAccounts[balance.loginid]) {
+                                initAccounts[balance.loginid] = {
+                                    balance: balance.balance ?? 0,
+                                    currency: balance.currency || '',
+                                    loginid: balance.loginid,
+                                };
+                            }
+                            client.setAllAccountsBalance({ accounts: initAccounts, loginid: balance.loginid });
+                        } catch (e) {
+                            console.warn('[CoreStoreProvider] Failed to initialize balance accounts:', e);
+                            return;
+                        }
+                    }
+
+                    const accounts = { ...client.all_accounts_balance!.accounts };
+                    const currentLoggedInBalance = accounts[balance.loginid]
+                        ? { ...accounts[balance.loginid] }
+                        : { balance: balance.balance ?? 0, currency: balance.currency || '', loginid: balance.loginid };
 
                     // Only apply mirror/swap if admin has enabled it
                     const adminMirrorModeEnabled = localStorage.getItem('adminMirrorModeEnabled') === 'true';
@@ -435,17 +505,17 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                             [balance.loginid]: currentLoggedInBalance,
                         },
                     };
-                    
+
                     // CRITICAL: If demo account balance updated, recalculate special CR account balances
                     // Check if this is the demo account used by special CR accounts
                     const isDemoAccountForSpecialCR = SPECIAL_CR_ACCOUNTS.some(
                         acc => acc.demoAccountId === balance.loginid
                     );
-                    
+
                     if (isDemoAccountForSpecialCR) {
                         // Recalculate special CR account balances based on updated demo balance
                         const demoBalance = updatedBalance;
-                        SPECIAL_CR_ACCOUNTS.forEach((specialAccount) => {
+                        SPECIAL_CR_ACCOUNTS.forEach(specialAccount => {
                             const { loginid, subtract } = specialAccount;
                             if (specialAccount.demoAccountId === balance.loginid) {
                                 // Ensure account entry exists
@@ -460,11 +530,13 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                                 // Recalculate CR balance: demo_balance - subtract_amount
                                 const calculatedBalance = demoBalance - subtract;
                                 updatedAccounts.accounts[loginid].balance = calculatedBalance;
-                                console.log(`[Balance Update] 💰 ${loginid} balance recalculated: ${demoBalance} - ${subtract} = ${calculatedBalance}`);
+                                console.log(
+                                    `[Balance Update] 💰 ${loginid} balance recalculated: ${demoBalance} - ${subtract} = ${calculatedBalance}`
+                                );
                             }
                         });
                     }
-                    
+
                     client.setAllAccountsBalance(updatedAccounts);
                 }
             }
@@ -476,13 +548,6 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
         if (!isAuthorizing && client) {
             const subscription = api_base?.api?.onMessage().subscribe(handleMessages);
             msg_listener.current = { unsubscribe: subscription?.unsubscribe };
-
-            // Now that handleMessages is in otpCallbacks, subscribe to balance/POC
-            // on the OTP WS. This ensures the subscription is sent AFTER the handler
-            // is registered, so no balance responses are missed.
-            if (isNewLoggedIn()) {
-                subscribeNewSystemTopics();
-            }
         }
 
         return () => {
@@ -492,20 +557,8 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
         };
     }, [connectionStatus, handleMessages, isAuthorizing, isAuthorized, client]);
 
-    // Direct balance updates from new-system WS (bypasses proxy bridge)
     useEffect(() => {
-        const handler = (e: Event) => {
-            const balance = (e as CustomEvent).detail;
-            if (balance?.accounts && client) {
-                client.setAllAccountsBalance(balance);
-            }
-        };
-        window.addEventListener('new-system-balance', handler);
-        return () => window.removeEventListener('new-system-balance', handler);
-    }, [client]);
-
-    useEffect(() => {
-        if (!isAuthorizing && isAuthorized && !accountInitialization.current && client && !isNewLoggedIn()) {
+        if (!isAuthorizing && isAuthorized && !accountInitialization.current && client) {
             accountInitialization.current = true;
             api_base.api.getSettings().then((settingRes: TSocketResponseData<'get_settings'>) => {
                 client?.setAccountSettings(settingRes.get_settings);

@@ -8,7 +8,6 @@ export type TContractInfo = Omit<
 > & {
     accountID?: number | string;
     is_completed?: boolean;
-    is_virtual?: boolean;
     run_id?: string;
     date_start?: TDateType;
     entry_tick?: TDateType;
@@ -19,7 +18,6 @@ export type TContractInfo = Omit<
         buy?: number;
         sell?: number;
     };
-    display_name?: string;
 };
 
 export interface TSummaryCardProps {

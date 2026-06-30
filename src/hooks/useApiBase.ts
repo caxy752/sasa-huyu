@@ -46,5 +46,13 @@ export const useApiBase = () => {
         };
     }, []);
 
-    return { connectionStatus, isAuthorized, isAuthorizing, accountList, authData, activeLoginid };
+    return {
+        connectionStatus,
+        isAuthorized,
+        isAuthorizing,
+        setIsAuthorizing,
+        accountList,
+        authData,
+        activeLoginid,
+    };
 };

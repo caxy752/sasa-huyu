@@ -123,7 +123,7 @@ const Transactions = observer(({ is_drawer_open }: TTransactions) => {
                 <span className='transactions__header-column transactions__header-spot'>
                     <Localize i18n_default_text='Entry/Exit spot' />
                 </span>
-                <span className='transactions__header-column transactions__header-profit'>
+                <span className='transactions__header-column transactions__header-stake'>
                     <Localize i18n_default_text='Buy price' />
                 </span>
             </div>
@@ -148,7 +148,13 @@ const Transactions = observer(({ is_drawer_open }: TTransactions) => {
                             keyMapper={row => {
                                 switch (row.type) {
                                     case transaction_elements.CONTRACT: {
-                                        return row.data.display_transaction_ids?.buy ?? row.data.transaction_ids.buy;
+                                        // Prefer display_transaction_ids, then original transaction_ids, then contract_id as a stable fallback
+                                        return (
+                                            row.data.display_transaction_ids?.buy ??
+                                            row.data.transaction_ids?.buy ??
+                                            (row.data.contract_id as any) ??
+                                            `${row.type}-${row.data.date_start}`
+                                        );
                                     }
                                     case transaction_elements.DIVIDER: {
                                         return row.data;
@@ -176,7 +182,7 @@ const Transactions = observer(({ is_drawer_open }: TTransactions) => {
                     ) : (
                         <>
                             {contract_stage >= contract_stages.STARTING ? (
-                                <Transaction contract={null} />
+                                null
                             ) : (
                                 <ThemedScrollbars>
                                     <div className='transactions-empty-box'>

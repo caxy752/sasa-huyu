@@ -4,4 +4,3 @@ export { OSCARS_GRIND } from './oscars_grind';
 export { REVERSE_D_ALEMBERT } from './reverse_dalembert';
 export { REVERSE_MARTINGALE } from './reverse_martingale';
 export { STRATEGY_1_3_2_6 } from './strategy_1_3_2_6';
-export { MAKOTI_V3_RISE_FALL } from './makoti_v3_rise_fall';

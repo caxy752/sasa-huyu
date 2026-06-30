@@ -104,6 +104,13 @@
         background-color: var(--general-section-5);
     }
 
+    &__actions {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
     &__item {
         display: flex;
         flex-direction: row;

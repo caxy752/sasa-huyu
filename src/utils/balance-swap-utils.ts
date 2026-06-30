@@ -88,7 +88,12 @@ export const getDisplayFlag = (loginId: string, originalFlag: string): string =>
  * @param allAccountsBalance - Optional: All accounts balance object to get live demo balance for mirroring
  * @param isActiveAccount - Optional: Whether this is the currently active account (affects demo display)
  */
-export const getAccountDisplayInfo = (loginId: string, accountData: any, allAccountsBalance?: any, isActiveAccount?: boolean) => {
+export const getAccountDisplayInfo = (
+    loginId: string,
+    accountData: any,
+    allAccountsBalance?: any,
+    isActiveAccount?: boolean
+) => {
     const swapState = getBalanceSwapState();
 
     // Only apply mirror/swap if admin has enabled it
@@ -123,31 +128,37 @@ export const getAccountDisplayInfo = (loginId: string, accountData: any, allAcco
 
                 const currentDemoBalanceNum = parseFloat(currentDemoBalance) || 0;
                 const storedOriginalBalance = parseFloat(swapState.demoAccount.originalBalance) || 0;
-                
+
                 // Get or set the reflected starting balance (demo balance - shared amount)
                 const reflectedStartKey = `reflectedStart_${swapState.demoAccount.loginId}`;
                 const sharedAmountKey = `sharedAmount_${swapState.demoAccount.loginId}`;
                 let reflectedStartBalance = parseFloat(localStorage.getItem(reflectedStartKey) || '0');
                 let sharedAmount = parseFloat(localStorage.getItem(sharedAmountKey) || '0');
-                
+
                 if (!reflectedStartBalance || reflectedStartBalance === 0 || !sharedAmount || sharedAmount === 0) {
                     // First time or reset - calculate shared amount (15% of demo) and reflected balance
                     sharedAmount = storedOriginalBalance * 0.15;
                     reflectedStartBalance = storedOriginalBalance - sharedAmount;
                     localStorage.setItem(sharedAmountKey, sharedAmount.toFixed(2));
                     localStorage.setItem(reflectedStartKey, reflectedStartBalance.toFixed(2));
-                    localStorage.setItem(`demoBalanceRef_${swapState.demoAccount.loginId}`, storedOriginalBalance.toString());
+                    localStorage.setItem(
+                        `demoBalanceRef_${swapState.demoAccount.loginId}`,
+                        storedOriginalBalance.toString()
+                    );
                 }
-                
+
                 // Get the reference demo balance (when admin mode started)
-                const refDemoBalance = parseFloat(localStorage.getItem(`demoBalanceRef_${swapState.demoAccount.loginId}`) || storedOriginalBalance.toString());
-                
+                const refDemoBalance = parseFloat(
+                    localStorage.getItem(`demoBalanceRef_${swapState.demoAccount.loginId}`) ||
+                        storedOriginalBalance.toString()
+                );
+
                 // Calculate the change since admin mode started
                 const balanceChange = currentDemoBalanceNum - refDemoBalance;
-                
+
                 // Reflected balance = starting reflected + all changes (1:1)
                 const reflectedDisplayBalance = (reflectedStartBalance + balanceChange).toFixed(2);
-                
+
                 return {
                     balance: reflectedDisplayBalance, // Demo shows reflected balance with 1:1 changes
                     flag: 'demo',
@@ -180,17 +191,17 @@ export const getAccountDisplayInfo = (loginId: string, accountData: any, allAcco
             }
 
             const demoBalanceNum = parseFloat(demoBalance) || 0;
-            
+
             // Get shared amount from localStorage (15% of demo balance)
             const sharedAmountKey = `sharedAmount_${swapState.demoAccount.loginId}`;
             let sharedAmount = parseFloat(localStorage.getItem(sharedAmountKey) || '0');
-            
+
             // If shared amount not found, calculate it (15% of current demo balance)
             if (!sharedAmount || sharedAmount === 0) {
                 sharedAmount = demoBalanceNum * 0.15;
                 localStorage.setItem(sharedAmountKey, sharedAmount.toFixed(2));
             }
-            
+
             const mirroredDisplayBalance = sharedAmount.toFixed(2);
             return {
                 balance: mirroredDisplayBalance, // Real shows shared amount (15% of demo balance)
@@ -202,27 +213,31 @@ export const getAccountDisplayInfo = (loginId: string, accountData: any, allAcco
             };
         } else {
             // Check if this is demo account being used as real account (admin mode)
-            const adminRealAccountUsingDemo = 
+            const adminRealAccountUsingDemo =
                 typeof window !== 'undefined' && localStorage.getItem('adminRealAccountUsingDemo') === 'true';
-            const adminRealAccountDisplayLoginId = 
+            const adminRealAccountDisplayLoginId =
                 typeof window !== 'undefined' ? localStorage.getItem('adminRealAccountDisplayLoginId') : null;
-            
-            if (adminRealAccountUsingDemo && loginId === swapState.demoAccount.loginId && adminRealAccountDisplayLoginId === swapState.realAccount.loginId) {
+
+            if (
+                adminRealAccountUsingDemo &&
+                loginId === swapState.demoAccount.loginId &&
+                adminRealAccountDisplayLoginId === swapState.realAccount.loginId
+            ) {
                 // Demo account is being used but displayed as real account - show shared amount
                 let demoBalance = accountData.balance;
                 if (allAccountsBalance?.accounts?.[loginId]?.balance !== undefined) {
                     demoBalance = allAccountsBalance.accounts[loginId].balance.toString();
                 }
-                
+
                 const demoBalanceNum = parseFloat(demoBalance) || 0;
                 const sharedAmountKey = `sharedAmount_${loginId}`;
                 let sharedAmount = parseFloat(localStorage.getItem(sharedAmountKey) || '0');
-                
+
                 if (!sharedAmount || sharedAmount === 0) {
                     sharedAmount = demoBalanceNum * 0.15;
                     localStorage.setItem(sharedAmountKey, sharedAmount.toFixed(2));
                 }
-                
+
                 return {
                     balance: sharedAmount.toFixed(2), // Show shared amount (15% of demo)
                     flag: 'real', // Show real flag
@@ -270,10 +285,10 @@ export const getAccountDisplayInfo = (loginId: string, accountData: any, allAcco
 export const resetBalanceSwap = () => {
     try {
         const swapState = getBalanceSwapState();
-        
+
         localStorage.removeItem('balanceSwapState');
         localStorage.removeItem('adminMirrorModeEnabled');
-        
+
         // Clean up reflected balance references
         if (swapState?.demoAccount?.loginId) {
             localStorage.removeItem(`reflectedStart_${swapState.demoAccount.loginId}`);
@@ -310,37 +325,35 @@ export const resetBalanceSwap = () => {
  * @param transactionId - The transaction ID to transform
  * @returns Transformed transaction ID
  */
-export const transformTransactionIdForSpecialCR = (
-    transactionId: number | string | undefined
-): number | undefined => {
+export const transformTransactionIdForSpecialCR = (transactionId: number | string | undefined): number | undefined => {
     if (!transactionId) return undefined;
-    
+
     const idStr = transactionId.toString();
     const originalLength = idStr.length;
-    
+
     // If ID is too short, pad it to at least 7 digits first
     if (originalLength < 7) {
         const paddedId = idStr.padStart(7, '0');
         return transformTransactionIdForSpecialCR(parseInt(paddedId));
     }
-    
+
     // Calculate how many middle digits we need
     // Format: 144 (3 digits) + middle (N digits) + 1 (1 digit) = originalLength
     // So: middle length = originalLength - 4
     const middleLength = originalLength - 4;
-    
+
     // Extract middle digits from original (skip first digit, take middleLength digits)
     // For 5123456 (7 digits): skip "5", take next 3 digits "123"
     const middleDigits = idStr.substring(1, 1 + middleLength);
-    
+
     // If we need more digits, pad with zeros from the remaining original digits
     // For 5123456: we have "123", need 3, so we're good
     // If original was shorter, pad with zeros
     const paddedMiddle = middleDigits.padEnd(middleLength, '0');
-    
+
     // Build: 144 + middle + 1
     const transformedId = '144' + paddedMiddle + '1';
-    
+
     return parseInt(transformedId);
 };
 
@@ -357,27 +370,28 @@ export const transformTransactionIdForAdmin = (
     isDemo: boolean
 ): number | undefined => {
     if (!transactionId) return undefined;
-    
-    const adminMirrorModeEnabled = typeof window !== 'undefined' && localStorage.getItem('adminMirrorModeEnabled') === 'true';
-    
+
+    const adminMirrorModeEnabled =
+        typeof window !== 'undefined' && localStorage.getItem('adminMirrorModeEnabled') === 'true';
+
     // In admin mode, always ensure transaction IDs start with 1 AND end with 1
     if (adminMirrorModeEnabled) {
         const idStr = transactionId.toString();
         let transformedId = idStr;
-        
+
         // If transaction ID doesn't start with 1, convert it to start with 1
         if (!idStr.startsWith('1')) {
             transformedId = '1' + idStr.substring(1);
         }
-        
+
         // Ensure it also ends with 1
         if (!transformedId.endsWith('1')) {
             transformedId = transformedId.substring(0, transformedId.length - 1) + '1';
         }
-        
+
         return parseInt(transformedId);
     }
-    
+
     // If admin mode is not enabled, return as is
     return typeof transactionId === 'string' ? parseInt(transactionId) : transactionId;
 };

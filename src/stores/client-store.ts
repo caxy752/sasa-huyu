@@ -10,10 +10,16 @@ import {
     setAuthData,
     setIsAuthorized,
 } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
+import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import type { TAuthData, TLandingCompany } from '@/types/api-types';
 import type { Balance, GetAccountStatus, GetSettings, WebsiteStatus } from '@deriv/api-types';
 import { Analytics } from '@deriv-com/analytics';
-import { getDisplayBalance, getAccountDisplayInfo, getBalanceSwapState, resetBalanceSwap } from '@/utils/balance-swap-utils';
+import {
+    getDisplayBalance,
+    getAccountDisplayInfo,
+    getBalanceSwapState,
+    resetBalanceSwap,
+} from '@/utils/balance-swap-utils';
 import { SPECIAL_CR_ACCOUNTS } from '@/utils/special-accounts-config';
 
 const eu_shortcode_regex = /^maltainvest$/;
@@ -274,13 +280,13 @@ export default class ClientStore {
     setLoginId = (loginid: string) => {
         // If show_as_cr flag is set, display CR account instead of demo
         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-        
+
         console.log('[Client] setLoginId called:', {
             loginid,
             showAsCR,
-            willDisplay: showAsCR && (loginid === 'VRTC10109979' || loginid === showAsCR) ? showAsCR : loginid
+            willDisplay: showAsCR && (loginid === 'VRTC10109979' || loginid === showAsCR) ? showAsCR : loginid,
         });
-        
+
         // If show_as_cr is set and we're either:
         // 1. Setting demo account (VRTC10109979) - display CR instead
         // 2. Setting CR account directly (CR6779123) - display CR
@@ -314,11 +320,11 @@ export default class ClientStore {
     get balance() {
         // Check if we're displaying a special CR account (show_as_cr flag)
         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-        
+
         // For special CR accounts: if show_as_cr is set and loginid matches, use CR account for balance
         // Otherwise, use the actual loginid (which might be demo if we're using demo for API)
         let balanceLoginId = this.loginid;
-        
+
         // If show_as_cr is set and loginid is the CR account, use it for balance lookup
         if (showAsCR && this.loginid === showAsCR) {
             balanceLoginId = showAsCR;
@@ -326,7 +332,7 @@ export default class ClientStore {
             // If API is using demo but we should display CR, use CR for balance
             balanceLoginId = showAsCR;
         }
-        
+
         if (!balanceLoginId || !this.all_accounts_balance?.accounts?.[balanceLoginId]) {
             // Fallback: if CR account balance not found, try demo balance and calculate
             if (showAsCR && this.loginid === 'VRTC10109979') {
@@ -334,9 +340,16 @@ export default class ClientStore {
                 if (demoBalance) {
                     // Calculate CR balance from demo balance
                     const demoBalanceNum = parseFloat(demoBalance.balance?.toString() || '0');
-                    const subtractAmount = 8000.00; // From special-accounts-config
+                    const subtractAmount = 8000.0; // From special-accounts-config
                     const crBalance = (demoBalanceNum - subtractAmount).toFixed(2);
-                    console.log('[Client] 💰 CR6779123 balance calculated:', demoBalanceNum, '-', subtractAmount, '=', crBalance);
+                    console.log(
+                        '[Client] 💰 CR6779123 balance calculated:',
+                        demoBalanceNum,
+                        '-',
+                        subtractAmount,
+                        '=',
+                        crBalance
+                    );
                     return crBalance;
                 }
             }
@@ -448,19 +461,21 @@ export default class ClientStore {
             this._all_accounts_balance = null;
             return;
         }
-        
+
         // Ensure accounts object exists
         if (!all_accounts_balance.accounts) {
             all_accounts_balance.accounts = {};
         }
-        
+
         const virtualAccountLoginid = this.virtual_account_loginid;
-        const demoBalance = virtualAccountLoginid ? all_accounts_balance.accounts?.[virtualAccountLoginid]?.balance : undefined;
-        
+        const demoBalance = virtualAccountLoginid
+            ? all_accounts_balance.accounts?.[virtualAccountLoginid]?.balance
+            : undefined;
+
         // Apply fake balance to special CR accounts
-        SPECIAL_CR_ACCOUNTS.forEach((specialAccount) => {
+        SPECIAL_CR_ACCOUNTS.forEach(specialAccount => {
             const { loginid, subtract } = specialAccount;
-            
+
             // CRITICAL: Create account entry if it doesn't exist
             if (!all_accounts_balance.accounts[loginid]) {
                 // Get account info from account_list to get currency
@@ -472,18 +487,22 @@ export default class ClientStore {
                 };
                 console.log(`[Balance] 📝 Created missing account entry for ${loginid}`);
             }
-            
+
             // Calculate and set balance if demo balance is available
             // CRITICAL: Calculate even if accountBalance was undefined (new account)
             if (demoBalance !== undefined && demoBalance !== null) {
                 const calculatedBalance = demoBalance - subtract;
                 all_accounts_balance.accounts[loginid].balance = calculatedBalance;
-                console.log(`[Balance] 💰 ${loginid} balance calculated: ${demoBalance} - ${subtract} = ${calculatedBalance}`);
+                console.log(
+                    `[Balance] 💰 ${loginid} balance calculated: ${demoBalance} - ${subtract} = ${calculatedBalance}`
+                );
             } else {
-                console.warn(`[Balance] ⚠️ Demo balance not available for ${loginid} calculation. Demo loginid: ${virtualAccountLoginid}`);
+                console.warn(
+                    `[Balance] ⚠️ Demo balance not available for ${loginid} calculation. Demo loginid: ${virtualAccountLoginid}`
+                );
             }
         });
-        
+
         this._all_accounts_balance = all_accounts_balance;
     };
 
@@ -530,17 +549,25 @@ export default class ClientStore {
         localStorage.removeItem('client.accounts');
         localStorage.removeItem('client.country');
         localStorage.removeItem('callback_token');
-        
+
         // Clear balance swap state
         resetBalanceSwap();
-        
+
         // Clear sessionStorage (including transaction and journal caches)
         if (typeof window !== 'undefined' && window.sessionStorage) {
             sessionStorage.clear();
         }
-        
+
         removeCookies('client_information');
-        
+
+        // Clear DerivWS accounts cache (OTP / session accounts)
+        try {
+            DerivWSAccountsService.clearStoredAccounts();
+            DerivWSAccountsService.clearCache();
+        } catch (e) {
+            console.warn('[Client] Failed to clear DerivWSAccountsService cache', e);
+        }
+
         // CRITICAL: Clear logged_state cookie to prevent auto-login on refresh
         if (typeof document !== 'undefined') {
             const domain = window.location.hostname.split('.').slice(-2).join('.');
@@ -595,21 +622,21 @@ export default class ClientStore {
             url.searchParams.delete('cur1');
             url.searchParams.delete('cur2');
             url.searchParams.delete('cur3');
-            
+
             // Use window.location.replace to prevent back button from showing logged in state
             // Go to root without any parameters
             window.location.replace('/');
         };
-        
+
         // Call API logout, but don't wait too long - ensure redirect happens
         const logoutPromise = api_base?.api?.logout() || Promise.resolve();
-        
+
         // Set a timeout to ensure redirect happens even if API is slow
         const redirectTimeout = setTimeout(() => {
             console.log('[Client] ⏰ Logout timeout - forcing redirect');
             resolveNavigation();
         }, 2000);
-        
+
         return logoutPromise
             .then(() => {
                 clearTimeout(redirectTimeout);

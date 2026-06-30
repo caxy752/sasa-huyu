@@ -110,11 +110,7 @@ section {
 
 html {
     height: 100%;
-    font-size: 9px; // Reduced from 10px to make layout smaller
-
-    @media screen and (max-width: 768px) {
-        font-size: 8px; // Even smaller on mobile to fix "too zoomed" issue
-    }
+    font-size: 10px;
 }
 
 body {

@@ -3,7 +3,7 @@ import useModalManager from '@/hooks/useModalManager';
 import { getActiveTabUrl } from '@/utils/getActiveTabUrl';
 import { LANGUAGES } from '@/utils/languages';
 import { useTranslations } from '@deriv-com/translations';
-import { Drawer, MobileLanguagesDrawer } from '@deriv-com/ui';
+import { Drawer, MobileLanguagesDrawer, useDevice } from '@deriv-com/ui';
 import NetworkStatus from './../../footer/NetworkStatus';
 import ServerTime from './../../footer/ServerTime';
 import GButton from './../../footer/GButton';
@@ -23,6 +23,7 @@ const MobileMenu = forwardRef<MobileMenuRef>((props, ref) => {
     const [showAdminForm, setShowAdminForm] = useState(false);
     const { currentLang = 'EN', localize, switchLanguage } = useTranslations();
     const { hideModal, isModalOpenFor, showModal } = useModalManager();
+    const { isDesktop } = useDevice();
 
     const openDrawer = () => {
         setIsDrawerOpen(true);
@@ -54,6 +55,7 @@ const MobileMenu = forwardRef<MobileMenuRef>((props, ref) => {
         setShowAdminForm(false);
     };
 
+    if (isDesktop) return null;
     return (
         <div className='mobile-menu'>
             <Drawer isOpen={isDrawerOpen} onCloseDrawer={closeDrawer} width='29.5rem'>

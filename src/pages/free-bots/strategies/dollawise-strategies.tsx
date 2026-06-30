@@ -1,10 +1,14 @@
 import React from 'react';
+import { getBrandLabel, getBrandTitle } from '@/components/shared/utils/brand/brand';
 import './strategy-viewer.scss';
 
-const CaptainPeterTradingHubStrategies: React.FC = () => {
+const TradingHubStrategies: React.FC = () => {
+    const brandLabel = getBrandLabel();
+    const brandTitle = getBrandTitle();
+
     const handleDownload = () => {
         // Create PDF content
-        const content = `CAPTAIN PETER TRADING HUB STRATEGIES
+        const content = `${brandTitle.toUpperCase()} STRATEGIES
 
 1. Even/Odd 
 
@@ -179,7 +183,7 @@ ALL THE BEST, SEE YOU AT THE MOON CHAMP!`;
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'CAPTAIN PETER TRADING HUB STRATEGIES.pdf';
+        link.download = `${brandTitle.replace(/\s+/g, '_')}_STRATEGIES.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -224,7 +228,7 @@ ALL THE BEST, SEE YOU AT THE MOON CHAMP!`;
             </div>
             <div className='strategy-viewer__content'>
                 <div className='strategy-viewer__document'>
-                    <h1 className='strategy-viewer__title'>CAPTAIN PETER TRADING HUB STRATEGIES</h1>
+                    <h1 className='strategy-viewer__title'>{brandLabel} Strategies</h1>
 
                     <section className='strategy-section'>
                         <h2 className='strategy-section__number'>1. Even/Odd</h2>
@@ -487,4 +491,4 @@ ALL THE BEST, SEE YOU AT THE MOON CHAMP!`;
     );
 };
 
-export default CaptainPeterTradingHubStrategies;
+export default TradingHubStrategies;

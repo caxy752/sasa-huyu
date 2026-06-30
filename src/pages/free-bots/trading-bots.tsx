@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import FreeBots from './free-bots';
 import HybridBots from '../hybrid-bots';
 import RiskCalculator from './risk-calculator';
@@ -16,7 +16,9 @@ const TradingBots: React.FC = () => {
         setActiveTool(tool);
     };
 
-    const content = useMemo(() => {
+    const renderContent = () => {
+        if (!active_tool) return null;
+
         switch (active_tool) {
             case 'free-bots':
                 return <FreeBots />;
@@ -29,7 +31,7 @@ const TradingBots: React.FC = () => {
             default:
                 return null;
         }
-    }, [active_tool]);
+    };
 
     return (
         <div className='trading-bots'>
@@ -98,7 +100,7 @@ const TradingBots: React.FC = () => {
                     </div>
                 </div>
             </div>
-            <div className='trading-bots__content'>{content}</div>
+            {active_tool && <div className='trading-bots__content'>{renderContent()}</div>}
         </div>
     );
 };

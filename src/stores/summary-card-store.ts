@@ -118,19 +118,15 @@ export default class SummaryCardStore {
     }
 
     clear(should_unset_contract = true) {
-        try {
-            if (should_unset_contract) {
-                this.contract_info = null;
-            }
-
-            this.profit = 0;
-            this.profit_loss = 0;
-            this.indicative = 0;
-            this.indicative_movement = '';
-            this.profit_movement = '';
-        } catch (error) {
-            console.error('[Summary Card] ❌ Error in clear method:', error);
+        if (should_unset_contract) {
+            this.contract_info = null;
         }
+
+        this.profit = 0;
+        this.profit_loss = 0;
+        this.indicative = 0;
+        this.indicative_movement = '';
+        this.profit_movement = '';
     }
 
     clearContractUpdateConfigValues() {
@@ -165,7 +161,7 @@ export default class SummaryCardStore {
             contract_id: contract.contract_id,
             id: contract.id,
             accountID: (contract as any)?.accountID,
-            current_account: this.core?.client?.loginid
+            current_account: this.core?.client?.loginid,
         });
         const { profit } = contract;
         const indicative = getIndicativePrice(contract as ProposalOpenContract);
@@ -200,7 +196,7 @@ export default class SummaryCardStore {
         console.log('[Summary] ✅ Contract info updated:', {
             contract_id: this.contract_info?.contract_id,
             profit: this.profit,
-            indicative: this.indicative
+            indicative: this.indicative,
         });
     }
 
@@ -327,14 +323,14 @@ export default class SummaryCardStore {
                 console.log('[Summary] 🔄 Account changed:', {
                     previous: previousLoginId,
                     current: loginid,
-                    has_contract: !!this.contract_info
+                    has_contract: !!this.contract_info,
                 });
                 // Don't clear contract when switching to/from special CR account
                 // because the contract is actually on demo account and should remain visible
                 const wasSpecialCR = previousLoginId && isSpecialCRAccount(previousLoginId);
                 const isSpecialCR = loginid && isSpecialCRAccount(loginid);
                 console.log('[Summary] 🔄 Special CR check:', { wasSpecialCR, isSpecialCR });
-                
+
                 // Only clear if switching between non-special accounts
                 if (!wasSpecialCR && !isSpecialCR) {
                     console.log('[Summary] 🔄 Clearing contract (non-special account switch)');

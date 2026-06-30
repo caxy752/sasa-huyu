@@ -31,40 +31,28 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        background: $color-hub-navy-mid;
 
         svg {
             g {
                 path {
-                    fill: $color-hub-gold;
+                    fill: var(--text-less-prominent);
                 }
             }
         }
 
         &__header {
             padding: 0.8rem;
-            color: $color-hub-gold-label !important;
-
-            * { color: $color-hub-gold-label !important; }
         }
 
         &__icon {
             align-self: center;
-
-            svg,
-            svg > path,
-            svg > g > path {
-                fill: $color-hub-gold !important;
-            }
         }
 
         &__message {
             margin: 0 auto;
-            color: $color-white !important;
 
             & .dc-text {
                 line-height: var(--text-lh-xxl);
-                color: $color-white !important;
             }
         }
 
@@ -72,26 +60,18 @@
             list-style-type: disc;
             margin-left: 20px;
             line-height: var(--text-lh-xl);
-            color: rgba(255, 255, 255, 0.7) !important;
 
             li::marker {
-                color: $color-hub-gold;
+                color: var(--text-less-prominent);
             }
         }
     }
 
     &__item {
         padding: 16px;
-        border-bottom: 1px solid $color-hub-gold-border-light;
-        transition: background-color 0.15s ease;
-
-        &:hover {
-            background-color: $color-hub-blue-glow;
-        }
 
         &-list {
             height: calc(100% - 7.2rem);
-            background: rgba(10, 18, 44, 0.75);
         }
 
         &-content {
@@ -104,11 +84,7 @@
     &__data-list {
         .ReactVirtualized__Grid__innerScrollContainer {
             > div:nth-child(even) {
-                background: rgba(30, 58, 138, 0.2);
-            }
-
-            > div:nth-child(odd) {
-                background: rgba(10, 18, 44, 0.4);
+                background: var(--general-section-2);
             }
         }
     }
@@ -119,9 +95,7 @@
             justify-content: space-between;
             padding: 12px;
             padding-left: 16px;
-            background: $color-hub-navy-mid;
-            border: solid 1px $color-hub-gold-border !important;
-            border-top: none !important;
+            border: solid 1px var(--general-section-1);
 
             &-filter {
                 @include flex-center(flex-end);
@@ -131,12 +105,10 @@
 
                 &--label {
                     margin-inline-end: 0.8rem;
-                    color: $color-hub-gold-label !important;
                 }
 
                 .deriv-text {
                     font-weight: lighter;
-                    color: $color-white !important;
                 }
             }
         }
@@ -146,34 +118,33 @@
         font-size: var(--text-size-xxs);
         line-height: 1.5;
         display: inline;
-        color: $color-white !important;
+        color: var(--text-general);
 
         &-time,
         &-date {
             display: inline;
-            color: rgba(255, 255, 255, 0.7) !important;
         }
 
         &-datetime {
-            color: rgba(255, 215, 0, 0.6) !important;
+            color: var(--text-less-prominent);
             font-size: var(--text-size--xxxs);
             margin-top: 6px;
         }
 
         &--error {
-            color: $color-hub-loss !important;
+            color: var(--status-danger);
         }
 
         &--warn {
-            color: $color-hub-warn !important;
+            color: var(--status-warning);
         }
 
         &--info {
-            color: $color-hub-info !important;
+            color: var(--status-info);
         }
 
         &--success {
-            color: $color-hub-profit !important;
+            color: var(--status-success);
         }
 
         &--bold {
@@ -197,10 +168,9 @@
     position: fixed;
     display: grid;
     grid-gap: 1.6rem;
-    background: $color-hub-navy-mid;
-    border: 1px solid $color-hub-gold-border;
+    background: var(--general-main-2);
     border-radius: $BORDER_RADIUS;
-    box-shadow: $shadow-hub-panel;
+    box-shadow: 0 4px 16px 0 var(--shadow-menu);
     transition:
         transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
         opacity 0.25s linear;
@@ -208,7 +178,6 @@
     padding-inline-end: 3.6rem;
     inset-inline-end: 16px;
     z-index: 99;
-    color: $color-white;
 
     &--enter-done {
         opacity: 1;
@@ -223,14 +192,7 @@
 
     &__input {
         .input-wrapper__input {
-            border: 1px solid $color-hub-gold-border;
-            background: rgba(30, 58, 138, 0.3);
-            color: $color-white;
-
-            &:focus {
-                border-color: $color-hub-blue;
-                box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
-            }
+            border: 1px solid var(--border-normal);
         }
     }
 
@@ -239,13 +201,6 @@
 
         .dc-btn {
             width: 100%;
-            background: $color-hub-blue !important;
-            color: $color-white !important;
-            border: none !important;
-
-            &:hover {
-                background: $color-hub-blue-hover !important;
-            }
         }
     }
 }

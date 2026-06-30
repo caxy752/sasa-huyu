@@ -29,12 +29,13 @@ const AccountSwitcherFooter = ({ oAuthLogout, loginid, is_logging_out, residence
     // Check if special CR account is active
     const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
     const isSpecialCR = showAsCR === 'CR6779123';
-    
+
     // Check if the account is a demo account from both loginid and URL parameter
     const urlParams = new URLSearchParams(window.location.search);
     const account_param = urlParams.get('account');
     // For special CR accounts, don't treat as virtual even if loginid is VRTC
-    const is_virtual = (loginid?.startsWith('VRTC') && !isSpecialCR) || (account_param === 'demo' && !isSpecialCR) || false;
+    const is_virtual =
+        (loginid?.startsWith('VRTC') && !isSpecialCR) || (account_param === 'demo' && !isSpecialCR) || false;
 
     // Get the redirect URL from handleTraderHubRedirect
     const redirectParams = {
