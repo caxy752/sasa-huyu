@@ -5,6 +5,7 @@ import { getDecimalPlaces, toMoment } from '@/components/shared';
 import { FORM_ERROR_MESSAGES } from '@/components/shared/constants/form-error-messages';
 import { initFormErrorMessages } from '@/components/shared/utils/validation/declarative-validation-rules';
 import { api_base } from '@/external/bot-skeleton';
+import { getNewAuthHeaders, isNewLoggedIn } from '@/auth/NewDerivAuth';
 import { useOauth2 } from '@/hooks/auth/useOauth2';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
@@ -13,6 +14,32 @@ import { getBalanceSwapState, getAccountDisplayInfo } from '@/utils/balance-swap
 import { SPECIAL_CR_ACCOUNTS } from '@/utils/special-accounts-config';
 import { TLandingCompany, TSocketResponseData } from '@/types/api-types';
 import { useTranslations } from '@deriv-com/translations';
+
+const REST_BASE = 'https://api.derivws.com/trading/v1';
+const BALANCE_POLL_INTERVAL_MS = 30_000;
+
+async function fetchNewAuthBalances(): Promise<Record<string, { balance: number; currency: string; loginid: string }> | null> {
+    try {
+        const res = await fetch(`${REST_BASE}/options/accounts`, { headers: getNewAuthHeaders() });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const accounts: Record<string, { balance: number; currency: string; loginid: string }> = {};
+        const list: any[] = data.accounts ?? data ?? [];
+        list.forEach((acc: any) => {
+            const lid = acc.loginid || acc.account_id;
+            if (lid) {
+                accounts[lid] = {
+                    balance: parseFloat(acc.balance ?? '0'),
+                    currency: acc.currency || 'USD',
+                    loginid: lid,
+                };
+            }
+        });
+        return Object.keys(accounts).length > 0 ? accounts : null;
+    } catch {
+        return null;
+    }
+}
 
 type TClientInformation = {
     loginid?: string;
@@ -556,6 +583,42 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
             }
         };
     }, [connectionStatus, handleMessages, isAuthorizing, isAuthorized, client]);
+
+    // ── REST API balance polling for new OAuth PKCE users ──────────────────────
+    // Legacy users get live balance via WebSocket `balance` subscription.
+    // New OAuth users can't WS-authorize (Bearer token), so we poll the REST API
+    // every 30 s and immediately on authorized state change.
+    const balancePollRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        if (!isAuthorized || !client || !isNewLoggedIn()) return;
+
+        const applyBalances = async () => {
+            const accounts = await fetchNewAuthBalances();
+            if (!accounts) return;
+            const activeLoginId = localStorage.getItem('active_loginid') || Object.keys(accounts)[0];
+            client.setAllAccountsBalance({ accounts, loginid: activeLoginId });
+            // Also update cached_balances so offline refresh still works
+            try {
+                const cached: Record<string, any> = JSON.parse(sessionStorage.getItem('cached_balances') || '{}');
+                Object.entries(accounts).forEach(([lid, acc]) => {
+                    cached[lid] = { balance: acc.balance.toFixed(2), currency: acc.currency, timestamp: Date.now() };
+                });
+                sessionStorage.setItem('cached_balances', JSON.stringify(cached));
+            } catch { /* ignore */ }
+        };
+
+        applyBalances();
+        balancePollRef.current = setInterval(applyBalances, BALANCE_POLL_INTERVAL_MS);
+
+        return () => {
+            if (balancePollRef.current) {
+                clearInterval(balancePollRef.current);
+                balancePollRef.current = null;
+            }
+        };
+    }, [isAuthorized, client]);
+    // ───────────────────────────────────────────────────────────────────────────
 
     useEffect(() => {
         if (!isAuthorizing && isAuthorized && !accountInitialization.current && client) {
