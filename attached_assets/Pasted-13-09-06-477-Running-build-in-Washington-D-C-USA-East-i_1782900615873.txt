@@ -1,0 +1,99 @@
+13:09:06.477 Running build in Washington, D.C., USA (East) – iad1
+13:09:06.477 Build machine configuration: 2 cores, 8 GB
+13:09:06.636 Cloning github.com/caxy752/sasa-huyu (Branch: main, Commit: c33b308)
+13:09:12.017 Cloning completed: 5.381s
+13:09:12.273 Found .vercelignore
+13:09:12.309 Removed 43 ignored files defined in .vercelignore
+13:09:12.310   /.git/config
+13:09:12.310   /.git/description
+13:09:12.310   /.git/FETCH_HEAD
+13:09:12.310   /.git/HEAD
+13:09:12.310   /.git/hooks/applypatch-msg.sample
+13:09:12.310   /.git/hooks/commit-msg.sample
+13:09:12.312   /.git/hooks/fsmonitor-watchman.sample
+13:09:12.312   /.git/hooks/post-update.sample
+13:09:12.312   /.git/hooks/pre-applypatch.sample
+13:09:12.312   /.git/hooks/pre-commit.sample
+13:09:12.391 Restored build cache from previous deployment (9oGGQ7jw7kgGMHMVwSLHbMfZGVQQ)
+13:09:12.637 Running "vercel build"
+13:09:12.657 Vercel CLI 54.18.6
+13:09:13.940 Warning: Detected "engines": { "node": ">=20.x" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version
+13:09:13.954 Running "install" command: `npm ci --ignore-scripts`...
+13:09:15.106 npm error code EUSAGE
+13:09:15.112 npm error
+13:09:15.113 npm error The `npm ci` command can only install with an existing package-lock.json or
+13:09:15.113 npm error npm-shrinkwrap.json with lockfileVersion >= 1. Run an install with npm@5 or
+13:09:15.114 npm error later to generate a package-lock.json file, then try again.
+13:09:15.114 npm error
+13:09:15.114 npm error Clean install a project
+13:09:15.114 npm error
+13:09:15.115 npm error Usage:
+13:09:15.115 npm error npm ci
+13:09:15.115 npm error
+13:09:15.115 npm error Options:
+13:09:15.116 npm error [--install-strategy <hoisted|nested|shallow|linked>] [--legacy-bundling]
+13:09:15.116 npm error [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
+13:09:15.116 npm error [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
+13:09:15.116 npm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts]
+13:09:15.117 npm error [--allow-git <all|none|root>] [--no-audit] [--no-bin-links] [--no-fund]
+13:09:15.117 npm error [--dry-run]
+13:09:15.117 npm error [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
+13:09:15.117 npm error [--workspaces] [--include-workspace-root] [--install-links]
+13:09:15.117 npm error
+13:09:15.117 npm error   --install-strategy
+13:09:15.117 npm error     Sets the strategy for installing packages in node_modules.
+13:09:15.117 npm error
+13:09:15.117 npm error   --legacy-bundling
+13:09:15.117 npm error     Instead of hoisting package installs in `node_modules`, install packages
+13:09:15.117 npm error
+13:09:15.118 npm error   --global-style
+13:09:15.118 npm error     Only install direct dependencies in the top level `node_modules`,
+13:09:15.118 npm error
+13:09:15.118 npm error   --omit
+13:09:15.118 npm error     Dependency types to omit from the installation tree on disk.
+13:09:15.118 npm error
+13:09:15.118 npm error   --include
+13:09:15.118 npm error     Option that allows for defining which types of dependencies to install.
+13:09:15.118 npm error
+13:09:15.118 npm error   --strict-peer-deps
+13:09:15.118 npm error     If set to `true`, and `--legacy-peer-deps` is not set, then _any_
+13:09:15.118 npm error
+13:09:15.119 npm error   --foreground-scripts
+13:09:15.119 npm error     Run all build scripts (ie, `preinstall`, `install`, and
+13:09:15.119 npm error
+13:09:15.119 npm error   --ignore-scripts
+13:09:15.119 npm error     If true, npm does not run scripts specified in package.json files.
+13:09:15.119 npm error
+13:09:15.119 npm error   --allow-git
+13:09:15.119 npm error     Limits the ability for npm to fetch dependencies from git references.
+13:09:15.119 npm error
+13:09:15.119 npm error   --audit
+13:09:15.120 npm error     When "true" submit audit reports alongside the current npm command to the
+13:09:15.120 npm error
+13:09:15.120 npm error   --bin-links
+13:09:15.120 npm error     Tells npm to create symlinks (or `.cmd` shims on Windows) for package
+13:09:15.120 npm error
+13:09:15.120 npm error   --fund
+13:09:15.120 npm error     When "true" displays the message at the end of each `npm install`
+13:09:15.120 npm error
+13:09:15.120 npm error   --dry-run
+13:09:15.120 npm error     Indicates that you don't want npm to make any changes and that it should
+13:09:15.120 npm error
+13:09:15.120 npm error   -w|--workspace
+13:09:15.120 npm error     Enable running a command in the context of the configured workspaces of the
+13:09:15.120 npm error
+13:09:15.120 npm error   --workspaces
+13:09:15.120 npm error     Set to true to run the command in the context of **all** configured
+13:09:15.120 npm error
+13:09:15.120 npm error   --include-workspace-root
+13:09:15.120 npm error     Include the workspace root when workspaces are enabled for a command.
+13:09:15.125 npm error
+13:09:15.125 npm error   --install-links
+13:09:15.126 npm error     When set file: protocol dependencies will be packed and installed as
+13:09:15.126 npm error
+13:09:15.126 npm error
+13:09:15.126 npm error aliases: clean-install, ic, install-clean, isntall-clean
+13:09:15.127 npm error
+13:09:15.127 npm error Run "npm help ci" for more info
+13:09:15.128 npm error A complete log of this run can be found in: /vercel/.npm/_logs/2026-07-01T10_09_14_077Z-debug-0.log
+13:09:15.155 Error: Command "npm ci --ignore-scripts" exited with 1
