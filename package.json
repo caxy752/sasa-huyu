@@ -192,7 +192,7 @@
     "overrides": {
         "cross-spawn": "^7.0.6",
         "braces": "^3.0.3",
-        "brace-expansion": "^2.0.1",
+        "brace-expansion@2.0.1": "2.0.2",
         "shell-quote": "^1.7.4"
     }
 }
