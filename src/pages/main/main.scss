@@ -95,50 +95,77 @@
 
             &__list {
                 background: #0a1633 !important; // Dark blue background for nav bar
-                justify-content: flex-start; // Start from left like friend's design
+                justify-content: flex-start !important; // Start from left
                 border-bottom: none !important; // Remove border
-                padding: 0; // Remove all padding to eliminate space
-                margin: 0; // Remove any margins
-                gap: 0; // Remove gaps between items
-                flex-wrap: nowrap !important; // Always one row — never wrap tabs to a second line
-                overflow-x: auto; // Scroll horizontally when tabs overflow
-                overflow-y: hidden;
+                padding: 0 !important; // Remove all padding
+                margin: 0 !important; // Remove any margins
+                gap: 0 !important; // Remove gaps between items
+                // ── single horizontal scrolling row on ALL screen sizes ──────────
+                display: flex !important;
+                flex-direction: row !important;    // always a row — never column
+                flex-wrap: nowrap !important;      // never wrap to a second line
+                overflow-x: auto !important;       // scroll when tabs overflow
+                overflow-y: hidden !important;
                 -ms-overflow-style: none;
                 scrollbar-width: none;
+                -webkit-overflow-scrolling: touch; // smooth momentum scroll on iOS
+                touch-action: pan-x;               // allow horizontal swipe on mobile
 
                 &::-webkit-scrollbar {
                     display: none;
                 }
 
-                // Override tab width calculation to be more compact
+                // Override tab width calculation to be compact and auto-sized
                 .dc-tabs__item {
                     width: auto !important; // Let tabs size naturally
-                    padding: 0.15rem 0.65rem !important; // Compact padding for all tabs
-                    margin: 0.1rem 0.1rem !important; // Small margin for spacing
-                    flex-shrink: 0; // Prevent shrinking
-                    border-radius: 5px !important; // Rounded corners for all tabs
-                    transition: background-color 0.2s ease !important; // Smooth transition
-                    color: #ffffff !important; // White text for all navigation items
-                    white-space: nowrap !important; // Keep label on one line
-                    display: inline-flex !important; // Icon + text stay side-by-side
+                    flex-shrink: 0 !important; // Never compress — all tabs stay same row
+                    flex-grow: 0 !important;
+                    padding: 0.15rem 0.55rem !important; // Desktop padding
+                    margin: 0.1rem 0.05rem !important;
+                    border-radius: 5px !important;
+                    transition: background-color 0.2s ease !important;
+                    color: #ffffff !important;
+                    white-space: nowrap !important; // Icon + label on one line
+                    display: inline-flex !important;
                     align-items: center !important;
-                    gap: 0.3rem !important;
+                    gap: 0.25rem !important;
+                    font-size: 12px !important;
+
+                    @include mobile-or-tablet-screen {
+                        padding: 0.12rem 0.35rem !important; // Tighter on mobile
+                        margin: 0.08rem 0.04rem !important;
+                        font-size: 10px !important;         // Smaller text on mobile
+                        gap: 0.18rem !important;
+                    }
                 }
 
                 // Override the default justify-content: center from tabs.scss
                 &:not(&--header-fit-content) {
-                    justify-content: flex-start !important; // Start from left like friend's design
+                    justify-content: flex-start !important; // Start from left
                 }
 
+                // Ensure the header wrapper div also allows horizontal overflow
                 &--header {
                     &--main {
                         &__tabs {
-                            @include mobile-or-tablet-screen {
-                                width: 100%;
-                                overflow-x: auto;
-                                padding: 0; // Remove padding to eliminate space between header and navigation
-                            }
+                            width: 100%;
+                            overflow-x: auto;
+                            overflow-y: hidden;
+                            padding: 0;
                         }
+                    }
+                }
+
+                // ── CRITICAL: override the mobile flex-direction:column that was
+                //    causing "Manual Trading" to drop to a second row ─────────────
+                &--main__tabs {
+                    flex-direction: row !important;   // row on ALL screen sizes
+                    flex-wrap: nowrap !important;
+                    overflow-x: auto !important;
+
+                    @include mobile-or-tablet-screen {
+                        flex-direction: row !important; // belt-and-suspenders for mobile
+                        background-color: transparent !important;
                     }
                 }
 
@@ -940,189 +967,106 @@
     justify-content: center;
 }
 
-// Navigation tabs styling to match screenshot - dark blue background, white text, golden icons
-.main__container .main__tabs .dc-tabs__list {
+// ── Main tab-bar: correct selectors (dc-tabs--main__tabs, not main__tabs) ────
+// The Tabs component with className="main__tabs" renders:
+//   div.dc-tabs.dc-tabs--main__tabs > div.dc-tabs__list--header--main__tabs > ul.dc-tabs__list--main__tabs
+// There is NO element with class "main__tabs" — all previous rules using
+// .main__container .main__tabs … were dead code and had zero effect.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Tab list: single horizontal scrollable row on every screen size
+.main__container .dc-tabs--main__tabs .dc-tabs__list,
+.main__container .dc-tabs__list--main__tabs {
     display: flex !important;
-    flex-wrap: nowrap !important;      // ← single row — no second-row dark strip
-    overflow-x: auto !important;       // ← scroll instead of wrap
+    flex-direction: row !important;    // always horizontal — never column
+    flex-wrap: nowrap !important;      // single row — never wrap to second line
+    overflow-x: auto !important;
     overflow-y: hidden !important;
-    scrollbar-width: none !important;  // Firefox
-    line-height: 24px !important;
-    min-height: 24px !important;
-    background: rgba(10, 18, 44, 0.96) !important;
-    border: 1px solid rgba(255, 215, 0, 0.35) !important;
-    border-radius: 0 !important;
-    box-shadow:
-        0 0 0 1px rgba(255, 215, 0, 0.18),
-        inset 0 0 1px rgba(255, 215, 0, 0.1);
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    -webkit-overflow-scrolling: touch; // iOS momentum scroll
+    touch-action: pan-x;
 
     &::-webkit-scrollbar {
-        display: none;                 // Chrome/Safari
+        display: none;
     }
 }
 
-.main__container .main__tabs .dc-tabs__item__icon,
-.main__container .main__tabs .dc-tabs__item__icon svg,
-.main__container .main__tabs .dc-tabs__item__icon svg * {
-    width: 16px !important;
-    height: 16px !important;
-    fill: #f5c542 !important;
-    stroke: #f5c542 !important;
-    filter: drop-shadow(0 0 5px rgba(245, 197, 66, 0.35));
+// Header wrapper div: allow it to pass horizontal overflow through
+.main__container .dc-tabs__list--header--main__tabs {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
-.main__container .main__tabs .dc-tabs__item {
-    flex-shrink: 0 !important;         // ← never compress; all tabs same row
-    // All navigation items use white text
-    color: #ffffff !important; // White text for all navigation items
+// Tab items in the main nav bar
+.main__container .dc-tabs--main__tabs .dc-tabs__item {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    width: auto !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    color: #ffffff !important;
     font-weight: 500 !important;
-    font-family:
-        Arial,
-        Helvetica,
-        -apple-system,
-        BlinkMacSystemFont,
-        'Segoe UI',
-        sans-serif !important;
     font-size: 12px !important;
     background: transparent !important;
+
+    @include mobile-or-tablet-screen {
+        font-size: 10px !important;
+        padding: 0.12rem 0.35rem !important;
+    }
 
     * {
         color: #ffffff !important;
         font-weight: 500 !important;
-        font-family:
-            Arial,
-            Helvetica,
-            -apple-system,
-            BlinkMacSystemFont,
-            'Segoe UI',
-            sans-serif !important;
-    }
-
-    span,
-    div,
-    p,
-    label {
-        color: #ffffff !important;
-        font-weight: 500 !important;
-        font-family:
-            Arial,
-            Helvetica,
-            -apple-system,
-            BlinkMacSystemFont,
-            'Segoe UI',
-            sans-serif !important;
-    }
-
-    // Icon styling for all navigation items
-    svg {
-        position: relative;
-        filter: none;
-        fill: #f5c542 !important; // Golden icons - override any inline fill attributes
-
-        &::before {
-            display: none;
-        }
     }
 
     svg,
     svg > path,
     svg > g > path,
     svg > * {
-        fill: #f5c542 !important; // Golden icons for all navigation items
+        fill: #f5c542 !important;
         stroke: #f5c542 !important;
         filter: none !important;
     }
 
-    // Active tab - consistent green background matching .dc-tabs__active
     &.dc-tabs__active {
-        background: #16a34a !important; // Green — matches all other active tabs
-        color: #ffffff !important; // White text
+        background: #16a34a !important;
+        color: #ffffff !important;
         font-weight: bold !important;
-        font-family:
-            Arial,
-            Helvetica,
-            -apple-system,
-            BlinkMacSystemFont,
-            'Segoe UI',
-            sans-serif !important;
-        font-size: 12px !important;
 
-        * {
-            color: #ffffff !important;
-            font-weight: bold !important;
-            font-family:
-                Arial,
-                Helvetica,
-                -apple-system,
-                BlinkMacSystemFont,
-                'Segoe UI',
-                sans-serif !important;
-        }
-
-        span,
-        div,
-        p,
-        label {
-            color: #ffffff !important;
-            font-weight: bold !important;
-            font-family:
-                Arial,
-                Helvetica,
-                -apple-system,
-                BlinkMacSystemFont,
-                'Segoe UI',
-                sans-serif !important;
-        }
-
-        svg {
-            filter: none;
-            fill: #f5c542 !important; // Golden icons for active tab - override any inline fill attributes
-
-            &::before {
-                display: none;
-            }
-        }
+        * { color: #ffffff !important; font-weight: bold !important; }
 
         svg,
         svg > path,
         svg > g > path,
         svg > * {
-            fill: #f5c542 !important; // Golden icons for active tab
+            fill: #f5c542 !important;
             stroke: #f5c542 !important;
             filter: none !important;
         }
     }
 
-    // Hover effect for inactive tabs
     &:hover:not(.dc-tabs__active) {
-        color: #ffffff !important;
-        background: rgba(255, 255, 255, 0.1) !important; // Slight white hover on dark blue
-        transition: all 0.2s ease;
+        background: rgba(255, 255, 255, 0.1) !important;
+        transition: background 0.2s ease;
+    }
+}
 
-        * {
-            color: #ffffff !important;
-            font-weight: 500 !important;
-        }
+// Icons in the main nav tab bar
+.main__container .dc-tabs--main__tabs .dc-tabs__item .dc-tabs__item__icon,
+.main__container .dc-tabs--main__tabs .dc-tabs__item .dc-tabs__item__icon svg,
+.main__container .dc-tabs--main__tabs .dc-tabs__item .dc-tabs__item__icon svg * {
+    width: 16px !important;
+    height: 16px !important;
+    fill: #f5c542 !important;
+    stroke: #f5c542 !important;
+    filter: drop-shadow(0 0 5px rgba(245, 197, 66, 0.35));
 
-        span,
-        div,
-        p,
-        label {
-            color: #ffffff !important;
-            font-weight: 500 !important;
-        }
-
-        svg {
-            filter: none;
-        }
-
-        svg,
-        svg > path,
-        svg > g > path {
-            fill: #f5c542 !important; // Golden icons on hover
-            stroke: #f5c542 !important;
-            filter: none !important;
-        }
+    @include mobile-or-tablet-screen {
+        width: 13px !important;
+        height: 13px !important;
     }
 }
 
@@ -1260,17 +1204,24 @@ body.theme--dark .dc-tabs__item {
     }
 }
 
-// Main tab bar gold icon override (stronger specificity, placed after all tab overrides)
-.main__container .main__tabs .dc-tabs__item .dc-tabs__item__icon,
-.main__container .main__tabs .dc-tabs__item .dc-tabs__item__icon svg,
-.main__container .main__tabs .dc-tabs__item .dc-tabs__item__icon svg *,
-.main__container .main__tabs .dc-tabs__item.dc-tabs__active .dc-tabs__item__icon svg,
-.main__container .main__tabs .dc-tabs__item.dc-tabs__active .dc-tabs__item__icon svg * {
-    width: 28px !important;
-    height: 28px !important;
+// Main tab bar gold icon override — highest specificity, correct selectors
+.main__container .dc-tabs--main__tabs .dc-tabs__item .dc-tabs__item__icon,
+.main__container .dc-tabs--main__tabs .dc-tabs__item .dc-tabs__item__icon svg,
+.main__container .dc-tabs--main__tabs .dc-tabs__item .dc-tabs__item__icon svg *,
+.main__container .dc-tabs--main__tabs .dc-tabs__item.dc-tabs__active .dc-tabs__item__icon svg,
+.main__container .dc-tabs--main__tabs .dc-tabs__item.dc-tabs__active .dc-tabs__item__icon svg * {
     fill: #f5c542 !important;
     stroke: #f5c542 !important;
     filter: drop-shadow(0 0 6px rgba(245, 197, 66, 0.35)) !important;
+
+    // Dynamic icon size: slightly smaller on mobile so more tabs fit without scrolling as far
+    width: 16px !important;
+    height: 16px !important;
+
+    @include mobile-or-tablet-screen {
+        width: 13px !important;
+        height: 13px !important;
+    }
 }
 
 // Manual Trading tab — fill the tab content area and scroll internally
