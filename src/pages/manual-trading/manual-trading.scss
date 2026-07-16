@@ -13,6 +13,9 @@
 
     box-sizing: border-box;
     width: 100%;
+    // Desktop: cap at ~half the viewport so the Run Panel sits comfortably
+    // in the remaining right-hand space without any overlap.
+    max-width: 55vw;
     min-height: 100%;
     padding: 1.2rem 1.4rem 4rem;
     overflow-y: auto;
@@ -500,6 +503,8 @@
 
 @media (max-width: 76.8rem) {
     .manual-trading-page {
+        // Full width on mobile/tablet — no run panel visible on these breakpoints
+        max-width: 100%;
         padding: 1rem 0.6rem 8rem;
     }
 

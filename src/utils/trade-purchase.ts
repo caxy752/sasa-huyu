@@ -94,16 +94,45 @@ const assertSufficientDemoBalance = (required_amount: number, source: string) =>
         | {
               loginid?: string;
               currency?: string;
+              balance?: string | number;
+              _balance?: string;
+              is_virtual?: boolean;
               getAccountCurrency?: (loginid?: string) => string;
               getDisplayBalanceAmount?: (loginid?: string) => number;
               hasSufficientDemoBalance?: (amount: number, loginid?: string) => boolean;
           }
         | undefined;
 
-    const loginid = client_store?.loginid;
-    if (!client_store?.hasSufficientDemoBalance?.(required_amount, loginid)) {
-        const currency = client_store?.getAccountCurrency?.(loginid) || client_store?.currency || 'USD';
-        const available_balance = Number(client_store?.getDisplayBalanceAmount?.(loginid) ?? 0);
+    if (!client_store) return;
+
+    // Real-money accounts: let the Deriv API validate the balance.
+    // Only apply a client-side guard for virtual (demo) accounts.
+    if (!client_store.is_virtual) return;
+
+    // Prefer hasSufficientDemoBalance if the store exposes it.
+    if (typeof client_store.hasSufficientDemoBalance === 'function') {
+        const loginid = client_store.loginid;
+        if (!client_store.hasSufficientDemoBalance(required_amount, loginid)) {
+            const currency = client_store.getAccountCurrency?.(loginid) || client_store.currency || 'USD';
+            const available_balance = Number(client_store.getDisplayBalanceAmount?.(loginid) ?? 0);
+            throw new InsufficientDemoBalanceError(
+                `${source} could not purchase this contract. Insufficient demo balance: available ${formatAmount(
+                    available_balance,
+                    currency
+                )}, required ${formatAmount(required_amount, currency)}.`
+            );
+        }
+        return;
+    }
+
+    // hasSufficientDemoBalance is not available — fall back to direct balance read.
+    // If the balance reads as 0 we cannot tell whether it hasn't loaded yet or the
+    // account is truly empty, so we pass through and let the Deriv API reject.
+    const available_balance = Number(client_store.balance ?? client_store._balance ?? 0);
+    if (!Number.isFinite(available_balance) || available_balance <= 0) return;
+
+    if (available_balance < required_amount) {
+        const currency = client_store.currency || 'USD';
         throw new InsufficientDemoBalanceError(
             `${source} could not purchase this contract. Insufficient demo balance: available ${formatAmount(
                 available_balance,
