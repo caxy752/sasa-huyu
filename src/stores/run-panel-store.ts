@@ -1068,13 +1068,11 @@ export default class RunPanelStore {
             this.is_sell_requested = false;
             this.setContractStage(contract_stages.CONTRACT_CLOSED);
 
-            // CRITICAL: For special accounts, ensure the contract shows as complete immediately
-            // This displays the transaction in the run panel right away
+            // Always clear the open-contract flag so the Reset button is enabled after
+            // any contract settles — regardless of account type (special or normal).
+            this.setHasOpenContract(false);
             if (isSpecialAccount) {
-                console.log('[Run Panel] 📊 Special account - ensuring contract displays as complete');
-                // Force the has_open_contract to briefly stay true then set to false
-                // This ensures the contract appears in the completed list
-                this.setHasOpenContract(false);
+                console.log('[Run Panel] 📊 Special account - contract displays as complete');
             }
 
             // CRITICAL: Check if target profit is reached and stop bot automatically

@@ -504,7 +504,21 @@ export default class TransactionsStore {
             exit_tick_time:
                 (dataAny.exit_tick_time || dataAny.exit_spot_time) &&
                 formatDate(dataAny.exit_tick_time || dataAny.exit_spot_time, 'YYYY-M-D HH:mm:ss [GMT]'),
-            profit: is_completed ? (data.profit ?? (data as any).margin ?? (data as any).payout ?? 0) : 0,
+            profit: is_completed
+                ? (() => {
+                      // Use the explicit profit field when the API provides it (handles both wins and losses).
+                      if (data.profit !== undefined && data.profit !== null) return Number(data.profit);
+                      // DO NOT fall back to `payout`: for a lost contract payout = 0, which would
+                      // incorrectly show a P/L of 0 instead of -buy_price.
+                      // Instead derive profit from sell_price - buy_price (standard accounting).
+                      const sell = Number((data as any).sell_price ?? (data as any).bid_price ?? 0);
+                      const buy = Number(
+                          data.buy_price ?? (data as any).stake ?? (data as any).amount ?? 0
+                      );
+                      if (buy > 0) return Number((sell - buy).toFixed(8));
+                      return 0;
+                  })()
+                : 0,
         } as TContractInfo & { original_transaction_ids?: { buy?: number; sell?: number } };
 
         const contract = (() => {

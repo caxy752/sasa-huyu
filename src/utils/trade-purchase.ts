@@ -270,7 +270,19 @@ export const getContractSnapshot = (contract: Record<string, any>, fallback: Rec
         barrier: contract.barrier ?? fallback.barrier,
         sell_price: contract.sell_price ?? fallback.sell_price,
         bid_price: contract.bid_price ?? fallback.bid_price,
-        profit: is_sold ? (contract.profit ?? fallback.profit ?? 0) : (fallback.profit ?? 0),
+        profit: is_sold
+            ? (() => {
+                  // Use explicit API profit when available (covers both wins and losses).
+                  if (contract.profit !== undefined && contract.profit !== null) return Number(contract.profit);
+                  if (fallback.profit !== undefined && fallback.profit !== null) return Number(fallback.profit);
+                  // Derive from sell_price - buy_price so lost contracts show negative profit,
+                  // not 0 (which is the payout for a lost contract).
+                  const sell = Number(contract.sell_price ?? contract.bid_price ?? fallback.sell_price ?? fallback.bid_price ?? 0);
+                  const buy = Number(contract.buy_price ?? fallback.buy_price ?? 0);
+                  if (buy > 0) return Number((sell - buy).toFixed(8));
+                  return 0;
+              })()
+            : (fallback.profit ?? 0),
         is_sold,
         status: contract.status ?? fallback.status,
     };
