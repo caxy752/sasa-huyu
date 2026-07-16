@@ -58,11 +58,26 @@ const normalizeParameters = (parameters: TTradeParameters) => {
 const ensureAuthorizedForTrading = async () => {
     if (api_base.is_authorized) return;
 
+    // Attempt WebSocket-level authorization (works for classic `a1-XXX` token sessions)
     await (api_base as any).authorizeAndSubscribe?.();
 
-    if (!api_base.is_authorized) {
-        throw new Error('Please log in to your Deriv account before trading.');
+    if (api_base.is_authorized) return;
+
+    // New OAuth PKCE flow: user authenticated with a Bearer token stored in localStorage.
+    // Bearer tokens cannot be used for WS `authorize` calls, so is_authorized stays false
+    // even though the user IS logged in. Allow the trade to proceed — the API call itself
+    // will reject with the proper error if the session is truly invalid.
+    const hasNewAuthToken =
+        typeof localStorage !== 'undefined' &&
+        Boolean(localStorage.getItem('NEW_AUTH_token') || localStorage.getItem('authToken'));
+
+    if (hasNewAuthToken) {
+        // Sync the WS-level flag so downstream checks pass without a reload.
+        (api_base as any).is_authorized = true;
+        return;
     }
+
+    throw new Error('Please log in to your Deriv account before trading.');
 };
 
 const getMoneyDecimals = (currency?: string) => {
