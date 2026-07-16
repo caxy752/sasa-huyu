@@ -20,9 +20,8 @@ export const DBOT_TABS: TDashboardTabIndex = Object.freeze({
     ANALYSIS_TOOL: 5,
     STRATEGIES: 6,
     COPY_TRADING: 7,
-    DTRADER: 8,
-    TRADINGVIEW: 9,
-    MANUAL_TRADING: 10,
+    TRADINGVIEW: 8,
+    MANUAL_TRADING: 9,
     SPEEDBOT: 12,
     // SCANNER shares the ANALYSIS_TOOL index so scanner.tsx visibility check passes
     // when embedded as the Signals sub-tab inside Analysis Tool.
@@ -51,7 +50,6 @@ export const TAB_IDS = [
     'id-analysis-tool',
     'id-strategies',
     'id-copy-trading',
-    'id-dtrader',
     'id-tradingview',
     'id-manual-trading',
     'id-speedbot',

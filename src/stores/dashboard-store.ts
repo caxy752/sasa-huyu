@@ -65,6 +65,10 @@ export interface IDashboardStore {
     pending_free_bot: { name: string; xml: string } | null;
     setPendingFreeBot: (bot: { name: string; xml: string }) => void;
     clearPendingFreeBot: () => void;
+    // Trading module registry (used by scanner, manual-trading)
+    registerTradingStopHandler: (key: string, handler: () => void) => void;
+    unregisterTradingStopHandler: (key: string) => void;
+    setActiveTradingModule: (module: string | null) => void;
 }
 
 export default class DashboardStore implements IDashboardStore {
@@ -368,6 +372,22 @@ export default class DashboardStore implements IDashboardStore {
     setActiveTab = (active_tab: number): void => {
         this.active_tab = active_tab;
         localStorage.setItem('active_tab', active_tab.toString());
+    };
+
+    // Registry for trading stop handlers (used by scanner, manual trading etc.)
+    private tradingStopHandlers: Map<string, () => void> = new Map();
+
+    registerTradingStopHandler = (key: string, handler: () => void): void => {
+        this.tradingStopHandlers.set(key, handler);
+    };
+
+    unregisterTradingStopHandler = (key: string): void => {
+        this.tradingStopHandlers.delete(key);
+    };
+
+    setActiveTradingModule = (_module: string | null): void => {
+        // No-op stub — exists so scanner/manual-trading components can call it
+        // without causing a TypeError.
     };
 
     setActiveTabTutorial = (active_tab_tutorials: number): void => {

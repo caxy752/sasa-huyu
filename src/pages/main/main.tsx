@@ -41,7 +41,6 @@ const AnalysisTools = lazy(() => import('../analysis-tool'));
 const CopyTrading = lazy(() => import('../copy-trading'));
 const Strategies = lazy(() => import('../free-bots/strategies'));
 const ProTool = lazy(() => import('../pro-tool'));
-const Dtrader = lazy(() => import('../dtrader'));
 const ManualTrading = lazy(() => import('../manual-trading'));
 // Import TradingBots directly instead of lazy loading for faster access
 import TradingBots from '../free-bots/trading-bots';
@@ -85,7 +84,6 @@ const AppWrapper = observer(() => {
         'analysis_tool',
         'strategies',
         'copy_trading',
-        'dtrader',
         'tradingview',
         'manual_trading',
     ];
@@ -374,25 +372,6 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
-                                        <LabelPairedChartLineCaptionRegularIcon
-                                            height='28px'
-                                            width='28px'
-                                            fill='#f5c542'
-                                        />
-                                        <Localize i18n_default_text='DTrader' />
-                                    </>
-                                }
-                                id='id-dtrader'
-                            >
-                                <Suspense
-                                    fallback={<ChunkLoader message={localize('Please wait, loading DTrader...')} />}
-                                >
-                                    <Dtrader />
-                                </Suspense>
-                            </div>
-                            <div
-                                label={
-                                    <>
                                         <LegacyChartsIcon height='28px' width='28px' fill='#f5c542' />
                                         <Localize i18n_default_text='TradingView' />
                                     </>
@@ -431,18 +410,17 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {/* Hide RunStrategy and RunPanel on DTrader tab - manual trading only */}
-                {active_tab !== DBOT_TABS.DTRADER && (
-                    <div className='main__run-strategy-wrapper'>
-                        {active_tab !== DBOT_TABS.TRADING_BOTS && <RunStrategy />}
-                        <RunPanel />
-                    </div>
-                )}
+                <div className='main__run-strategy-wrapper'>
+                    {active_tab !== DBOT_TABS.TRADING_BOTS && active_tab !== DBOT_TABS.MANUAL_TRADING && (
+                        <RunStrategy />
+                    )}
+                    <RunPanel />
+                </div>
                 <ChartModal />
                 <TradingViewModal />
             </DesktopWrapper>
             <MobileWrapper>
-                {!is_open && active_tab !== DBOT_TABS.STRATEGIES && active_tab !== DBOT_TABS.DTRADER && <RunPanel />}
+                {!is_open && active_tab !== DBOT_TABS.STRATEGIES && <RunPanel />}
             </MobileWrapper>
             <SpeedBotFloatingStop />
             <Dialog

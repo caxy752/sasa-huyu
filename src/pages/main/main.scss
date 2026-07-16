@@ -88,7 +88,7 @@
             }
 
             &__list {
-                background: #f97316 !important; // Orange background for nav bar
+                background: #0a1633 !important; // Dark blue background for nav bar
                 justify-content: flex-start; // Start from left like friend's design
                 border-bottom: none !important; // Remove border
                 padding: 0; // Remove all padding to eliminate space
@@ -1246,4 +1246,20 @@ body.theme--dark .dc-tabs__item {
     fill: #f5c542 !important;
     stroke: #f5c542 !important;
     filter: drop-shadow(0 0 6px rgba(245, 197, 66, 0.35)) !important;
+}
+
+// Manual Trading tab — fill the tab content area and scroll internally
+#id-manual-trading {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+
+    .manual-trading-page {
+        flex: 1;
+        min-height: 0;
+        height: auto;
+    }
 }

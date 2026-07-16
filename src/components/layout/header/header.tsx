@@ -8,7 +8,6 @@ import useActiveAccount from '@/hooks/api/account/useActiveAccount';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useLogout } from '@/hooks/useLogout';
 import { useStore } from '@/hooks/useStore';
-import { navigateToTransfer } from '@/utils/transfer-utils';
 import { Localize } from '@deriv-com/translations';
 import { Header, useDevice, Wrapper } from '@deriv-com/ui';
 import { AppLogo } from '../app-logo';
@@ -19,7 +18,7 @@ import './header.scss';
 
 const AppHeader = observer(() => {
     const { isDesktop } = useDevice();
-    const { isAuthorizing, activeLoginid, setIsAuthorizing, authData } = useApiBase();
+    const { isAuthorizing, activeLoginid, setIsAuthorizing } = useApiBase();
     const { client } = useStore() ?? {};
     const mobileMenuRef = useRef<MobileMenuRef>(null);
     const [showWhatsAppDropdown, setShowWhatsAppDropdown] = useState(false);
@@ -199,40 +198,15 @@ const AppHeader = observer(() => {
                     </div>
                 );
             }
-            // Show account switcher and logout when user is fully authenticated
+            // Show account switcher when user is fully authenticated
             else if (activeLoginid && !is_account_regenerating) {
-                if (position === 'left' && !isDesktop) {
-                    // For mobile left section - only account switcher
-                    return (
-                        <div className='auth-actions'>
-                            <div className='account-info'>
-                                <AccountSwitcher activeAccount={activeAccount} />
-                            </div>
+                return (
+                    <div className='auth-actions'>
+                        <div className='account-info'>
+                            <AccountSwitcher activeAccount={activeAccount} />
                         </div>
-                    );
-                } else if (position === 'right') {
-                    // For right section - transfer button (and account switcher on desktop)
-                    return (
-                        <div className='auth-actions'>
-                            {isDesktop && (
-                                <div className='account-info'>
-                                    <AccountSwitcher activeAccount={activeAccount} />
-                                </div>
-                            )}
-                            <Button
-                                primary
-                                disabled={client?.is_logging_out || !authData?.currency}
-                                onClick={() => {
-                                    if (authData?.currency) {
-                                        navigateToTransfer(authData.currency);
-                                    }
-                                }}
-                            >
-                                <Localize i18n_default_text='Transfer' />
-                            </Button>
-                        </div>
-                    );
-                }
+                    </div>
+                );
             }
             // Show login button only when fully settled (not during OAuth flow)
             else if (
@@ -263,7 +237,6 @@ const AppHeader = observer(() => {
             authTimeout,
             is_account_regenerating,
             isOAuthPending,
-            authData,
             handleLogin,
             handleSignup,
         ]
