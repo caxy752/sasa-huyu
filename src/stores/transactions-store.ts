@@ -55,6 +55,7 @@ export default class TransactionsStore {
             is_called_proposal_open_contract: observable,
             is_transaction_details_modal_open: observable,
             transactions: computed,
+            statistics: computed,
             onBotContractEvent: action.bound,
             pushTransaction: action.bound,
             clear: action.bound,
@@ -239,11 +240,20 @@ export default class TransactionsStore {
         );
         const statistics = trxs.reduce(
             (stats, { data }) => {
-                const { profit = 0, is_completed = false, buy_price = 0, payout, bid_price } = data as TContractInfo;
+                const d = data as any;
+                const is_completed: boolean = d.is_completed ?? false;
+                // profit: always a signed number; positive = won, negative = lost
+                const profit: number = Number(d.profit ?? 0);
+                // buy_price: mirror the display fallback chain (buy_price → stake → amount)
+                const buy_price: number = Number(d.buy_price || d.stake || d.amount || 0);
+                // payout for won contracts: sell_price is the settled payout; fall back to
+                // the legacy payout/bid_price fields for bot-engine-sourced contracts
+                const payout_amount: number = Number(d.sell_price ?? d.payout ?? d.bid_price ?? 0);
+
                 if (is_completed) {
                     if (profit > 0) {
                         stats.won_contracts += 1;
-                        stats.total_payout += payout ?? bid_price ?? 0;
+                        stats.total_payout += payout_amount;
                     } else {
                         stats.lost_contracts += 1;
                     }
