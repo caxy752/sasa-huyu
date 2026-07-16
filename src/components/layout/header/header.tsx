@@ -301,7 +301,6 @@ const AppHeader = observer(() => {
                         )}
                     </div>
                     <MobileMenu ref={mobileMenuRef} onLogout={handleLogout} />
-                    {isDesktop ? null : renderAccountSection('left')}
                 </Wrapper>
                 <Wrapper variant='right'>{renderAccountSection('right')}</Wrapper>
                 <AdminPasswordModal
