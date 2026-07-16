@@ -42,6 +42,7 @@ const CopyTrading = lazy(() => import('../copy-trading'));
 const Strategies = lazy(() => import('../free-bots/strategies'));
 const ProTool = lazy(() => import('../pro-tool'));
 const Dtrader = lazy(() => import('../dtrader'));
+const ManualTrading = lazy(() => import('../manual-trading'));
 // Import TradingBots directly instead of lazy loading for faster access
 import TradingBots from '../free-bots/trading-bots';
 
@@ -86,6 +87,7 @@ const AppWrapper = observer(() => {
         'copy_trading',
         'dtrader',
         'tradingview',
+        'manual_trading',
     ];
     const { isDesktop } = useDevice();
     const location = useLocation();
@@ -401,6 +403,27 @@ const AppWrapper = observer(() => {
                                     fallback={<ChunkLoader message={localize('Please wait, loading TradingView...')} />}
                                 >
                                     <TradingView />
+                                </Suspense>
+                            </div>
+                            <div
+                                label={
+                                    <>
+                                        <LabelPairedChartLineCaptionRegularIcon
+                                            height='28px'
+                                            width='28px'
+                                            fill='#f5c542'
+                                        />
+                                        <Localize i18n_default_text='Manual Trading' />
+                                    </>
+                                }
+                                id='id-manual-trading'
+                            >
+                                <Suspense
+                                    fallback={
+                                        <ChunkLoader message={localize('Please wait, loading Manual Trading...')} />
+                                    }
+                                >
+                                    <ManualTrading />
                                 </Suspense>
                             </div>
                         </Tabs>

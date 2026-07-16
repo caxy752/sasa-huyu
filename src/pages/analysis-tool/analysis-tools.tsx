@@ -3,7 +3,7 @@ import AnalysisTool from './analysis-tool';
 import DpTools from '../dp-tools';
 import Dcircles from '../dtrader/dcircles/dcircles';
 import AllAnalysis from './all-analysis';
-import Signals from '../signals';
+import Scanner from '../scanner';
 import TickAnalyser from './tick-analyser';
 import IframeWrapper from '@/components/iframe-wrapper';
 import { useStore } from '@/hooks/useStore';
@@ -656,7 +656,7 @@ const AnalysisTools: React.FC = () => {
             case 'dcircles':
                 return <Dcircles />;
             case 'signals':
-                return <Signals />;
+                return <Scanner />;
             case 'analysis-tool':
                 return <AnalysisTool />;
             case 'dp-tools':
