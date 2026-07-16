@@ -6,6 +6,7 @@ import Dialog from '@/components/shared_ui/dialog';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
+import { startNewLogin } from '@/auth/NewDerivAuth';
 import {
     DIGIT_STRATEGIES,
     SUPPORTED_VOLATILITY_MARKETS,
@@ -1063,6 +1064,43 @@ const ManualTrading = observer(() => {
     }, [handleManualPurchase, isPurchasing, isSignalTradingActive, loadedSignalState, signalTradeAction]);
 
     if (!showManualTrading) return null;
+
+    // Show login prompt when user is not authenticated
+    if (!client.is_logged_in) {
+        return (
+            <div
+                className={classNames('manual-trading-page', {
+                    'manual-trading-page--dark': ui.is_dark_mode_on,
+                })}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}
+            >
+                <div style={{ textAlign: 'center', padding: '3rem' }}>
+                    <div style={{ fontSize: '4rem', marginBottom: '1.6rem' }}>📊</div>
+                    <h2 style={{ marginBottom: '0.8rem', fontSize: '2rem', fontWeight: 900, color: 'var(--manual-text)' }}>
+                        Log in to trade manually
+                    </h2>
+                    <p style={{ marginBottom: '2rem', color: 'var(--manual-muted)', fontSize: '1.4rem' }}>
+                        Connect your Deriv account to access live digit statistics and place trades.
+                    </p>
+                    <button
+                        style={{
+                            padding: '1rem 3rem',
+                            background: '#0b4ea2',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '0.8rem',
+                            fontSize: '1.4rem',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                        }}
+                        onClick={() => void startNewLogin()}
+                    >
+                        Log in with Deriv
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div

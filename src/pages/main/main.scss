@@ -1015,9 +1015,9 @@
         filter: none !important;
     }
 
-    // Active tab - lighter blue background with white text
+    // Active tab - consistent green background matching .dc-tabs__active
     &.dc-tabs__active {
-        background: #3b82f6 !important; // Lighter blue background for active tab
+        background: #16a34a !important; // Green — matches all other active tabs
         color: #ffffff !important; // White text
         font-weight: bold !important;
         font-family:
