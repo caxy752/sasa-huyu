@@ -934,6 +934,11 @@
 
 // Navigation tabs styling to match screenshot - dark blue background, white text, golden icons
 .main__container .main__tabs .dc-tabs__list {
+    display: flex !important;
+    flex-wrap: nowrap !important;      // ← single row — no second-row dark strip
+    overflow-x: auto !important;       // ← scroll instead of wrap
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;  // Firefox
     line-height: 24px !important;
     min-height: 24px !important;
     background: rgba(10, 18, 44, 0.96) !important;
@@ -942,6 +947,10 @@
     box-shadow:
         0 0 0 1px rgba(255, 215, 0, 0.18),
         inset 0 0 1px rgba(255, 215, 0, 0.1);
+
+    &::-webkit-scrollbar {
+        display: none;                 // Chrome/Safari
+    }
 }
 
 .main__container .main__tabs .dc-tabs__item__icon,
@@ -955,6 +964,7 @@
 }
 
 .main__container .main__tabs .dc-tabs__item {
+    flex-shrink: 0 !important;         // ← never compress; all tabs same row
     // All navigation items use white text
     color: #ffffff !important; // White text for all navigation items
     font-weight: 500 !important;
