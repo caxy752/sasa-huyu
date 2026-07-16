@@ -1224,18 +1224,28 @@ body.theme--dark .dc-tabs__item {
     }
 }
 
-// Manual Trading tab — fill the tab content area and scroll internally
-#id-manual-trading {
-    height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    flex: 1;
+// ── Manual Trading content area ───────────────────────────────────────────────
+// NOTE: The Tabs component renders child.props.children, not the wrapper div
+// with id="id-manual-trading" — so #id-manual-trading is never in the DOM.
+// Target the actual rendered elements instead.
+
+// The content wrapper that Tabs puts around the active panel:
+.main__container .dc-tabs__content--main__tabs:has(.manual-trading-page) {
     display: flex;
     flex-direction: column;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    height: 100%;
+}
 
-    .manual-trading-page {
-        flex: 1;
-        min-height: 0;
-        height: auto;
-    }
+// The page itself must fill the full wrapper
+.main__container .dc-tabs__content--main__tabs .manual-trading-page {
+    flex: 1 1 0;
+    width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    height: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
 }

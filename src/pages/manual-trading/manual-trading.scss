@@ -11,11 +11,12 @@
     --manual-inner-bg: #333333;
     --manual-shadow: 0 0.8rem 1.6rem rgba(0, 0, 0, 0.35);
 
+    // Fill the entire tab content area — the container's padding-right already
+    // reserves space for the Run Panel on desktop, so no max-width cap needed.
     box-sizing: border-box;
+    flex: 1 1 0;            // grow to fill the flex content wrapper
     width: 100%;
-    // Desktop: cap at ~half the viewport so the Run Panel sits comfortably
-    // in the remaining right-hand space without any overlap.
-    max-width: 55vw;
+    max-width: 100%;        // never artificially narrow; container handles clearance
     min-height: 100%;
     padding: 1.2rem 1.4rem 4rem;
     overflow-y: auto;
