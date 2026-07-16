@@ -235,8 +235,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedObjectsColumnCaptionRegularIcon
-                                            height='28px'
-                                            width='28px'
+                                            height='16px'
+                                            width='16px'
                                             fill='#f5c542'
                                         />
                                         <Localize i18n_default_text='Dashboard' />
@@ -250,8 +250,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedPuzzlePieceTwoCaptionBoldIcon
-                                            height='28px'
-                                            width='28px'
+                                            height='16px'
+                                            width='16px'
                                             fill='#f5c542'
                                         />
                                         <Localize i18n_default_text='Matches Tool' />
@@ -265,8 +265,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedPuzzlePieceTwoCaptionBoldIcon
-                                            height='28px'
-                                            width='28px'
+                                            height='16px'
+                                            width='16px'
                                             fill='#f5c542'
                                         />
                                         <Localize i18n_default_text='Bot Builder' />
@@ -278,8 +278,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedChartLineCaptionRegularIcon
-                                            height='28px'
-                                            width='28px'
+                                            height='16px'
+                                            width='16px'
                                             fill='#f5c542'
                                         />
                                         <Localize i18n_default_text='Charts' />
@@ -301,8 +301,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedPuzzlePieceTwoCaptionBoldIcon
-                                            height='28px'
-                                            width='28px'
+                                            height='16px'
+                                            width='16px'
                                             fill='#f5c542'
                                         />
                                         <Localize i18n_default_text='Trading Bots' />
@@ -315,7 +315,7 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
-                                        <LegacyIndicatorsIcon height='28px' width='28px' fill='#f5c542' />
+                                        <LegacyIndicatorsIcon height='16px' width='16px' fill='#f5c542' />
                                         <Localize i18n_default_text='Analysis Tool' />
                                     </>
                                 }
@@ -333,8 +333,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedPuzzlePieceTwoCaptionBoldIcon
-                                            height='28px'
-                                            width='28px'
+                                            height='16px'
+                                            width='16px'
                                             fill='#f5c542'
                                         />
                                         <Localize i18n_default_text='Strategies' />
@@ -352,8 +352,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedObjectsColumnCaptionRegularIcon
-                                            height='28px'
-                                            width='28px'
+                                            height='16px'
+                                            width='16px'
                                             fill='#f5c542'
                                         />
                                         <Localize i18n_default_text='Copy Trading' />
@@ -372,7 +372,7 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
-                                        <LegacyChartsIcon height='28px' width='28px' fill='#f5c542' />
+                                        <LegacyChartsIcon height='16px' width='16px' fill='#f5c542' />
                                         <Localize i18n_default_text='TradingView' />
                                     </>
                                 }
@@ -388,8 +388,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedChartLineCaptionRegularIcon
-                                            height='28px'
-                                            width='28px'
+                                            height='16px'
+                                            width='16px'
                                             fill='#f5c542'
                                         />
                                         <Localize i18n_default_text='Manual Trading' />

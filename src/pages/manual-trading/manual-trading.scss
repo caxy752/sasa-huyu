@@ -128,10 +128,10 @@
 .manual-trading-digits-card {
     width: 100%;
     max-width: 72rem;
-    margin: 0 auto 1.4rem;
-    padding: 3.4rem 4.2rem 2.6rem;
+    margin: 0 auto 0.8rem;
+    padding: 1.6rem 2rem 1.4rem;
     border: 0.1rem solid var(--manual-strong-border);
-    border-radius: 1.5rem;
+    border-radius: 1rem;
     background: var(--manual-card-bg);
     box-shadow:
         var(--manual-shadow),
@@ -141,8 +141,8 @@
 .manual-trading-digits-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    row-gap: 3rem;
-    column-gap: 3.6rem;
+    row-gap: 1.4rem;
+    column-gap: 1.6rem;
     align-items: center;
     justify-items: center;
 }
@@ -152,16 +152,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 8.6rem;
-    height: 8.4rem;
+    width: 6.4rem;
+    height: 6.2rem;
 }
 
 .manual-trading-digit__circle {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 8.4rem;
-    height: 8.4rem;
+    width: 6.2rem;
+    height: 6.2rem;
     border-radius: 50%;
     background: var(--manual-ring-base);
 }
@@ -179,8 +179,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 6.8rem;
-    height: 6.8rem;
+    width: 5rem;
+    height: 5rem;
     border-radius: 50%;
     background: var(--manual-inner-bg);
     color: #ffffff;
@@ -188,13 +188,13 @@
 }
 
 .manual-trading-digit__number {
-    margin-bottom: 1.4rem;
-    font-size: 1.5rem;
+    margin-bottom: 0.6rem;
+    font-size: 1.3rem;
     font-weight: 900;
 }
 
 .manual-trading-digit__percent {
-    font-size: 1.3rem;
+    font-size: 1.1rem;
     font-weight: 900;
 }
 
