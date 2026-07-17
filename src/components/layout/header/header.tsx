@@ -8,6 +8,7 @@ import useActiveAccount from '@/hooks/api/account/useActiveAccount';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useLogout } from '@/hooks/useLogout';
 import { useStore } from '@/hooks/useStore';
+import useThemeSwitcher from '@/hooks/useThemeSwitcher';
 import { Localize } from '@deriv-com/translations';
 import { Header, useDevice, Wrapper } from '@deriv-com/ui';
 import { AppLogo } from '../app-logo';
@@ -20,6 +21,7 @@ const AppHeader = observer(() => {
     const { isDesktop } = useDevice();
     const { isAuthorizing, activeLoginid, setIsAuthorizing } = useApiBase();
     const { client } = useStore() ?? {};
+    const { is_dark_mode_on, toggleTheme } = useThemeSwitcher();
     const mobileMenuRef = useRef<MobileMenuRef>(null);
     const [showWhatsAppDropdown, setShowWhatsAppDropdown] = useState(false);
     const whatsappDropdownRef = useRef<HTMLDivElement>(null);
@@ -302,7 +304,19 @@ const AppHeader = observer(() => {
                     </div>
                     <MobileMenu ref={mobileMenuRef} onLogout={handleLogout} />
                 </Wrapper>
-                <Wrapper variant='right'>{renderAccountSection('right')}</Wrapper>
+                <Wrapper variant='right'>
+                    {!isDesktop && (
+                        <button
+                            type='button'
+                            className='mobile-theme-toggle'
+                            aria-label='Toggle theme'
+                            onClick={toggleTheme}
+                        >
+                            {is_dark_mode_on ? '☀️' : '🌙'}
+                        </button>
+                    )}
+                    {renderAccountSection('right')}
+                </Wrapper>
                 <AdminPasswordModal
                     isOpen={isAdminModalOpen}
                     onClose={handleAdminModalClose}
