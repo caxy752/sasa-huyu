@@ -502,79 +502,144 @@
     color: #ffffff;
 }
 
+// ── Mobile / Tablet ──────────────────────────────────────────────────────────
+// Rule: layout structure is IDENTICAL to desktop (same columns, same order).
+// Only padding, gap, font-size, and min-height values are scaled down.
+// ─────────────────────────────────────────────────────────────────────────────
 @media (max-width: 76.8rem) {
     .manual-trading-page {
-        // Full width on mobile/tablet — no run panel visible on these breakpoints
         max-width: 100%;
-        padding: 1rem 0.6rem 8rem;
+        padding: 0.8rem 0.5rem 8rem; // tight sides, generous bottom for fixed footer
     }
 
+    // ── Toolbar: keep all 5 columns, just tighten sizes ──────────────────────
     .manual-trading-toolbar {
-        grid-template-columns: 1fr 10rem 8rem;
-        padding: 0 0.6rem;
+        grid-template-columns: minmax(0, 1fr) minmax(7rem, 9rem) minmax(5.5rem, 7rem) auto auto;
+        gap: 0.5rem;
+        margin: 0 0 0.9rem;
     }
 
-    .manual-trading-field--market {
-        grid-column: 1 / -1;
+    .manual-trading-field__control {
+        height: 3.2rem;
+        font-size: 1.2rem;
+        padding: 0 0.7rem;
+    }
+
+    .manual-trading-toolbar__apply {
+        height: 3.2rem;
+        font-size: 1.2rem;
+        padding: 0 0.8rem;
     }
 
     .manual-trading-toolbar__status {
-        grid-column: 1 / -1;
-        width: fit-content;
-        height: 2.8rem;
+        height: 3.2rem;
+        min-width: 5.5rem;
+        padding: 0 0.7rem;
+        font-size: 1rem;
     }
 
+    // ── Digits card: keep 10 columns — identical to desktop ──────────────────
     .manual-trading-digits-card {
-        margin-bottom: 0.8rem;
-        padding: 1rem 0.6rem 0.8rem;
+        padding: 0.8rem 0.5rem 0.7rem;
+        margin-bottom: 0.7rem;
     }
 
-    // On mobile wrap to 5-per-row so circles are readable
     .manual-trading-digits-grid {
-        grid-template-columns: repeat(5, 1fr);
-        gap: 0.8rem;
+        grid-template-columns: repeat(10, 1fr); // same 10-per-row as desktop
+        gap: 0.3rem;
     }
 
     .manual-trading-digit {
         max-width: 100%;
     }
 
+    .manual-trading-digit__number {
+        font-size: 1.05rem;
+        margin-bottom: 0.15rem;
+    }
+
+    .manual-trading-digit__percent {
+        font-size: 0.85rem;
+    }
+
+    // ── Ticket: keep header as a row (same as desktop) ───────────────────────
     .manual-trading-ticket {
-        padding: 1.2rem;
+        padding: 1rem 0.9rem;
     }
 
     .manual-trading-ticket__header {
-        align-items: flex-start;
-        flex-direction: column;
+        flex-direction: row; // stay in a row — identical to desktop
+        align-items: center;
+        margin-bottom: 0.9rem;
+
+        h2 {
+            font-size: 1.5rem;
+        }
+
+        span {
+            font-size: 1rem;
+        }
     }
 
-    .manual-trading-actions {
-        order: 2;
-        margin-bottom: 1.2rem;
-    }
-
+    // ── Trade types: keep 3 columns — identical to desktop ───────────────────
     .manual-trading-trade-types {
-        order: 3;
+        grid-template-columns: repeat(3, 1fr); // same 3-per-row as desktop
+        gap: 0.5rem;
+        margin-bottom: 0.9rem;
+        order: unset; // natural DOM order — same as desktop
     }
 
+    .manual-trading-trade-types__button,
+    .manual-trading-barrier__digit {
+        min-height: 3.2rem;
+        font-size: 1.15rem;
+    }
+
+    // ── Barrier: keep 10 columns — identical to desktop ──────────────────────
     .manual-trading-barrier {
-        order: 4;
+        grid-template-columns: repeat(10, 1fr); // same 10-per-row as desktop
+        gap: 0.3rem;
+        margin-bottom: 0.9rem;
+        order: unset;
     }
 
+    // ── Inputs: keep 3 columns — identical to desktop ────────────────────────
     .manual-trading-ticket__inputs {
-        order: 5;
+        grid-template-columns: repeat(3, 1fr); // same 3-per-row as desktop
+        gap: 0.6rem;
+        margin-bottom: 0.9rem;
+        order: unset;
+    }
+
+    // ── Actions: keep 2 columns — identical to desktop ───────────────────────
+    .manual-trading-actions {
+        grid-template-columns: repeat(2, 1fr); // same 2-per-row as desktop
+        gap: 0.7rem;
+        order: unset;
+        margin-bottom: 0;
+    }
+
+    .manual-trading-actions__button {
+        min-height: 6rem;
+
+        strong {
+            font-size: 1.6rem;
+        }
+
+        span {
+            font-size: 1rem;
+            margin-top: 0.6rem;
+        }
+
+        small {
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
     }
 
     .manual-trading-ticket__message {
-        order: 6;
-    }
-
-    .manual-trading-trade-types {
-        grid-template-columns: 1fr;
-    }
-
-    .manual-trading-barrier {
-        grid-template-columns: repeat(5, 1fr);
+        order: unset;
+        margin-top: 0.8rem;
     }
 
     .manual-trading-signal-popup {
@@ -585,21 +650,67 @@
     }
 }
 
+// ── Very small phones (≤380px): same structure, just minimal sizes ────────────
 @media (max-width: 38rem) {
+    .manual-trading-page {
+        padding: 0.6rem 0.4rem 8rem;
+    }
+
+    // Toolbar still 5 columns, narrower minimums
     .manual-trading-toolbar {
-        grid-template-columns: 1fr 7.8rem;
+        grid-template-columns: minmax(0, 1fr) minmax(5.5rem, 7.5rem) minmax(4.5rem, 6rem) auto auto;
+        gap: 0.35rem;
     }
 
-    .manual-trading-toolbar__apply {
-        grid-column: 2;
+    .manual-trading-field__control,
+    .manual-trading-toolbar__apply,
+    .manual-trading-toolbar__status {
+        height: 3rem;
+        font-size: 1.1rem;
     }
 
-    .manual-trading-field:not(.manual-trading-field--market) {
-        grid-column: 1;
+    .manual-trading-toolbar__status {
+        min-width: 4.5rem;
+        padding: 0 0.5rem;
     }
 
-    .manual-trading-ticket__inputs,
+    .manual-trading-digits-grid {
+        gap: 0.2rem;
+    }
+
+    .manual-trading-digit__number {
+        font-size: 0.9rem;
+    }
+
+    .manual-trading-digit__percent {
+        font-size: 0.75rem;
+    }
+
+    // Inputs and actions: still same column counts as desktop
+    .manual-trading-ticket__inputs {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.4rem;
+    }
+
     .manual-trading-actions {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+    }
+
+    .manual-trading-actions__button {
+        min-height: 5.5rem;
+
+        strong {
+            font-size: 1.4rem;
+        }
+    }
+
+    .manual-trading-trade-types {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.35rem;
+    }
+
+    .manual-trading-barrier {
+        gap: 0.2rem;
     }
 }
