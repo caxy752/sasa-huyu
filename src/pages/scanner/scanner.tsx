@@ -1058,7 +1058,9 @@ const Scanner = observer(() => {
         setSessionProfit(0);
         sessionProfitRef.current = 0;
         completedRunsRef.current = 0;
-        setPopupOpen(true);
+        // On mobile we skip the scanner popup — the run panel opens instead
+        // so the user can see live contract events as they happen.
+        if (isDesktop) setPopupOpen(true);
         setTerminalDashboard([`Analysis Dashboard - ${strategy} on ${selectedSymbol}`]);
         setTerminalBody(['Connecting to server...']);
 
