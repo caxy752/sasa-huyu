@@ -13,7 +13,8 @@
 
     &--run-panel-open {
         pointer-events: none;
-        visibility: hidden;
+        // Do NOT use visibility:hidden — the run panel (z-index:5) overlays us naturally.
+        // Hiding the scanner also hides position:fixed children inconsistently on mobile.
     }
 
     * {
@@ -44,7 +45,7 @@
     }
 
     .background {
-        position: fixed;
+        position: absolute;   // was fixed — keep it bounded to scanner-page
         inset: 0;
         width: 100%;
         height: 100%;
@@ -502,18 +503,19 @@
             margin: 16px 0 14px;
         }
 
-        // ── Popup: absolute so it fills the scanner-page area naturally ──────
-        // Instead of fighting fixed-position viewport math, make the popup
-        // absolute within its parent .scanner-page (position:relative above).
+        // ── Popup: absolute, fills scanner-page, z-index BELOW run panel ─────
+        // Run panel has z-index:5 (--zindex-drawer). Keeping popup below that
+        // lets the run panel slide over the scanner naturally on mobile,
+        // exactly like every other trading tab.
         .popup {
             position: absolute;
-            inset: 0;           // top:0 right:0 bottom:0 left:0
+            inset: 0;
             width: 100%;
             max-width: 100%;
             height: 100%;
             transform: none;
             border-radius: 12px;
-            z-index: 100;
+            z-index: 3;   // below run-panel's z-index:5 so it shows on top
         }
 
         .popup-header {
