@@ -452,47 +452,48 @@
 @media (max-width: 760px) {
     .scanner-page {
         align-items: flex-start;
-        // Use the mobile height variable so the page fits inside the sub-tab content area
+        // Fill the sub-tab content area naturally — no fixed vh
         height: var(--tab-content-height-mobile, calc(100vh - 12rem));
         min-height: 0;
         padding: 10px 12px 3% 12px;
         overflow-y: auto;
-        
+        // Needed so position:absolute popup children are bounded by this element
+        position: relative;
+
         .container {
             padding: 16px 15px;
-            // Pull the form much closer to the top — desktop's 10% is too far down
             margin-top: 2%;
             border-radius: 28px;
         }
-        
+
         h1 {
             font-size: 1.2rem;
             margin-bottom: 14px;
             letter-spacing: 1.5px;
         }
-        
+
         label {
             font-size: 0.65rem;
             margin-top: 12px;
         }
-        
+
         .dropdown {
             padding: 9px 14px;
             font-size: 0.78rem;
         }
-        
+
         .martingale-row {
             flex-wrap: wrap;
             gap: 8px;
             padding: 6px 14px;
             margin: 12px 0 6px;
-            
+
             .martingale-select {
                 width: 100%;
                 max-width: 110px;
             }
         }
-        
+
         .contain {
             flex-direction: column;
             gap: 8px;
@@ -500,75 +501,61 @@
             padding: 10px 14px;
             margin: 16px 0 14px;
         }
-        
-        // ── Popup: account for the app nav headers (~15vh from top) ──────────
-        // On desktop the popup sits at 50% viewport height which is fine,
-        // but on mobile the nav bars eat ~15vh so the popup must start below them.
-        &:not(.scanner-page--run-panel-open) ~ * .popup,
+
+        // ── Popup: absolute so it fills the scanner-page area naturally ──────
+        // Instead of fighting fixed-position viewport math, make the popup
+        // absolute within its parent .scanner-page (position:relative above).
         .popup {
-            top: 14vh !important;      // start below main nav + tab + sub-tab strips
-            left: 3% !important;
-            right: 3% !important;
-            width: 94% !important;
-            max-width: 94% !important;
-            height: 80vh !important;   // fill most of the remaining screen
-            transform: none !important;
-            border-radius: 20px !important;
+            position: absolute;
+            inset: 0;           // top:0 right:0 bottom:0 left:0
+            width: 100%;
+            max-width: 100%;
+            height: 100%;
+            transform: none;
+            border-radius: 12px;
+            z-index: 100;
         }
-        
+
         .popup-header {
             padding: 6px 12px;
         }
-        
+
         .stop-bot-btn,
         .close-btn {
             padding: 4px 12px;
             font-size: 0.7rem;
         }
-        
+
         .terminal-header {
             padding: 8px 12px;
-            
+
             .dot {
                 height: 8px;
                 width: 8px;
             }
-            
+
             .terminal-title {
                 font-size: 0.7rem;
             }
         }
-        
+
         .terminal-dashboard {
             padding: 10px 12px;
             max-height: 150px;
-            
+
             p {
                 font-size: 10px;
             }
         }
-        
+
         .terminal-scroll {
             padding: 10px 12px;
             height: calc(100% - 190px);
-            
+
             .terminal-scroll-content p {
                 font-size: 9px;
             }
         }
-    }
-    
-    // The popup is position: fixed so it lives at the root stacking context,
-    // NOT inside .scanner-page — target it at the top level too.
-    .popup.popup--reduced {
-        top: 14vh !important;
-        left: 3% !important;
-        right: 3% !important;
-        width: 94% !important;
-        max-width: 94% !important;
-        height: 80vh !important;
-        transform: none !important;
-        border-radius: 20px !important;
     }
 }
 
