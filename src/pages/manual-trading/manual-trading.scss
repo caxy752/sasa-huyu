@@ -538,15 +538,15 @@
         font-size: 1rem;
     }
 
-    // ── Digits card: keep 10 columns — identical to desktop ──────────────────
+    // ── Digits card: 2 rows of 5 on mobile (0-4 top, 5-9 bottom) ────────────
     .manual-trading-digits-card {
         padding: 0.8rem 0.5rem 0.7rem;
         margin-bottom: 0.7rem;
     }
 
     .manual-trading-digits-grid {
-        grid-template-columns: repeat(10, 1fr); // same 10-per-row as desktop
-        gap: 0.3rem;
+        grid-template-columns: repeat(5, 1fr); // 2 rows: digits 0-4 then 5-9
+        gap: 0.5rem;
     }
 
     .manual-trading-digit {
@@ -674,8 +674,10 @@
         padding: 0 0.5rem;
     }
 
+    // Digits stay 5-per-row (2 rows of 5) on very small phones too
     .manual-trading-digits-grid {
-        gap: 0.2rem;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.3rem;
     }
 
     .manual-trading-digit__number {

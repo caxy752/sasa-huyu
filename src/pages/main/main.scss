@@ -164,8 +164,8 @@
                     overflow-x: auto !important;
 
                     @include mobile-or-tablet-screen {
-                        flex-direction: row !important; // belt-and-suspenders for mobile
-                        background-color: transparent !important;
+                        flex-direction: row !important;   // belt-and-suspenders for mobile
+                        background-color: #0a1633 !important; // keep dark blue on mobile
                     }
                 }
 
