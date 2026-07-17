@@ -452,32 +452,68 @@
 @media (max-width: 760px) {
     .scanner-page {
         align-items: flex-start;
-        padding: 15px 15px 7% 15px; /* Adjusted for mobile with 7% bottom padding */
+        // Use the mobile height variable so the page fits inside the sub-tab content area
+        height: var(--tab-content-height-mobile, calc(100vh - 12rem));
+        min-height: 0;
+        padding: 10px 12px 3% 12px;
+        overflow-y: auto;
         
         .container {
-            padding: 20px 18px;
-            margin-top: 8%;
+            padding: 16px 15px;
+            // Pull the form much closer to the top — desktop's 10% is too far down
+            margin-top: 2%;
+            border-radius: 28px;
         }
         
         h1 {
-            font-size: 1.4rem;
-            margin-bottom: 20px;
+            font-size: 1.2rem;
+            margin-bottom: 14px;
+            letter-spacing: 1.5px;
+        }
+        
+        label {
+            font-size: 0.65rem;
+            margin-top: 12px;
+        }
+        
+        .dropdown {
+            padding: 9px 14px;
+            font-size: 0.78rem;
         }
         
         .martingale-row {
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
+            padding: 6px 14px;
+            margin: 12px 0 6px;
             
             .martingale-select {
                 width: 100%;
-                max-width: 120px;
+                max-width: 110px;
             }
         }
         
         .contain {
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
             text-align: center;
+            padding: 10px 14px;
+            margin: 16px 0 14px;
+        }
+        
+        // ── Popup: account for the app nav headers (~15vh from top) ──────────
+        // On desktop the popup sits at 50% viewport height which is fine,
+        // but on mobile the nav bars eat ~15vh so the popup must start below them.
+        &:not(.scanner-page--run-panel-open) ~ * .popup,
+        .popup {
+            top: 14vh !important;      // start below main nav + tab + sub-tab strips
+            left: 3% !important;
+            right: 3% !important;
+            width: 94% !important;
+            max-width: 94% !important;
+            height: 80vh !important;   // fill most of the remaining screen
+            transform: none !important;
+            border-radius: 20px !important;
         }
         
         .popup-header {
@@ -520,6 +556,19 @@
                 font-size: 9px;
             }
         }
+    }
+    
+    // The popup is position: fixed so it lives at the root stacking context,
+    // NOT inside .scanner-page — target it at the top level too.
+    .popup.popup--reduced {
+        top: 14vh !important;
+        left: 3% !important;
+        right: 3% !important;
+        width: 94% !important;
+        max-width: 94% !important;
+        height: 80vh !important;
+        transform: none !important;
+        border-radius: 20px !important;
     }
 }
 
