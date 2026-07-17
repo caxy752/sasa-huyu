@@ -49,9 +49,11 @@ const SignalZone: React.FC = () => {
         }))
     );
     const [connected, setConnected] = useState(false);
+    const [running, setRunning] = useState(true);
     const [activeView, setActiveView] = useState<'rise-fall' | 'over-under' | 'even-odd'>('rise-fall');
     const ticksRef = useRef<Record<string, number[]>>({});
     const wsRef = useRef<WebSocket | null>(null);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const computeSignals = useCallback(() => {
         setSignals(prev =>
@@ -149,13 +151,22 @@ const SignalZone: React.FC = () => {
         ws.onclose = () => setConnected(false);
         ws.onerror = () => setConnected(false);
 
-        const interval = setInterval(computeSignals, 1500);
-
         return () => {
-            clearInterval(interval);
             ws.close();
         };
-    }, [computeSignals]);
+    }, []);
+
+    useEffect(() => {
+        if (!running) {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            intervalRef.current = null;
+            return;
+        }
+        intervalRef.current = setInterval(computeSignals, 1500);
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, [running, computeSignals]);
 
     const getSignalBadge = (status: SignalStatus, label: string) => {
         const active = status !== 'neutral';
@@ -178,14 +189,20 @@ const SignalZone: React.FC = () => {
         <div className='signal-zone'>
             <div className='signal-zone__header'>
                 <div className='signal-zone__header-left'>
-                    <div className='sz-pulse-dot' />
+                    <div className={`sz-pulse-dot ${!running ? 'sz-pulse-dot--stopped' : ''}`} />
                     <div>
                         <h1 className='signal-zone__title'>Signal Zone</h1>
                         <p className='signal-zone__subtitle'>
-                            {connected ? `Live · ${activeSignals} active signal${activeSignals !== 1 ? 's' : ''}` : 'Connecting…'}
+                            {!running ? 'Paused · signals frozen' : connected ? `Live · ${activeSignals} active signal${activeSignals !== 1 ? 's' : ''}` : 'Connecting…'}
                         </p>
                     </div>
                 </div>
+                <button
+                    className={`sz-stop-btn ${running ? 'sz-stop-btn--running' : 'sz-stop-btn--stopped'}`}
+                    onClick={() => setRunning(r => !r)}
+                >
+                    {running ? '⏹ Stop' : '▶ Resume'}
+                </button>
                 <div className='signal-zone__views'>
                     {(['rise-fall', 'over-under', 'even-odd'] as const).map(v => (
                         <button

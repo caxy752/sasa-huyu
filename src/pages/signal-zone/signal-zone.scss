@@ -116,11 +116,55 @@
     box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
     animation: sz-pulse 2s ease-in-out infinite;
     flex-shrink: 0;
+    transition: background 0.3s;
+
+    &--stopped {
+        background: #94a3b8;
+        box-shadow: none;
+        animation: none;
+    }
 
     @keyframes sz-pulse {
         0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
         70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
         100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+}
+
+.sz-stop-btn {
+    padding: 0.55rem 1.2rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1.5px solid;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    &--running {
+        background: rgba(239, 68, 68, 0.12);
+        border-color: #ef4444;
+        color: #ef4444;
+
+        &:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+    }
+
+    &--stopped {
+        background: rgba(34, 197, 94, 0.12);
+        border-color: #22c55e;
+        color: #22c55e;
+
+        &:hover {
+            background: rgba(34, 197, 94, 0.25);
+        }
+    }
+
+    @media (max-width: 768px) {
+        font-size: 0.78rem;
+        padding: 0.45rem 0.9rem;
     }
 }
 
