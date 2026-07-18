@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { getAppId, getSocketURL } from '@/components/shared';
-import { buyContractForUi, streamContractUntilSettled } from '@/utils/trade-purchase';
+import { getToken } from '@/components/makoti-widget/makoti-ws';
 import '../signal-zone/signal-zone.scss';
 
 // ================================================================
@@ -149,6 +149,8 @@ const SignalZone: React.FC = () => {
     const dailyTradeCountRef = useRef(0);
     const dailyProfitRef = useRef(0);
     const tradeHistoryRef = useRef<TradeRecord[]>([]);
+    const pendingProposalRef = useRef<PendingProposal | null>(null);
+    const proposalTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
     const latencyIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -578,7 +580,9 @@ const SignalZone: React.FC = () => {
     // ============================================================
     // AUTO-TRADE EXECUTION
     // ============================================================
-    const executeAutoTrade = useCallback(async (symbol: string, contractType: string, stake: number) => {
+    const executeAutoTrade = useCallback((symbol: string, contractType: string, stake: number) => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
         // Check trade limits
         if (dailyTradeCountRef.current >= MAX_DAILY_TRADES) {
             console.warn('[EDGE] ⛔ Max daily trades reached.');
@@ -596,76 +600,28 @@ const SignalZone: React.FC = () => {
 
         const adjustedStake = Math.min(MAX_STAKE, Math.max(MIN_STAKE, stake));
 
-        try {
-            dailyTradeCountRef.current++;
-            console.log(`[EDGE] 📤 Buying: ${symbol} ${config.label} $${adjustedStake.toFixed(2)} [#${dailyTradeCountRef.current}/${MAX_DAILY_TRADES}]`);
+        const proposalReq = {
+            proposal: 1,
+            amount: adjustedStake,
+            barrier: config.barrier,
+            basis: 'stake',
+            contract_type: config.type,
+            currency: 'USD',
+            duration: 1,
+            duration_unit: 't',
+            symbol: symbol,
+            product_type: 'basic',
+        };
 
-            setDailyStats(prev => ({ ...prev, trades: prev.trades + 1 }));
+        pendingProposalRef.current = {
+            symbol,
+            contractType,
+            stake: adjustedStake,
+            timestamp: Date.now(),
+        };
 
-            const result = await buyContractForUi({
-                parameters: {
-                    symbol,
-                    contract_type: config.type,
-                    barrier: config.barrier,
-                    basis: 'stake',
-                    duration: 1,
-                    duration_unit: 't',
-                    currency: 'USD',
-                    product_type: 'basic',
-                },
-                price: adjustedStake,
-                source: 'scanner-auto-trade',
-            });
-
-            const contractId = (result as any)?.contract_id;
-            console.log(`[EDGE] ✅ Contract #${contractId} opened on ${symbol}`);
-
-            const tradeRecord: TradeRecord = {
-                timestamp: Date.now(),
-                symbol,
-                contract: config.type,
-                stake: adjustedStake,
-                result: 'pending',
-                profit: 0,
-            };
-            tradeHistoryRef.current.push(tradeRecord);
-
-            if (contractId) {
-                streamContractUntilSettled({
-                    contractId,
-                    source: 'scanner-auto-trade',
-                    onUpdate: (contract: any) => {
-                        if (contract?.is_sold || contract?.status === 'sold') {
-                            const profit = contract.profit || 0;
-                            const isWin = profit > 0;
-
-                            dailyProfitRef.current += profit;
-                            consecutiveLossesRef.current = isWin ? 0 : consecutiveLossesRef.current + 1;
-
-                            tradeRecord.result = isWin ? 'win' : 'loss';
-                            tradeRecord.profit = profit;
-
-                            setDailyStats(prev => ({
-                                trades: prev.trades,
-                                wins: prev.wins + (isWin ? 1 : 0),
-                                losses: prev.losses + (isWin ? 0 : 1),
-                                profit: parseFloat((prev.profit + profit).toFixed(2)),
-                            }));
-
-                            console.log(`[EDGE] ${isWin ? '✅' : '❌'} Contract #${contractId} settled: ${isWin ? `+$${profit.toFixed(2)}` : `-$${Math.abs(profit).toFixed(2)}`}`);
-
-                            if (!isWin && consecutiveLossesRef.current >= MAX_CONSECUTIVE_LOSSES) {
-                                console.warn(`[EDGE] ⛔ ${MAX_CONSECUTIVE_LOSSES} consecutive losses. Auto-trade paused.`);
-                                setAutoTrade(false);
-                            }
-                        }
-                    },
-                });
-            }
-        } catch (err: any) {
-            dailyTradeCountRef.current = Math.max(0, dailyTradeCountRef.current - 1);
-            console.warn('[EDGE] ❌ Trade failed:', err?.message || err);
-        }
+        wsRef.current.send(JSON.stringify(proposalReq));
+        console.log(`[EDGE] 📤 Proposal: ${symbol} ${config.label} $${adjustedStake.toFixed(2)}`);
     }, []);
 
     // ============================================================
@@ -704,6 +660,15 @@ const SignalZone: React.FC = () => {
         ws.onopen = () => {
             setConnected(true);
             console.log('[EDGE] ✅ WebSocket Connected');
+
+            // Authorize with stored token so proposal/buy calls work
+            const token = getToken();
+            if (token) {
+                ws.send(JSON.stringify({ authorize: token }));
+                console.log('[EDGE] 🔑 Authorizing WS connection');
+            } else {
+                console.warn('[EDGE] ⚠️ No auth token found — trading will require login');
+            }
 
             SYMBOLS.forEach(({ symbol }) => {
                 ticksRef.current[symbol] = [];
@@ -859,6 +824,87 @@ const SignalZone: React.FC = () => {
 
 
 
+                // Handle proposal response
+                if (data.proposal && pendingProposalRef.current) {
+                    const pp = pendingProposalRef.current;
+                    pp.proposalId = data.proposal.id;
+                    pp.askPrice = data.proposal.ask_price;
+
+                    const currentLatency = latencyRef.current;
+                    const lookaheadMs = Math.max(50, Math.min(300, 300 - currentLatency));
+                    console.log(`[EDGE] ⏳ Proposal received. Latency: ${currentLatency}ms. Lookahead: ${lookaheadMs}ms`);
+
+                    const timerKey = `${pp.symbol}_${pp.contractType}_${pp.timestamp}`;
+                    const timerId = setTimeout(() => {
+                        const currentTicks = ticksRef.current[pp.symbol];
+                        if (currentTicks && currentTicks.length > 0 && pp.proposalId && pp.askPrice) {
+                            const { digit: currentDigit } = extractDigits(
+                                currentTicks[currentTicks.length - 1], pp.symbol
+                            );
+                            const config = ALL_CONTRACTS[pp.contractType];
+                            const favorable = config ? config.winningDigits.includes(currentDigit) : false;
+
+                            if (favorable && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                                wsRef.current.send(JSON.stringify({ buy: pp.proposalId, price: pp.askPrice }));
+                                dailyTradeCountRef.current++;
+                                console.log(`[EDGE] ✅ BUY: ${pp.symbol} ${config?.label || pp.contractType} $${pp.stake.toFixed(2)} [#${dailyTradeCountRef.current}/${MAX_DAILY_TRADES}]`);
+                            } else {
+                                console.log(`[EDGE] ⏭️ SKIP: ${pp.symbol} digit ${currentDigit} not favorable for ${pp.contractType}`);
+                            }
+                        }
+                        pendingProposalRef.current = null;
+                    }, lookaheadMs);
+
+                    if (proposalTimersRef.current[timerKey]) clearTimeout(proposalTimersRef.current[timerKey]);
+                    proposalTimersRef.current[timerKey] = timerId;
+                }
+
+                // Handle buy response
+                if (data.buy) {
+                    const contractId = data.buy.contract_id;
+                    console.log(`[EDGE] ✅ Contract #${contractId} opened on ${data.echo_req?.symbol || 'unknown'}`);
+                    tradeHistoryRef.current.push({
+                        timestamp: Date.now(),
+                        symbol: data.echo_req?.symbol || 'unknown',
+                        contract: data.echo_req?.contract_type || 'unknown',
+                        stake: data.buy.buy_price || 0,
+                        result: 'pending',
+                        profit: 0,
+                    });
+                    setDailyStats(prev => ({ ...prev, trades: prev.trades + 1 }));
+                }
+
+                // Handle contract settlement
+                if (data.proposal_open_contract) {
+                    const contract = data.proposal_open_contract;
+                    if (contract.is_sold || contract.status === 'sold') {
+                        const profit = contract.profit || 0;
+                        const isWin = profit > 0;
+                        dailyProfitRef.current += profit;
+                        consecutiveLossesRef.current = isWin ? 0 : consecutiveLossesRef.current + 1;
+
+                        const lastTrade = tradeHistoryRef.current[tradeHistoryRef.current.length - 1];
+                        if (lastTrade && lastTrade.result === 'pending') {
+                            lastTrade.result = isWin ? 'win' : 'loss';
+                            lastTrade.profit = profit;
+                        }
+
+                        setDailyStats(prev => ({
+                            trades: prev.trades,
+                            wins: prev.wins + (isWin ? 1 : 0),
+                            losses: prev.losses + (isWin ? 0 : 1),
+                            profit: parseFloat((prev.profit + profit).toFixed(2)),
+                        }));
+
+                        console.log(`[EDGE] ${isWin ? '✅' : '❌'} Contract #${contract.contract_id || '?'} settled: ${isWin ? `+$${profit.toFixed(2)}` : `-$${Math.abs(profit).toFixed(2)}`} | P&L: $${dailyProfitRef.current.toFixed(2)}`);
+
+                        if (!isWin && consecutiveLossesRef.current >= MAX_CONSECUTIVE_LOSSES) {
+                            console.warn(`[EDGE] ⛔ ${MAX_CONSECUTIVE_LOSSES} consecutive losses. Auto-trade paused.`);
+                            setAutoTrade(false);
+                        }
+                    }
+                }
+
             } catch (e) {
                 // Silent parse error handling
             }
@@ -876,6 +922,8 @@ const SignalZone: React.FC = () => {
         };
 
         return () => {
+            Object.values(proposalTimersRef.current).forEach(t => clearTimeout(t));
+            proposalTimersRef.current = {};
             if (latencyIntervalRef.current) clearInterval(latencyIntervalRef.current);
             
             if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
