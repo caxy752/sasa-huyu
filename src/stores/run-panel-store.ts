@@ -66,6 +66,7 @@ export default class RunPanelStore {
             setActiveTabIndex: action,
             onCloseDialog: action,
             stopMyBot: action,
+            setRunId: action,
             closeMultiplierContract: action,
             showStopMultiplierContractDialog: action,
             showLoginDialog: action,
@@ -118,6 +119,11 @@ export default class RunPanelStore {
     };
 
     run_id = '';
+
+    setRunId = (id: string) => {
+        this.run_id = id;
+    };
+
     onOkButtonClick: (() => void) | null = null;
     onCancelButtonClick: (() => void) | null = null;
     original_account_info: any = null; // Store original account info when switching to demo
