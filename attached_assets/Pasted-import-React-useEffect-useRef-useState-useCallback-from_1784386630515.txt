@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { getAppId, getSocketURL } from '@/components/shared';
-import '../signal-zone/signal-zone.scss';
+import './signal-zone.scss';
 
 // ================================================================
 // TYPE DEFINITIONS
