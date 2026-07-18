@@ -85,25 +85,27 @@ const SYMBOLS = [
 ];
 
 const ALL_CONTRACTS: Record<string, ContractConfig> = {
-    'OVER_6':   { type: 'OVER_6',   barrier: '6', category: 'over',    winningDigits: [7,8,9],         label: 'Over 6' },
-    'OVER_5':   { type: 'OVER_5',   barrier: '5', category: 'over',    winningDigits: [6,7,8,9],       label: 'Over 5' },
-    'OVER_4':   { type: 'OVER_4',   barrier: '4', category: 'over',    winningDigits: [5,6,7,8,9],     label: 'Over 4' },
-    'OVER_3':   { type: 'OVER_3',   barrier: '3', category: 'over',    winningDigits: [4,5,6,7,8,9],   label: 'Over 3' },
-    'OVER_2':   { type: 'OVER_2',   barrier: '2', category: 'over',    winningDigits: [3,4,5,6,7,8,9], label: 'Over 2' },
-    'UNDER_7':  { type: 'UNDER_7',  barrier: '7', category: 'under',   winningDigits: [0,1,2,3,4,5,6], label: 'Under 7' },
-    'UNDER_6':  { type: 'UNDER_6',  barrier: '6', category: 'under',   winningDigits: [0,1,2,3,4,5],   label: 'Under 6' },
-    'UNDER_5':  { type: 'UNDER_5',  barrier: '5', category: 'under',   winningDigits: [0,1,2,3,4],     label: 'Under 5' },
-    'UNDER_4':  { type: 'UNDER_4',  barrier: '4', category: 'under',   winningDigits: [0,1,2,3],       label: 'Under 4' },
-    'UNDER_3':  { type: 'UNDER_3',  barrier: '3', category: 'under',   winningDigits: [0,1,2],         label: 'Under 3' },
-    'UNDER_2':  { type: 'UNDER_2',  barrier: '2', category: 'under',   winningDigits: [0,1],           label: 'Under 2' },
-    'EVEN':     { type: 'EVEN',     barrier: '0', category: 'evenodd', winningDigits: [0,2,4,6,8],     label: 'Even' },
-    'ODD':      { type: 'ODD',      barrier: '0', category: 'evenodd', winningDigits: [1,3,5,7,9],     label: 'Odd' },
+    'OVER_6':   { type: 'DIGOVER',  barrier: '6', category: 'over',    winningDigits: [7,8,9],         label: 'Over 6' },
+    'OVER_5':   { type: 'DIGOVER',  barrier: '5', category: 'over',    winningDigits: [6,7,8,9],       label: 'Over 5' },
+    'OVER_4':   { type: 'DIGOVER',  barrier: '4', category: 'over',    winningDigits: [5,6,7,8,9],     label: 'Over 4' },
+    'OVER_3':   { type: 'DIGOVER',  barrier: '3', category: 'over',    winningDigits: [4,5,6,7,8,9],   label: 'Over 3' },
+    'OVER_2':   { type: 'DIGOVER',  barrier: '2', category: 'over',    winningDigits: [3,4,5,6,7,8,9], label: 'Over 2' },
+    'UNDER_7':  { type: 'DIGUNDER', barrier: '7', category: 'under',   winningDigits: [0,1,2,3,4,5,6], label: 'Under 7' },
+    'UNDER_6':  { type: 'DIGUNDER', barrier: '6', category: 'under',   winningDigits: [0,1,2,3,4,5],   label: 'Under 6' },
+    'UNDER_5':  { type: 'DIGUNDER', barrier: '5', category: 'under',   winningDigits: [0,1,2,3,4],     label: 'Under 5' },
+    'UNDER_4':  { type: 'DIGUNDER', barrier: '4', category: 'under',   winningDigits: [0,1,2,3],       label: 'Under 4' },
+    'UNDER_3':  { type: 'DIGUNDER', barrier: '3', category: 'under',   winningDigits: [0,1,2],         label: 'Under 3' },
+    'UNDER_2':  { type: 'DIGUNDER', barrier: '2', category: 'under',   winningDigits: [0,1],           label: 'Under 2' },
+    'EVEN':     { type: 'DIGEVEN',  barrier: '0', category: 'evenodd', winningDigits: [0,2,4,6,8],     label: 'Even' },
+    'ODD':      { type: 'DIGODD',   barrier: '0', category: 'evenodd', winningDigits: [1,3,5,7,9],     label: 'Odd' },
 };
 
 const MAX_DAILY_TRADES = 60;
 const MAX_CONSECUTIVE_LOSSES = 5;
 const MIN_STAKE = 0.50;
 const MAX_STAKE = 5.00;
+const SYMBOL_COOLDOWN_MS = 10000; // 10s cooldown per symbol after a trade
+const RECALIBRATE_INTERVAL_MS = 30000; // recalibrate every 30s with fresh ticks
 
 // ================================================================
 // COMPONENT
@@ -133,6 +135,7 @@ const SignalZone: React.FC = () => {
     const [showCalibration, setShowCalibration] = useState(false);
     const [apiToken, setApiToken] = useState('');
     const [autoTrade, setAutoTrade] = useState(false);
+    const [isAuthorized, setIsAuthorized] = useState(false);
     const [latency, setLatency] = useState(200);
     const [dailyStats, setDailyStats] = useState({ trades: 0, wins: 0, losses: 0, profit: 0 });
     const [stakeAmount, setStakeAmount] = useState(1.0);
@@ -152,7 +155,30 @@ const SignalZone: React.FC = () => {
     const dailyProfitRef = useRef(0);
     const tradeHistoryRef = useRef<TradeRecord[]>([]);
     const latencyIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // ---- Stability refs (avoid stale closures in intervals) ----
+    const calibrationRef = useRef<CalibrationData | null>(null);
+    const signalsRef = useRef<SymbolSignal[]>([]);
+    const isAuthorizedRef = useRef(false);
+    const isTradingRef = useRef(false);
+    const symbolCooldownRef = useRef<Record<string, number>>({});
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const stakeAmountRef = useRef(1.0);
+    const apiTokenRef = useRef('');
+    const autoTradeRef = useRef(false);
+
+    // Keep plain refs in sync with state so interval callbacks always read latest values
+    useEffect(() => { stakeAmountRef.current = stakeAmount; }, [stakeAmount]);
+    useEffect(() => { apiTokenRef.current = apiToken; }, [apiToken]);
+    useEffect(() => { autoTradeRef.current = autoTrade; }, [autoTrade]);
+
+    // Wrapper: update both React state and the ref so intervals see latest signals immediately
+    const updateSignals = useCallback((updater: (prev: SymbolSignal[]) => SymbolSignal[]) => {
+        setSignals(prev => {
+            const next = updater(prev);
+            signalsRef.current = next;
+            return next;
+        });
+    }, []);
 
     // ============================================================
     // HELPER: Get decimal architecture for ANY symbol
@@ -161,8 +187,7 @@ const SignalZone: React.FC = () => {
         if (symbol === 'R_50' || symbol === 'R_75' || symbol === '1HZ50V' || symbol === '1HZ75V') {
             return { display: 4, hidden: 5, pipSize: 4 };
         }
-        if (symbol.includes('1s') || 
-            symbol === 'R_100' || symbol === 'R_150' || symbol === 'R_250' ||
+        if (symbol === 'R_100' || symbol === 'R_150' || symbol === 'R_250' ||
             symbol === '1HZ100V' || symbol === '1HZ150V' || symbol === '1HZ250V') {
             return { display: 2, hidden: 3, pipSize: 3 };
         }
@@ -176,10 +201,10 @@ const SignalZone: React.FC = () => {
         const arch = getDecimalArchitecture(symbol);
         const multiplier = Math.pow(10, arch.display);
         const hiddenMultiplier = Math.pow(10, arch.hidden);
-        
+
         const scaled = Math.floor(price * multiplier + 0.0000001);
         const hiddenScaled = Math.floor(price * hiddenMultiplier + 0.0000001);
-        
+
         return {
             digit: scaled % 10,
             hiddenDigit: hiddenScaled % 10,
@@ -189,44 +214,34 @@ const SignalZone: React.FC = () => {
     }, [getDecimalArchitecture]);
 
     // ============================================================
-    // LATENCY MEASUREMENT
-    // ============================================================
-    const measureLatency = useCallback(() => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-        const pingId = Date.now();
-        latencyPingRef.current = pingId;
-        wsRef.current.send(JSON.stringify({ ping: 1, req_id: pingId }));
-    }, []);
-
-    // ============================================================
     // VALIDATE HIDDEN DIGIT INTEGRITY
     // ============================================================
     const validateHiddenDigitIntegrity = useCallback(() => {
         console.log('========================================');
         console.log('🔬 HIDDEN DIGIT INTEGRITY CHECK');
-        
+
         SYMBOLS.forEach(({ symbol, label }) => {
             const prices = ticksRef.current[symbol];
             if (!prices || prices.length < 20) return;
-            
+
             const uniqueHiddenDigits = new Set<number>();
             let totalSamples = 0;
-            
+
             for (let i = 0; i < Math.min(prices.length, 100); i++) {
                 const { hiddenDigit } = extractDigits(prices[i], symbol);
                 uniqueHiddenDigits.add(hiddenDigit);
                 totalSamples++;
             }
-            
+
             const isReal = uniqueHiddenDigits.size > 1;
             const status = isReal ? '✅' : '❌';
             console.log(`   ${status} ${label} (${symbol}): ${uniqueHiddenDigits.size}/10 unique hidden digits (${totalSamples} samples)`);
-            
+
             if (!isReal) {
                 console.warn(`   ⚠️  ${label}: Hidden digit ALWAYS ${[...uniqueHiddenDigits][0]}. Proxy stripping precision. CSPRNG exploit DISABLED.`);
             }
         });
-        
+
         console.log('========================================');
     }, [extractDigits]);
 
@@ -235,7 +250,7 @@ const SignalZone: React.FC = () => {
     // ============================================================
     const buildCalibration = useCallback(() => {
         calibrationBuildCountRef.current++;
-        
+
         const calData: CalibrationData = {
             hiddenDigitToNextDigit: {},
             digitTransitionMatrix: Array.from({ length: 10 }, () => new Array(10).fill(0)),
@@ -313,6 +328,9 @@ const SignalZone: React.FC = () => {
         });
 
         calData.calibrationComplete = calData.ticksAnalyzed > 200;
+
+        // FIX: Update both React state AND the ref so interval callbacks see fresh data immediately
+        calibrationRef.current = calData;
         setCalibrationData(calData);
 
         if (calData.calibrationComplete && calibrationBuildCountRef.current <= 2) {
@@ -343,7 +361,7 @@ const SignalZone: React.FC = () => {
                 console.log(`   ${key}: Flip ${flipPct}% (n=${val.total})`);
             });
             console.log('========================================');
-            
+
             validateHiddenDigitIntegrity();
         }
 
@@ -464,7 +482,7 @@ const SignalZone: React.FC = () => {
 
         let prob = 0.5;
         const transitions = calData.digitTransitionMatrix[currentDigit];
-        
+
         if (transitions) {
             const total = transitions.reduce((a: number, b: number) => a + b, 0);
             if (total > 5) {
@@ -489,12 +507,15 @@ const SignalZone: React.FC = () => {
 
     // ============================================================
     // SIGNAL COMPUTATION
+    // FIX: Uses calibrationRef (not state) so the interval never
+    //      has a stale value and doesn't restart on every update.
     // ============================================================
     const computeRealSignals = useCallback(() => {
-        const currentCalData = calibrationData || buildCalibration();
+        // Always read from ref — never from closed-over state
+        const currentCalData = calibrationRef.current || buildCalibration();
         if (!currentCalData || !currentCalData.calibrationComplete) return;
 
-        setSignals(prev =>
+        updateSignals(prev =>
             prev.map(sig => {
                 const symbol = sig.symbol;
                 const ticks = ticksRef.current[symbol] || [];
@@ -507,16 +528,12 @@ const SignalZone: React.FC = () => {
                 const streak = hiddenState.streakCount;
                 const currentRange = hiddenState.lastRange;
 
-                let bestOverKey = '';
                 let bestOverProb = 0;
-                let bestUnderKey = '';
                 let bestUnderProb = 0;
-                let bestEvenKey = '';
                 let bestEvenProb = 0;
-                let bestOddKey = '';
                 let bestOddProb = 0;
 
-                Object.entries(ALL_CONTRACTS).forEach(([key, config]) => {
+                Object.entries(ALL_CONTRACTS).forEach(([, config]) => {
                     let prob: number;
 
                     if (config.category === 'over') {
@@ -524,36 +541,20 @@ const SignalZone: React.FC = () => {
                             currentDigit, currentHidden, streak, currentRange,
                             currentCalData, 'over', parseInt(config.barrier)
                         );
-                        if (prob > bestOverProb) {
-                            bestOverProb = prob;
-                            bestOverKey = key;
-                        }
+                        if (prob > bestOverProb) bestOverProb = prob;
                     } else if (config.category === 'under') {
                         prob = computeWinProbability(
                             currentDigit, currentHidden, streak, currentRange,
                             currentCalData, 'under', parseInt(config.barrier)
                         );
-                        if (prob > bestUnderProb) {
-                            bestUnderProb = prob;
-                            bestUnderKey = key;
-                        }
+                        if (prob > bestUnderProb) bestUnderProb = prob;
                     } else if (config.category === 'evenodd') {
                         if (config.label === 'Even') {
-                            prob = computeParityProbability(
-                                currentDigit, currentHidden, currentCalData, 'even'
-                            );
-                            if (prob > bestEvenProb) {
-                                bestEvenProb = prob;
-                                bestEvenKey = key;
-                            }
+                            prob = computeParityProbability(currentDigit, currentHidden, currentCalData, 'even');
+                            if (prob > bestEvenProb) bestEvenProb = prob;
                         } else {
-                            prob = computeParityProbability(
-                                currentDigit, currentHidden, currentCalData, 'odd'
-                            );
-                            if (prob > bestOddProb) {
-                                bestOddProb = prob;
-                                bestOddKey = key;
-                            }
+                            prob = computeParityProbability(currentDigit, currentHidden, currentCalData, 'odd');
+                            if (prob > bestOddProb) bestOddProb = prob;
                         }
                     }
                 });
@@ -575,30 +576,73 @@ const SignalZone: React.FC = () => {
                 };
             })
         );
-    }, [calibrationData, buildCalibration, extractDigits, computeWinProbability, computeParityProbability]);
+    }, [buildCalibration, extractDigits, computeWinProbability, computeParityProbability, updateSignals]);
+    // NOTE: calibrationData intentionally NOT in deps — we use calibrationRef instead.
+
+    // ============================================================
+    // DYNAMIC STAKE CALCULATION  (Kelly Criterion, 25% fractional)
+    // FIX: Respects user-set stakeAmountRef as a direct override.
+    // ============================================================
+    const calculateDynamicStake = useCallback((winProb: number): number => {
+        // If user typed a specific stake, use it directly
+        const userStake = stakeAmountRef.current;
+        if (userStake > 0) {
+            return Math.min(MAX_STAKE, Math.max(MIN_STAKE, userStake));
+        }
+        // Kelly fallback
+        const p = winProb;
+        const q = 1 - p;
+        const b = 1.0; // net payout ratio for digit contracts (stake doubles on win)
+        let kellyFraction = (b * p - q) / b;
+        kellyFraction = Math.max(0, kellyFraction * 0.25);
+        const stake = 500 * kellyFraction;
+        return Math.round(Math.min(MAX_STAKE, Math.max(MIN_STAKE, stake)) * 2) / 2;
+    }, []);
 
     // ============================================================
     // AUTO-TRADE EXECUTION
+    // FIX: Checks isAuthorizedRef before sending. Uses per-symbol
+    //      cooldown so we never send duplicate proposals.
     // ============================================================
     const executeAutoTrade = useCallback((symbol: string, contractType: string, stake: number) => {
-        if (!apiToken || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+        const token = apiTokenRef.current;
+        if (!token || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+        if (!isAuthorizedRef.current) {
+            console.warn('[EDGE] ⛔ Not yet authorized — skipping trade');
+            return;
+        }
+        if (isTradingRef.current) {
+            console.log('[EDGE] ⏳ Trade already pending — skipping');
+            return;
+        }
 
-        // Check trade limits
+        // Per-symbol cooldown to prevent double-firing on the same index
+        const lastTrade = symbolCooldownRef.current[symbol] || 0;
+        if (Date.now() - lastTrade < SYMBOL_COOLDOWN_MS) {
+            console.log(`[EDGE] ⏳ ${symbol} in cooldown`);
+            return;
+        }
+
         if (dailyTradeCountRef.current >= MAX_DAILY_TRADES) {
             console.warn('[EDGE] ⛔ Max daily trades reached.');
+            autoTradeRef.current = false;
             setAutoTrade(false);
             return;
         }
-        
+
+        let adjustedStake = stake;
         if (consecutiveLossesRef.current >= MAX_CONSECUTIVE_LOSSES) {
-            console.warn('[EDGE] ⛔ Max consecutive losses reached. Reducing stake by 50%.');
-            stake = Math.max(MIN_STAKE, stake * 0.5);
+            console.warn('[EDGE] ⛔ Max consecutive losses — halving stake.');
+            adjustedStake = Math.max(MIN_STAKE, stake * 0.5);
         }
 
         const config = ALL_CONTRACTS[contractType];
         if (!config) return;
 
-        const adjustedStake = Math.min(MAX_STAKE, Math.max(MIN_STAKE, stake));
+        adjustedStake = Math.min(MAX_STAKE, Math.max(MIN_STAKE, adjustedStake));
+
+        isTradingRef.current = true;
+        symbolCooldownRef.current[symbol] = Date.now();
 
         const proposalReq = {
             proposal: 1,
@@ -622,38 +666,26 @@ const SignalZone: React.FC = () => {
 
         wsRef.current.send(JSON.stringify(proposalReq));
         console.log(`[EDGE] 📤 Proposal: ${symbol} ${config.label} $${adjustedStake.toFixed(2)}`);
-    }, [apiToken]);
-
-    // ============================================================
-    // DYNAMIC STAKE CALCULATION
-    // ============================================================
-    const calculateDynamicStake = useCallback((winProb: number): number => {
-        // Kelly Criterion: f = (p * b - q) / b
-        // Using conservative 25% Kelly
-        const payoutMultiplier = 2.0; // Approximate for digit contracts
-        const p = winProb;
-        const q = 1 - p;
-        const b = payoutMultiplier - 1;
-        
-        let kellyFraction = (b * p - q) / b;
-        kellyFraction = Math.max(0, kellyFraction * 0.25); // 25% Kelly
-        
-        const bankrollPerTrade = 500; // Assume $500 effective bankroll
-        let stake = bankrollPerTrade * kellyFraction;
-        
-        stake = Math.max(MIN_STAKE, Math.min(MAX_STAKE, stake));
-        
-        // Round to nearest 0.50
-        return Math.round(stake * 2) / 2;
     }, []);
 
     // ============================================================
-    // WebSocket Connection
+    // CONNECT / RECONNECT WebSocket
     // ============================================================
-    useEffect(() => {
+    const connectWebSocket = useCallback(() => {
+        // Clean up any existing socket
+        if (wsRef.current &&
+            (wsRef.current.readyState === WebSocket.OPEN ||
+             wsRef.current.readyState === WebSocket.CONNECTING)) {
+            wsRef.current.close();
+        }
+        if (reconnectTimerRef.current) {
+            clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = null;
+        }
+
         const wsUrl = `wss://${getSocketURL()}/websockets/v3?app_id=${getAppId()}`;
         console.log('[EDGE] 🔗 Connecting to:', wsUrl);
-        
+
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
@@ -663,7 +695,7 @@ const SignalZone: React.FC = () => {
 
             SYMBOLS.forEach(({ symbol }) => {
                 ticksRef.current[symbol] = [];
-                
+
                 if (!hiddenStateRef.current[symbol]) {
                     hiddenStateRef.current[symbol] = {
                         lastDigits: [],
@@ -683,20 +715,27 @@ const SignalZone: React.FC = () => {
                 }));
             });
 
-            // Start latency measurement
+            // Re-authorize if we already have a token and auto-trade is on
+            if (apiTokenRef.current && autoTradeRef.current) {
+                isAuthorizedRef.current = false;
+                setIsAuthorized(false);
+                ws.send(JSON.stringify({ authorize: apiTokenRef.current }));
+                console.log('[EDGE] 🔑 Re-authorizing after reconnect...');
+            }
+
+            // Latency ping loop
             const latencyInt = setInterval(() => {
                 if (ws.readyState !== WebSocket.OPEN) return;
-                const pingId = Date.now();
-                latencyPingRef.current = pingId;
-                ws.send(JSON.stringify({ ping: 1, req_id: pingId }));
+                latencyPingRef.current = Date.now();
+                ws.send(JSON.stringify({ ping: 1, req_id: latencyPingRef.current }));
             }, 10000);
             latencyIntervalRef.current = latencyInt;
 
-            // Initial latency ping
+            // Initial ping
             setTimeout(() => {
                 if (ws.readyState === WebSocket.OPEN) {
                     latencyPingRef.current = Date.now();
-                    ws.send(JSON.stringify({ ping: 1, req_id: Date.now() }));
+                    ws.send(JSON.stringify({ ping: 1, req_id: latencyPingRef.current }));
                 }
             }, 1000);
         };
@@ -706,15 +745,19 @@ const SignalZone: React.FC = () => {
                 const data = JSON.parse(evt.data);
                 if (data.error) {
                     if (data.error.code !== 'AlreadySubscribed') {
-                        console.warn('[EDGE] API Error:', data.error.message || data.error);
+                        console.warn('[EDGE] API Error:', data.error.code, data.error.message);
+                    }
+                    // If proposal errored, release trading lock
+                    if (pendingProposalRef.current) {
+                        pendingProposalRef.current = null;
+                        isTradingRef.current = false;
                     }
                     return;
                 }
 
-                // Handle pong (latency measurement)
+                // ── Pong (latency) ──────────────────────────────
                 if (data.pong || data.msg_type === 'pong') {
-                    const now = Date.now();
-                    const rtt = now - latencyPingRef.current;
+                    const rtt = Date.now() - latencyPingRef.current;
                     if (rtt > 0 && rtt < 10000) {
                         latencyRef.current = Math.round(latencyRef.current * 0.7 + rtt * 0.3);
                         setLatency(latencyRef.current);
@@ -722,11 +765,22 @@ const SignalZone: React.FC = () => {
                     return;
                 }
 
-                // Handle tick_history response
+                // ── Authorize response ─────────────────────────
+                if (data.authorize) {
+                    isAuthorizedRef.current = true;
+                    setIsAuthorized(true);
+                    console.log(`[EDGE] 🔑 Authorized as ${data.authorize.loginid} · Balance: ${data.authorize.currency} ${data.authorize.balance}`);
+                    return;
+                }
+
+                // ── Tick history (initial load) ─────────────────
                 if (data.history?.prices) {
-                    const sym = data.echo_req.ticks_history;
+                    // FIX: safe optional chaining on echo_req
+                    const sym = data.echo_req?.ticks_history;
+                    if (!sym) return;
+
                     const prices = data.history.prices.map((p: string) => parseFloat(p));
-                    
+
                     const existing = ticksRef.current[sym] || [];
                     if (existing.length === 0) {
                         ticksRef.current[sym] = prices;
@@ -735,7 +789,7 @@ const SignalZone: React.FC = () => {
                         const newTicks = prices.filter((p: number) => Math.abs(p - lastExisting) > 0.00001);
                         ticksRef.current[sym] = [...existing, ...newTicks];
                     }
-                    
+
                     if (ticksRef.current[sym].length > 500) {
                         ticksRef.current[sym] = ticksRef.current[sym].slice(-500);
                     }
@@ -749,7 +803,7 @@ const SignalZone: React.FC = () => {
                             lastRange: null,
                         };
                     }
-                    
+
                     const state = hiddenStateRef.current[sym];
                     const lastPrices = ticksRef.current[sym];
                     if (lastPrices.length > 3) {
@@ -774,7 +828,7 @@ const SignalZone: React.FC = () => {
                     }
                 }
 
-                // Handle live tick
+                // ── Live tick ──────────────────────────────────
                 if (data.tick) {
                     const sym = data.tick.symbol;
                     const rawPrice = parseFloat(data.tick.quote);
@@ -813,17 +867,16 @@ const SignalZone: React.FC = () => {
                     state.lastDigit = digit;
                 }
 
-                // Handle proposal response
+                // ── Proposal response ──────────────────────────
                 if (data.proposal && pendingProposalRef.current) {
                     const pp = pendingProposalRef.current;
                     pp.proposalId = data.proposal.id;
                     pp.askPrice = data.proposal.ask_price;
 
-                    // DYNAMIC LOOKAHEAD based on latency
                     const currentLatency = latencyRef.current;
                     const lookaheadMs = Math.max(50, Math.min(300, 300 - currentLatency));
-                    
-                    console.log(`[EDGE] ⏳ Proposal received. Latency: ${currentLatency}ms. Lookahead: ${lookaheadMs}ms`);
+
+                    console.log(`[EDGE] ⏳ Proposal received. Latency: ${currentLatency}ms · Lookahead: ${lookaheadMs}ms`);
 
                     const timerKey = `${pp.symbol}_${pp.contractType}_${pp.timestamp}`;
                     const timerId = setTimeout(() => {
@@ -834,22 +887,18 @@ const SignalZone: React.FC = () => {
                             );
 
                             const config = ALL_CONTRACTS[pp.contractType];
-                            let favorable = false;
-                            if (config) {
-                                favorable = config.winningDigits.includes(currentDigit);
-                            }
+                            const favorable = config ? config.winningDigits.includes(currentDigit) : false;
 
                             if (favorable && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                                const buyMsg = {
-                                    buy: pp.proposalId,
-                                    price: pp.askPrice,
-                                };
-                                wsRef.current.send(JSON.stringify(buyMsg));
+                                wsRef.current.send(JSON.stringify({ buy: pp.proposalId, price: pp.askPrice }));
                                 dailyTradeCountRef.current++;
                                 console.log(`[EDGE] ✅ BUY: ${pp.symbol} ${config?.label || pp.contractType} $${pp.stake.toFixed(2)} [#${dailyTradeCountRef.current}/${MAX_DAILY_TRADES}]`);
                             } else {
                                 console.log(`[EDGE] ⏭️ SKIP: ${pp.symbol} digit ${currentDigit} not favorable for ${pp.contractType}`);
+                                isTradingRef.current = false;
                             }
+                        } else {
+                            isTradingRef.current = false;
                         }
                         pendingProposalRef.current = null;
                     }, lookaheadMs);
@@ -860,93 +909,137 @@ const SignalZone: React.FC = () => {
                     proposalTimersRef.current[timerKey] = timerId;
                 }
 
-                // Handle buy response
+                // ── Buy response ───────────────────────────────
                 if (data.buy) {
                     const contractId = data.buy.contract_id;
-                    console.log(`[EDGE] ✅ Contract #${contractId} opened on ${data.echo_req?.symbol || 'unknown'}`);
-                    
-                    // Track the trade
-                    const tradeRecord: TradeRecord = {
+                    console.log(`[EDGE] ✅ Contract #${contractId} opened`);
+
+                    tradeHistoryRef.current.push({
                         timestamp: Date.now(),
                         symbol: data.echo_req?.symbol || 'unknown',
                         contract: data.echo_req?.contract_type || 'unknown',
                         stake: data.buy.buy_price || 0,
                         result: 'pending',
                         profit: 0,
-                    };
-                    tradeHistoryRef.current.push(tradeRecord);
-                    
-                    // Update daily stats
-                    setDailyStats(prev => ({
-                        ...prev,
-                        trades: prev.trades + 1,
-                    }));
+                    });
+
+                    setDailyStats(prev => ({ ...prev, trades: prev.trades + 1 }));
+
+                    // FIX: Subscribe to contract settlement so we can track wins/losses
+                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                        wsRef.current.send(JSON.stringify({
+                            proposal_open_contract: 1,
+                            subscribe: 1,
+                            contract_id: contractId,
+                        }));
+                    }
+
+                    // Release trading lock after buy is confirmed
+                    isTradingRef.current = false;
                 }
 
-                // Handle contract settlement (for tracking wins/losses)
+                // ── Contract settlement ────────────────────────
                 if (data.proposal_open_contract) {
                     const contract = data.proposal_open_contract;
                     if (contract.is_sold || contract.status === 'sold') {
-                        const profit = contract.profit || 0;
+                        const profit = parseFloat(contract.profit) || 0;
                         const isWin = profit > 0;
-                        
+
                         dailyProfitRef.current += profit;
                         consecutiveLossesRef.current = isWin ? 0 : consecutiveLossesRef.current + 1;
-                        
-                        // Update the last pending trade
+
                         const lastTrade = tradeHistoryRef.current[tradeHistoryRef.current.length - 1];
                         if (lastTrade && lastTrade.result === 'pending') {
                             lastTrade.result = isWin ? 'win' : 'loss';
                             lastTrade.profit = profit;
                         }
-                        
+
                         setDailyStats(prev => ({
                             trades: prev.trades,
                             wins: prev.wins + (isWin ? 1 : 0),
                             losses: prev.losses + (isWin ? 0 : 1),
                             profit: parseFloat((prev.profit + profit).toFixed(2)),
                         }));
-                        
-                        console.log(`[EDGE] ${isWin ? '✅' : '❌'} Contract #${contract.contract_id || '?'} settled: ${isWin ? `+$${profit.toFixed(2)}` : `-$${Math.abs(profit).toFixed(2)}`} | Balance: $${dailyProfitRef.current.toFixed(2)}`);
-                        
-                        // Stop if max consecutive losses reached
+
+                        const resultStr = isWin
+                            ? `+$${profit.toFixed(2)}`
+                            : `-$${Math.abs(profit).toFixed(2)}`;
+                        console.log(`[EDGE] ${isWin ? '✅' : '❌'} Contract #${contract.contract_id || '?'} settled: ${resultStr} | Daily P&L: $${dailyProfitRef.current.toFixed(2)}`);
+
                         if (!isWin && consecutiveLossesRef.current >= MAX_CONSECUTIVE_LOSSES) {
                             console.warn(`[EDGE] ⛔ ${MAX_CONSECUTIVE_LOSSES} consecutive losses. Auto-trade paused.`);
                             setAutoTrade(false);
+                            autoTradeRef.current = false;
                         }
                     }
                 }
 
             } catch (e) {
-                // Silent parse error handling
+                console.warn('[EDGE] Message parse error:', e);
             }
         };
 
-        ws.onclose = () => {
+        ws.onclose = (ev) => {
             setConnected(false);
-            console.log('[EDGE] 🔌 WebSocket Disconnected');
+            isAuthorizedRef.current = false;
+            setIsAuthorized(false);
             if (latencyIntervalRef.current) clearInterval(latencyIntervalRef.current);
+            console.log(`[EDGE] 🔌 Disconnected (code ${ev.code}) — reconnecting in 3s`);
+
+            // FIX: Auto-reconnect after 3 seconds
+            reconnectTimerRef.current = setTimeout(() => {
+                console.log('[EDGE] 🔄 Reconnecting...');
+                connectWebSocket();
+            }, 3000);
         };
 
-        ws.onerror = (err: Event) => {
-            console.warn('[EDGE] WebSocket Error:', err);
+        ws.onerror = () => {
             setConnected(false);
         };
-
-        return () => {
-            Object.values(proposalTimersRef.current).forEach(t => clearTimeout(t));
-            proposalTimersRef.current = {};
-            
-            if (latencyIntervalRef.current) clearInterval(latencyIntervalRef.current);
-            
-            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-                ws.close();
-            }
-        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [extractDigits]);
 
     // ============================================================
-    // Signal computation interval
+    // Mount: open WebSocket once
+    // ============================================================
+    useEffect(() => {
+        connectWebSocket();
+        return () => {
+            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+            if (latencyIntervalRef.current) clearInterval(latencyIntervalRef.current);
+            Object.values(proposalTimersRef.current).forEach(t => clearTimeout(t));
+            proposalTimersRef.current = {};
+            if (wsRef.current) wsRef.current.close();
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // ============================================================
+    // AUTHORIZE when apiToken + autoTrade both active
+    // FIX: Sends the Deriv authorize request so proposals/buys work
+    // ============================================================
+    useEffect(() => {
+        if (!autoTrade || !apiToken) {
+            if (!autoTrade) {
+                isAuthorizedRef.current = false;
+                setIsAuthorized(false);
+            }
+            return;
+        }
+        if (isAuthorizedRef.current) return; // already authorized this session
+
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            isAuthorizedRef.current = false;
+            setIsAuthorized(false);
+            wsRef.current.send(JSON.stringify({ authorize: apiToken }));
+            console.log('[EDGE] 🔑 Sending authorize request...');
+        }
+    }, [autoTrade, apiToken]);
+
+    // ============================================================
+    // Signal computation interval + periodic recalibration
+    // FIX: Uses stable computeRealSignals (no calibrationData dep)
+    //      so the interval never restarts due to calibration updates.
     // ============================================================
     useEffect(() => {
         if (!running) {
@@ -957,45 +1050,59 @@ const SignalZone: React.FC = () => {
             return;
         }
 
-        const timer = setTimeout(() => {
-            buildCalibration();
-        }, 2000);
+        // Initial calibration after ticks load
+        const initialCalTimer = setTimeout(() => buildCalibration(), 2000);
 
+        // Signal computation every 1.5s
         intervalRef.current = setInterval(computeRealSignals, 1500);
 
+        // FIX: Periodic recalibration every 30s so the engine learns new tick patterns
+        const recalTimer = setInterval(() => buildCalibration(), RECALIBRATE_INTERVAL_MS);
+
         return () => {
-            clearTimeout(timer);
+            clearTimeout(initialCalTimer);
+            clearInterval(recalTimer);
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;
             }
         };
+    // computeRealSignals and buildCalibration are stable (no calibrationData dep)
     }, [running, computeRealSignals, buildCalibration]);
 
     // ============================================================
     // AUTO-TRADE MONITOR
+    // FIX: Uses signalsRef + calibrationRef to avoid stale closures.
+    //      Deps no longer include `signals` or `calibrationData`,
+    //      so the 3s interval actually runs instead of restarting.
     // ============================================================
     useEffect(() => {
-        if (!autoTrade || !apiToken || !calibrationData?.calibrationComplete) return;
+        if (!autoTrade || !apiToken) return;
 
         const checkInterval = setInterval(() => {
-            if (!autoTrade) return;
-            
-            // Check daily limits
+            if (!autoTradeRef.current) return;
+            if (!isAuthorizedRef.current) return;
+
+            const calData = calibrationRef.current;
+            if (!calData?.calibrationComplete) return;
+
             if (dailyTradeCountRef.current >= MAX_DAILY_TRADES) {
-                console.warn('[EDGE] ⛔ Max daily trades (60) reached. Auto-trade stopping.');
+                console.warn('[EDGE] ⛔ Max daily trades reached. Stopping.');
                 setAutoTrade(false);
-                return;
-            }
-            
-            if (Math.abs(dailyProfitRef.current) > 100) {
-                console.warn(`[EDGE] ⛔ Daily ${dailyProfitRef.current > 0 ? 'profit' : 'loss'} limit reached. Auto-trade stopping.`);
-                setAutoTrade(false);
+                autoTradeRef.current = false;
                 return;
             }
 
-            signals.forEach(sig => {
-                if (!autoTrade) return;
+            if (Math.abs(dailyProfitRef.current) > 100) {
+                console.warn(`[EDGE] ⛔ Daily P&L limit ±$100 reached. Stopping.`);
+                setAutoTrade(false);
+                autoTradeRef.current = false;
+                return;
+            }
+
+            const currentSignals = signalsRef.current;
+            currentSignals.forEach(sig => {
+                if (!autoTradeRef.current || isTradingRef.current) return;
 
                 const hasOverSignal = sig.over2 !== 'neutral' && sig.riseStrength > 70;
                 const hasUnderSignal = sig.under7 !== 'neutral' && sig.fallStrength > 70;
@@ -1019,13 +1126,13 @@ const SignalZone: React.FC = () => {
                     if (config.category === 'over' || config.category === 'under') {
                         prob = computeWinProbability(
                             currentDigit, currentHidden, streak, currentRange,
-                            calibrationData,
+                            calData,
                             config.category as 'over' | 'under',
                             parseInt(config.barrier)
                         );
                     } else {
                         prob = computeParityProbability(
-                            currentDigit, currentHidden, calibrationData,
+                            currentDigit, currentHidden, calData,
                             config.label === 'Even' ? 'even' : 'odd'
                         );
                     }
@@ -1035,7 +1142,7 @@ const SignalZone: React.FC = () => {
                     }
                 });
 
-                const execThreshold = calibrationData.ticksAnalyzed > 500 ? 0.75 : 0.70;
+                const execThreshold = calData.ticksAnalyzed > 500 ? 0.75 : 0.70;
                 if (bestProb > execThreshold && bestContractKey) {
                     const stake = calculateDynamicStake(bestProb);
                     executeAutoTrade(sig.symbol, bestContractKey, stake);
@@ -1044,15 +1151,17 @@ const SignalZone: React.FC = () => {
         }, 3000);
 
         return () => clearInterval(checkInterval);
-    }, [autoTrade, apiToken, calibrationData, signals, executeAutoTrade, extractDigits, computeWinProbability, computeParityProbability, calculateDynamicStake]);
+    // FIX: Only depends on autoTrade + apiToken — signalsRef/calibrationRef
+    //      are plain refs so no stale-closure restarts.
+    }, [autoTrade, apiToken, executeAutoTrade, extractDigits, computeWinProbability, computeParityProbability, calculateDynamicStake]);
 
     // ============================================================
     // Daily stats reset at midnight
     // ============================================================
     useEffect(() => {
         const now = new Date();
-        const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0).getTime() - now.getTime();
-        
+        const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
+
         const resetTimer = setTimeout(() => {
             dailyTradeCountRef.current = 0;
             dailyProfitRef.current = 0;
@@ -1121,14 +1230,14 @@ const SignalZone: React.FC = () => {
                         {running ? '⏹ Stop' : '▶ Resume'}
                     </button>
                     <button
-                        className="sz-stop-btn"
+                        className='sz-stop-btn'
                         style={{
                             background: showCalibration ? '#0f0' : '#333',
                             color: showCalibration ? '#000' : '#fff',
                             border: showCalibration ? '1px solid #0f0' : '1px solid #555',
                         }}
                         onClick={() => setShowCalibration(s => !s)}
-                        title="Toggle calibration data"
+                        title='Toggle calibration data'
                     >
                         🔬 Cal
                     </button>
@@ -1149,7 +1258,7 @@ const SignalZone: React.FC = () => {
             </div>
 
             {/* AUTO-TRADE CONTROLS */}
-            <div className="sz-auto-trade" style={{
+            <div className='sz-auto-trade' style={{
                 display: 'flex',
                 gap: '10px',
                 alignItems: 'center',
@@ -1157,13 +1266,13 @@ const SignalZone: React.FC = () => {
                 background: '#1a1a2e',
                 borderRadius: '8px',
                 margin: '10px 0',
-                border: autoTrade ? '1px solid #0f0' : '1px solid #333',
+                border: autoTrade ? (isAuthorized ? '1px solid #0f0' : '1px solid #f80') : '1px solid #333',
                 flexWrap: 'wrap',
             }}>
                 <div style={{ color: '#888', fontSize: '12px', whiteSpace: 'nowrap' }}>🤖 Auto-Trade</div>
                 <input
-                    type="password"
-                    placeholder="Deriv API Token"
+                    type='password'
+                    placeholder='Deriv API Token'
                     value={apiToken}
                     onChange={e => setApiToken(e.target.value)}
                     style={{
@@ -1179,8 +1288,8 @@ const SignalZone: React.FC = () => {
                     }}
                 />
                 <input
-                    type="number"
-                    placeholder="Stake $"
+                    type='number'
+                    placeholder='Stake $'
                     value={stakeAmount}
                     onChange={e => setStakeAmount(parseFloat(e.target.value) || 1)}
                     min={MIN_STAKE}
@@ -1201,7 +1310,7 @@ const SignalZone: React.FC = () => {
                     onClick={() => setAutoTrade(a => !a)}
                     style={{
                         padding: '8px 20px',
-                        background: autoTrade ? '#0f0' : '#333',
+                        background: autoTrade ? (isAuthorized ? '#0f0' : '#f80') : '#333',
                         color: autoTrade ? '#000' : '#fff',
                         border: 'none',
                         borderRadius: '4px',
@@ -1212,22 +1321,22 @@ const SignalZone: React.FC = () => {
                     }}
                     disabled={!apiToken}
                 >
-                    {autoTrade ? '🔴 AUTO ON' : '⚪ AUTO OFF'}
+                    {autoTrade ? (isAuthorized ? '🟢 LIVE' : '🟡 AUTH…') : '⚪ AUTO OFF'}
                 </button>
-                
+
                 {/* Daily Stats */}
                 {dailyStats.trades > 0 && (
-                    <div style={{ 
-                        display: 'flex', 
-                        gap: '12px', 
+                    <div style={{
+                        display: 'flex',
+                        gap: '12px',
                         fontSize: '11px',
                         fontFamily: 'monospace',
                         marginLeft: 'auto',
                     }}>
-                        <span style={{ color: '#888' }}>#{dailyStats.trades}</span>
+                        <span style={{ color: '#888' }}>#{dailyStats.trades}/{MAX_DAILY_TRADES}</span>
                         <span style={{ color: '#22c55e' }}>W:{dailyStats.wins}</span>
                         <span style={{ color: '#ef4444' }}>L:{dailyStats.losses}</span>
-                        <span style={{ 
+                        <span style={{
                             color: dailyStats.profit >= 0 ? '#22c55e' : '#ef4444',
                             fontWeight: 'bold',
                         }}>
@@ -1239,7 +1348,7 @@ const SignalZone: React.FC = () => {
 
             {/* CALIBRATION PANEL */}
             {showCalibration && calibrationData && (
-                <div className="sz-calibration" style={{
+                <div className='sz-calibration' style={{
                     margin: '10px 0',
                     padding: '15px',
                     background: '#1a1a2e',
@@ -1253,7 +1362,7 @@ const SignalZone: React.FC = () => {
                             {calibrationData.calibrationComplete ? '✅ CALIBRATED' : '⏳ CALIBRATING...'}
                         </h3>
                         <span style={{ color: '#888', fontSize: '11px' }}>
-                            {calibrationData.ticksAnalyzed} ticks · Latency: {Math.round(latency)}ms · Threshold: {calibrationData.ticksAnalyzed > 500 ? '72%' : '65%'}
+                            {calibrationData.ticksAnalyzed} ticks · {Math.round(latency)}ms · Threshold: {calibrationData.ticksAnalyzed > 500 ? '72%' : '65%'}
                         </span>
                     </div>
 
@@ -1305,7 +1414,7 @@ const SignalZone: React.FC = () => {
                                         border: `1px solid ${isSignificant ? '#f80' : '#333'}`,
                                     }}>
                                         <div style={{ color: '#aaa', fontSize: '10px' }}>
-                                            {key === 'streak_high_len3' ? '3+ High Digits (7,8,9)' : '3+ Low Digits (0,1,2)'}
+                                            {key === 'streak_high_len3' ? '3+ High Digits (5-9)' : '3+ Low Digits (0-4)'}
                                         </div>
                                         <div style={{
                                             color: flipPct > 55 ? '#f80' : flipPct < 45 ? '#0f0' : '#888',
@@ -1326,9 +1435,7 @@ const SignalZone: React.FC = () => {
 
                     {/* Top Digit Transitions */}
                     <div style={{ fontSize: '11px' }}>
-                        <div style={{ color: '#888', marginBottom: '4px' }}>
-                            Top 5 Digit Transitions:
-                        </div>
+                        <div style={{ color: '#888', marginBottom: '4px' }}>Top 5 Digit Transitions:</div>
                         <div style={{ color: '#aaa', fontSize: '10px', lineHeight: '1.6' }}>
                             {(() => {
                                 const transitions: { from: number; to: number; count: number }[] = [];
@@ -1389,9 +1496,7 @@ const SignalZone: React.FC = () => {
                                                         width: `${sig.riseStrength}%`,
                                                         background: sig.riseStrength > 75
                                                             ? 'linear-gradient(to right, #0a0, #0f0)'
-                                                            : sig.riseStrength > 65
-                                                            ? 'linear-gradient(to right, #aa0, #ff0)'
-                                                            : 'linear-gradient(to right, #a80, #f80)',
+                                                            : 'linear-gradient(to right, #aa0, #ff0)',
                                                     }}
                                                 />
                                             </div>
@@ -1409,8 +1514,6 @@ const SignalZone: React.FC = () => {
                                                         width: `${sig.fallStrength}%`,
                                                         background: sig.fallStrength > 75
                                                             ? 'linear-gradient(to right, #a00, #f44)'
-                                                            : sig.fallStrength > 65
-                                                            ? 'linear-gradient(to right, #a80, #f80)'
                                                             : 'linear-gradient(to right, #a80, #f80)',
                                                     }}
                                                 />
@@ -1485,10 +1588,10 @@ const SignalZone: React.FC = () => {
                     backdropFilter: 'blur(4px)',
                 }}>
                     <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#0f0' }}>
-                        🔴 EDGE ENGINE {autoTrade ? '· AUTO-TRADING' : ''}
+                        🔴 EDGE ENGINE {autoTrade ? (isAuthorized ? '· 🟢 AUTO-TRADING' : '· 🟡 AUTHORIZING') : ''}
                     </div>
                     <div style={{ color: '#888', fontSize: '10px' }}>
-                        Latency: {Math.round(latency)}ms · Trades: {dailyStats.trades} · P&L: {dailyStats.profit >= 0 ? '+' : ''}${dailyStats.profit.toFixed(2)}
+                        Latency: {Math.round(latency)}ms · Trades: {dailyStats.trades}/{MAX_DAILY_TRADES} · P&L: {dailyStats.profit >= 0 ? '+' : ''}${dailyStats.profit.toFixed(2)}
                     </div>
                     <div style={{ color: '#888', fontSize: '10px' }}>
                         Signals: {signals.filter(s => s.over2 !== 'neutral').length} Over · {signals.filter(s => s.under7 !== 'neutral').length} Under
@@ -1505,20 +1608,16 @@ const SignalZone: React.FC = () => {
                             <span style={{ color: '#aaa' }}>{s.label}</span>
                             <span>
                                 {s.over2 !== 'neutral' && (
-                                    <span style={{ color: '#0f0', marginLeft: '4px' }}>
-                                        Over {s.riseStrength}%
-                                    </span>
+                                    <span style={{ color: '#0f0', marginLeft: '4px' }}>Over {s.riseStrength}%</span>
                                 )}
                                 {s.under7 !== 'neutral' && (
-                                    <span style={{ color: '#f44', marginLeft: '4px' }}>
-                                        Under {s.fallStrength}%
-                                    </span>
+                                    <span style={{ color: '#f44', marginLeft: '4px' }}>Under {s.fallStrength}%</span>
                                 )}
                             </span>
                         </div>
                     ))}
                     <div style={{ marginTop: '4px', fontSize: '9px', color: '#555' }}>
-                        {calibrationData.ticksAnalyzed} ticks · v2.0 (Kenya optimized)
+                        {calibrationData.ticksAnalyzed} ticks analyzed · v2.1
                     </div>
                 </div>
             )}
