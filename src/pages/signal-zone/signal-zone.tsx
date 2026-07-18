@@ -85,19 +85,19 @@ const SYMBOLS = [
 ];
 
 const ALL_CONTRACTS: Record<string, ContractConfig> = {
-    'OVER_6':   { type: 'DIGOVER',  barrier: '6', category: 'over',    winningDigits: [7,8,9],         label: 'Over 6' },
-    'OVER_5':   { type: 'DIGOVER',  barrier: '5', category: 'over',    winningDigits: [6,7,8,9],       label: 'Over 5' },
-    'OVER_4':   { type: 'DIGOVER',  barrier: '4', category: 'over',    winningDigits: [5,6,7,8,9],     label: 'Over 4' },
-    'OVER_3':   { type: 'DIGOVER',  barrier: '3', category: 'over',    winningDigits: [4,5,6,7,8,9],   label: 'Over 3' },
-    'OVER_2':   { type: 'DIGOVER',  barrier: '2', category: 'over',    winningDigits: [3,4,5,6,7,8,9], label: 'Over 2' },
-    'UNDER_7':  { type: 'DIGUNDER', barrier: '7', category: 'under',   winningDigits: [0,1,2,3,4,5,6], label: 'Under 7' },
-    'UNDER_6':  { type: 'DIGUNDER', barrier: '6', category: 'under',   winningDigits: [0,1,2,3,4,5],   label: 'Under 6' },
-    'UNDER_5':  { type: 'DIGUNDER', barrier: '5', category: 'under',   winningDigits: [0,1,2,3,4],     label: 'Under 5' },
-    'UNDER_4':  { type: 'DIGUNDER', barrier: '4', category: 'under',   winningDigits: [0,1,2,3],       label: 'Under 4' },
-    'UNDER_3':  { type: 'DIGUNDER', barrier: '3', category: 'under',   winningDigits: [0,1,2],         label: 'Under 3' },
-    'UNDER_2':  { type: 'DIGUNDER', barrier: '2', category: 'under',   winningDigits: [0,1],           label: 'Under 2' },
-    'EVEN':     { type: 'DIGEVEN',  barrier: '0', category: 'evenodd', winningDigits: [0,2,4,6,8],     label: 'Even' },
-    'ODD':      { type: 'DIGODD',   barrier: '0', category: 'evenodd', winningDigits: [1,3,5,7,9],     label: 'Odd' },
+    'OVER_6':   { type: 'DIGITOVER',  barrier: '6', category: 'over',    winningDigits: [7,8,9],         label: 'Over 6' },
+    'OVER_5':   { type: 'DIGITOVER',  barrier: '5', category: 'over',    winningDigits: [6,7,8,9],       label: 'Over 5' },
+    'OVER_4':   { type: 'DIGITOVER',  barrier: '4', category: 'over',    winningDigits: [5,6,7,8,9],     label: 'Over 4' },
+    'OVER_3':   { type: 'DIGITOVER',  barrier: '3', category: 'over',    winningDigits: [4,5,6,7,8,9],   label: 'Over 3' },
+    'OVER_2':   { type: 'DIGITOVER',  barrier: '2', category: 'over',    winningDigits: [3,4,5,6,7,8,9], label: 'Over 2' },
+    'UNDER_7':  { type: 'DIGITUNDER', barrier: '7', category: 'under',   winningDigits: [0,1,2,3,4,5,6], label: 'Under 7' },
+    'UNDER_6':  { type: 'DIGITUNDER', barrier: '6', category: 'under',   winningDigits: [0,1,2,3,4,5],   label: 'Under 6' },
+    'UNDER_5':  { type: 'DIGITUNDER', barrier: '5', category: 'under',   winningDigits: [0,1,2,3,4],     label: 'Under 5' },
+    'UNDER_4':  { type: 'DIGITUNDER', barrier: '4', category: 'under',   winningDigits: [0,1,2,3],       label: 'Under 4' },
+    'UNDER_3':  { type: 'DIGITUNDER', barrier: '3', category: 'under',   winningDigits: [0,1,2],         label: 'Under 3' },
+    'UNDER_2':  { type: 'DIGITUNDER', barrier: '2', category: 'under',   winningDigits: [0,1],           label: 'Under 2' },
+    'EVEN':     { type: 'DIGITEVEN',  barrier: '0', category: 'evenodd', winningDigits: [0,2,4,6,8],     label: 'Even' },
+    'ODD':      { type: 'DIGITODD',   barrier: '0', category: 'evenodd', winningDigits: [1,3,5,7,9],     label: 'Odd' },
 };
 
 const MAX_DAILY_TRADES = 60;

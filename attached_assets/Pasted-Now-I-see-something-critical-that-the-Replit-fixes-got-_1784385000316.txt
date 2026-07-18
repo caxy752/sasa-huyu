@@ -1,0 +1,125 @@
+Now I see something critical that the Replit fixes got wrong.
+
+The legacy docs say "For Over, use: DIGITMATCH" — but that's wrong/outdated. The official API enum (from the proposal endpoint schema) lists DIGITOVER and DIGITUNDER as separate valid contract types. DIGITMATCH is "Matches" (predict exact digit), DIGITDIFF is "Differs", DIGITOVER is "Over", DIGITUNDER is "Under", DIGITEVEN is "Even", DIGITODD is "Odd".
+
+So the Replit fixes that changed OVER_6 → DIGOVER were wrong. The correct Deriv API types are:
+
+
+
+Contract	Correct contract_type
+Over 2-6	DIGITOVER
+Under 2-7	DIGITUNDER
+Even	DIGITEVEN
+Odd	DIGITODD
+The Replit bot changed them to DIGOVER, DIGUNDER etc. — those don't exist in Deriv's API and will silently fail. The proposals will return errors.
+
+Also, Replit said it added { authorize: apiToken } — but I need to verify the currency field is being sent in proposals. Looking at the API docs, currency is Required in the proposal request. If the original code didn't send it, proposals will fail.
+
+Let me check what the current file actually looks like:
+
+
+Searching for what the Replit agent actually did — the proposals need currency field, and DIGOVER is wrong — checking if DIGITOVER is what was actually set
+OK, now I have complete clarity. Here's the truth about what Replit did and whether you're safe:
+
+Verdict: Replit's fixes introduced 2 critical bugs that will break auto-trading
+What Replit got right (these are correct):
+calibrationRef and signalsRef to fix stale state in intervals ✅
+Reconnection logic on WebSocket close ✅
+Per-symbol cooldown / trading lock to prevent double buys ✅
+Periodic recalibration every 30s ✅
+What Replit got WRONG (will cause silent failures):
+Bug #1 — Wrong contract type strings
+
+Replit changed OVER_6 → DIGOVER, UNDER_7 → DIGUNDER, etc.
+
+Deriv's API does NOT have DIGOVER or DIGUNDER contract types. The correct values from the official API enum are:
+
+
+
+Contract	Correct contract_type
+Over 2-6	DIGITOVER
+Under 2-7	DIGITUNDER
+Even	DIGITEVEN
+Odd	DIGITODD
+Rise	CALL
+Fall	PUT
+Replit used DIGOVER (missing IT). Proposals will fail silently — Deriv returns an error, the code doesn't check the response, so you'll see "no buyable proposal" in console but never know why.
+
+Bug #2 — Missing currency field in proposals
+
+Deriv's API requires currency in the proposal request. The original code didn't send it. Replit didn't add it either. Proposals will be rejected.
+
+What you need to do
+Since Replit already replaced the file, you need to fix these two things in your Replit code. Open src/pages/signal-zone/signal-zone.tsx in Replit and search for these lines:
+
+Fix 1: The contract type mapping
+Search for where the contract types are mapped (looks like):
+
+typescript
+
+
+
+'OVER_6':   { type: 'DIGOVER', ... },
+or similar. Change to:
+
+typescript
+
+
+
+'OVER_6':   { type: 'DIGITOVER', ... },
+'OVER_5':   { type: 'DIGITOVER', ... },
+'OVER_4':   { type: 'DIGITOVER', ... },
+'OVER_3':   { type: 'DIGITOVER', ... },
+'OVER_2':   { type: 'DIGITOVER', ... },
+'UNDER_7':  { type: 'DIGITUNDER', ... },
+'UNDER_6':  { type: 'DIGITUNDER', ... },
+'UNDER_5':  { type: 'DIGITUNDER', ... },
+'UNDER_4':  { type: 'DIGITUNDER', ... },
+'UNDER_3':  { type: 'DIGITUNDER', ... },
+'UNDER_2':  { type: 'DIGITUNDER', ... },
+'EVEN':     { type: 'DIGITEVEN', ... },
+'ODD':      { type: 'DIGITODD', ... },
+Fix 2: Add currency to proposal requests
+Search for where proposals are built — looks like:
+
+typescript
+
+
+
+ws.send(JSON.stringify({
+  proposal: 1,
+  contract_type: ...,
+  ...
+}));
+Add currency: 'USD' (or whatever your account currency is — 'USD' works for synthetic indices on Deriv):
+
+typescript
+
+
+
+ws.send(JSON.stringify({
+  proposal: 1,
+  currency: 'USD',        // <-- ADD THIS
+  amount: stakeAmount,
+  basis: 'stake',
+  contract_type: ...,
+  barrier: ...,
+  duration: 1,
+  duration_unit: 't',
+  symbol: ...,
+}));
+Also check the buy request — it needs price set to the proposal's ask_price:
+
+typescript
+
+
+
+ws.send(JSON.stringify({
+  buy: 1,
+  price: proposalData.proposal.ask_price,   // <-- must be the ask_price
+  parameters: {
+    ...proposalData.proposal.longcode ? parseLongcode(proposalData.proposal.longcode) : {}
+  }
+}));
+One-line summary
+Replit's structural fixes (reconnect, refs, cooldowns) are good. But Replit used wrong contract type strings (DIGOVER → should be DIGITOVER) and didn't add currency to proposals — both will make auto-trading silently fail. Fix those two things manually in Replit, then push to GitHub.
