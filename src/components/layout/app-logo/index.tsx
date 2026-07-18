@@ -87,7 +87,6 @@ export const AppLogo = ({ onMenuClick }: { onMenuClick?: () => void }) => {
 
     return (
         <div className='app-header__logo-container'>
-            {!isDesktop && onMenuClick && <MenuIcon onClick={onMenuClick} />}
         </div>
     );
 };
