@@ -656,9 +656,10 @@ const Scanner = observer(() => {
             let count = 5;
             const countdownIv = setInterval(() => {
                 if (shouldStopRef.current) { clearInterval(countdownIv); setIsWorking(false); return; }
-                setTerminalDashboard(p => [...p, `Running bot in ${count} seconds...`]);
-                count--;
-                if (count < 0) {
+                if (count > 0) {
+                    setTerminalDashboard(p => [...p, `Running bot in ${count} seconds...`]);
+                    count--;
+                } else {
                     clearInterval(countdownIv);
                     if (nextMode === 'Trade') {
                         // Start with a dummy signal — the auto-scanner takes over
@@ -697,8 +698,10 @@ const Scanner = observer(() => {
     };
 
     // ── Watch for best market and trade ──
+    // NOTE: always register the interval — refs don't trigger re-renders so
+    // checking tradeActiveRef.current here would lock the interval out forever.
+    // executeBestTrade already guards itself with the ref check internally.
     useEffect(() => {
-        if (!tradeActiveRef.current || tradeInFlightRef.current) return;
         const iv = setInterval(() => { void executeBestTrade(); }, 3000);
         return () => clearInterval(iv);
     }, [executeBestTrade]);
