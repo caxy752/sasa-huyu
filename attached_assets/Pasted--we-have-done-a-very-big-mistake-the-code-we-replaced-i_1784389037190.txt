@@ -1,0 +1,84 @@
+
+we have done a very big mistake the code we replaced it with was not to be in this file signal zone tab ...restore extract the way it was before the replacement 100% it is supposed to be in the scanner tab effectivley so all that we have been doing let them be replaced with what we have in the scanner tab 100% the rest restore exactly the way it was before sorry for that mistake thats the reason why i see the changes are not doing ....lets go clean 100% work
+
+43 minutes ago
+Restoring Extract Tab
+
+Restoring Extract Tab
+Let me check git history to find the original signal-zone.tsx before any of our replacements.
+
+
+6 actions
+Let me get the original file from the very first commit.
+
+
+3 actions
+Restoring both files directly from the original git commit.
+
+
+7 actions
+Build is clean. Let me restart the dev server so the restored files are live.
+
+
+2 actions
+Done. Here's exactly what happened:
+
+Signal Zone tab — restored 100% to the original from the first git commit:
+
+signal-zone.tsx → 257 lines (original)
+signal-zone.scss → 225 lines (original)
+All the auto-trading engine work (DIGITOVER/DIGITUNDER fixes, authorize flow, reconnect logic, calibration engine, stale-closure refs, etc.) is gone from that tab completely — it was never meant to be there.
+
+Scanner tab (scanner.tsx / scanner.scss) — untouched, exactly as it was. That's the RAMZFX Signal Analyzer where all that work belongs.
+
+Now we can focus on the Scanner tab cleanly. The 5 blockers I identified are what we should tackle next — starting with the 1,000-tick gate that's the main reason it appears to do nothing when you press ANALYSE & RUN. Say the word and I'll start fixing the scanner.
+
+
+Checkpoint made
+42 minutes ago
+
+Worked for 1 minute
+
+Pasted-import-React-useEffect-useRef-useState-useCallback-from_1784386630515.txt
+now do this replacement in the scanner.tsx
+
+40 minutes ago
+
+3 actions
+The uploaded code imports ./signal-zone.scss and exports SignalZone. Since this is going into the scanner folder I need to fix the scss import path, and keep the default export compatible. Everything else goes in verbatim.
+
+
+2 actions
+The default export name doesn't matter — the router imports by default. Writing the file now with only the scss path corrected.
+
+
+5 actions
+Build clean, zero errors. The replacement is complete.
+
+What was done:
+
+src/pages/scanner/scanner.tsx — fully replaced with the uploaded engine code (1528 lines)
+The only change from the uploaded file: import './signal-zone.scss' → import '../signal-zone/signal-zone.scss' (correct relative path from the scanner folder)
+Signal Zone tab remains restored to its original simple version
+Scanner tab now runs the full calibration engine with hidden-digit analysis, auto-trade controls, and the signal grid — exactly as intended
+
+Checkpoint made
+39 minutes ago
+
+Worked for 1 minute
+now on trading in the scanner restoore trading we should not input the api token the way it was performing for trading using the auth 2.0 just let that remain the way it was the rest we are agood
+
+30 minutes ago
+Restoring OAuth trading
+
+Restoring OAuth trading
+Let me check how trading was done before (using the app's existing auth) and how the current WS/auth hooks work.
+
+
+7 actions
+Now I have everything I need. The original scanner used buyContractForUi + streamContractUntilSettled from @/utils/trade-purchase — no token input. I need to:
+
+Add those imports
+Remove apiToken state + password input UI
+Replace raw WS proposal/buy handling with buyContractForUi
+Keep the auto-trade toggle and stats display
