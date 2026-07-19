@@ -1,0 +1,221 @@
+ The engine is limiting itself to only "Over 1" on "Volatility 10 (1s)" — that's a bug. It should be free to execute any contract type on any market that has the highest probability at that moment.
+
+The problem is in the findBestTradeAcrossAllMarkets function and the executeTrade flow. Let me fix both — remove all limitations and make it truly execute whatever is best across all 10 remaining markets (removed 15s, 30s, 90s), all 17 contract types.
+
+I'll rewrite the critical functions — you only need to replace 3 functions in your current Scanner.tsx.
+
+Fix 1: Update MARKETS (remove 3 indices)
+Find this line in your code:
+
+typescript
+
+
+
+const MARKETS = [
+Replace the entire MARKETS array with this (removed 1HZ15V, 1HZ30V, 1HZ90V):
+
+typescript
+
+
+
+const MARKETS = [
+    { label: 'Volatility 10 (1s) Index', symbol: '1HZ10V' },
+    { label: 'Volatility 25 (1s) Index', symbol: '1HZ25V' },
+    { label: 'Volatility 50 (1s) Index', symbol: '1HZ50V' },
+    { label: 'Volatility 75 (1s) Index', symbol: '1HZ75V' },
+    { label: 'Volatility 100 (1s) Index', symbol: '1HZ100V' },
+    { label: 'Volatility 10 Index', symbol: 'R_10' },
+    { label: 'Volatility 25 Index', symbol: 'R_25' },
+    { label: 'Volatility 50 Index', symbol: 'R_50' },
+    { label: 'Volatility 75 Index', symbol: 'R_75' },
+    { label: 'Volatility 100 Index', symbol: 'R_100' },
+];
+Fix 2: Replace findBestTradeAcrossAllMarkets — truly unrestricted
+Find this function in your code and replace it entirely:
+
+typescript
+
+
+
+const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>): BestTrade | null => {
+    let best: BestTrade | null = null;
+
+    for (const symbol of Object.keys(markets)) {
+        const ms = markets[symbol];
+        if (!ms || ms.ticks.length < 100 || ms.pm.totalSamples < 50) continue;
+
+        const marketLabel = MARKETS.find(m => m.symbol === symbol)?.label || symbol;
+
+        // Evaluate EVERY contract type without restriction
+        for (const key of Object.keys(ALL_CONTRACTS) as ContractKey[]) {
+            const c = ALL_CONTRACTS[key];
+            let prob = 0.5;
+
+            // Compute probability based on contract category
+            if (c.cat === 'over' || c.cat === 'under') {
+                prob = evaluateOverUnder(ms.pm, key);
+            } else if (c.cat === 'parity') {
+                prob = evaluateParity(ms.pm, key);
+            } else if (c.cat === 'risefall') {
+                prob = evaluateRiseFall(ms.pm, key);
+            }
+
+            // Streak reversal bonus — applies to Over/Under
+            if (ms.streak.streakCount >= 3 && (c.cat === 'over' || c.cat === 'under')) {
+                const highStreak = ms.streak.lastRange === 'high';
+                const lowStreak = ms.streak.lastRange === 'low';
+                const isOver = c.cat === 'over';
+                const isUnder = c.cat === 'under';
+
+                // After 3+ highs, under is favored. After 3+ lows, over is favored.
+                if ((highStreak && isUnder) || (lowStreak && isOver)) {
+                    prob += 0.08;
+                }
+                // Streak reversion from matrix data
+                if (highStreak && isUnder && ms.pm.streakReversion.high.total > 3) {
+                    prob += (ms.pm.streakReversion.high.flipped / ms.pm.streakReversion.high.total) * 0.12;
+                }
+                if (lowStreak && isOver && ms.pm.streakReversion.low.total > 3) {
+                    prob += (ms.pm.streakReversion.low.flipped / ms.pm.streakReversion.low.total) * 0.12;
+                }
+            }
+
+            // Parity bonus for Even/Odd
+            if (c.cat === 'parity' && ms.pm.totalSamples > 50) {
+                const hiddenIsEven = (ms.pm.lastHiddenDigit ?? 0) % 2 === 0;
+                const isEven = key === 'EVEN';
+                const totalParity = ms.pm.parityCorrelation.hiddenEven_to_nextEven + ms.pm.parityCorrelation.hiddenEven_to_nextOdd
+                    + ms.pm.parityCorrelation.hiddenOdd_to_nextEven + ms.pm.parityCorrelation.hiddenOdd_to_nextOdd;
+                if (totalParity > 5) {
+                    let correctParity = 0;
+                    let totalForHidden = 0;
+                    if (hiddenIsEven) {
+                        totalForHidden = ms.pm.parityCorrelation.hiddenEven_to_nextEven + ms.pm.parityCorrelation.hiddenEven_to_nextOdd;
+                        correctParity = isEven ? ms.pm.parityCorrelation.hiddenEven_to_nextEven : ms.pm.parityCorrelation.hiddenEven_to_nextOdd;
+                    } else {
+                        totalForHidden = ms.pm.parityCorrelation.hiddenOdd_to_nextEven + ms.pm.parityCorrelation.hiddenOdd_to_nextOdd;
+                        correctParity = isEven ? ms.pm.parityCorrelation.hiddenOdd_to_nextEven : ms.pm.parityCorrelation.hiddenOdd_to_nextOdd;
+                    }
+                    if (totalForHidden > 0) {
+                        const parProb = correctParity / totalForHidden;
+                        prob = prob * 0.3 + parProb * 0.7; // 70% hidden parity correlation
+                    }
+                }
+            }
+
+            // Rise/Fall — use tick direction data
+            if (c.cat === 'risefall' && ms.pm.tickDirectionTotal > 10) {
+                const upRatio = ms.pm.tickDirectionToDigitUp / ms.pm.tickDirectionTotal;
+                const downRatio = ms.pm.tickDirectionToDigitDown / ms.pm.tickDirectionTotal;
+                if (key === 'RISE') prob = Math.min(0.85, Math.max(0.15, 0.5 + (upRatio - 0.5) * 1.5));
+                else prob = Math.min(0.85, Math.max(0.15, 0.5 + (downRatio - 0.5) * 1.5));
+            }
+
+            // Clamp to realistic range
+            prob = Math.min(0.98, Math.max(0.08, prob));
+
+            // NO RESTRICTION — pick the absolute best across everything
+            if (prob > (best?.probability || 0)) {
+                best = {
+                    symbol,
+                    label: marketLabel,
+                    contractKey: key,
+                    contractLabel: c.label,
+                    probability: Math.round(prob * 100),
+                    barrier: c.barrier,
+                    contractType: c.type,
+                };
+            }
+        }
+    }
+
+    // Lower threshold from 58 to 52 — let the engine trade even with slight edge
+    if (best && best.probability >= 52) return best;
+    return null;
+};
+Fix 3: Replace the executeTrade function — must trade ANYTHING that's best
+Find this function and replace it entirely:
+
+typescript
+
+
+
+const executeTrade = useCallback(async (trade: BestTrade) => {
+    if (!tradeActiveRef.current || tradeInFlightRef.current || shouldStopRef.current) return;
+
+    // Check limits
+    if (sessionProfitRef.current <= -stopLossRef.current) {
+        setTerminalDashboard(p => [...p, `🛑 STOP LOSS: ${sessionProfitRef.current.toFixed(2)} ${currency}`]);
+        setShowTPSLPopup(true); setTpSlSettings(p => ({ ...p, isActive: true, stopLoss: String(stopLossRef.current) })); stopTrading(); return;
+    }
+    if (sessionProfitRef.current >= takeProfitRef.current) {
+        setTerminalDashboard(p => [...p, `🎯 TAKE PROFIT: ${sessionProfitRef.current.toFixed(2)} ${currency}`]);
+        setShowTPSLPopup(true); setTpSlSettings(p => ({ ...p, isActive: true, takeProfit: String(takeProfitRef.current) })); stopTrading(); return;
+    }
+    if (completedRunsRef.current >= runsToCheckRef.current && sessionProfitRef.current > 0.1) {
+        setTerminalDashboard(p => [...p, `✅ ${runsToCheckRef.current} runs complete: ${sessionProfitRef.current.toFixed(2)} ${currency}`]);
+        setShowTPSLPopup(true); setTpSlSettings(p => ({ ...p, isActive: true })); stopTrading(); return;
+    }
+
+    // Use recovery trade if in recovery mode, otherwise use the current best trade
+    const currentTrade = isRecoveryRef.current && recoveryTradeRef.current ? recoveryTradeRef.current : trade;
+    tradeInFlightRef.current = true;
+    const stake = currentMartingaleStakeRef.current;
+
+    setTerminalDashboard(p => [...p, `🎯 ${currentTrade.contractLabel} on ${currentTrade.label} @ ${currentTrade.probability}% | Stake: ${stake.toFixed(2)} ${currency} | ${isRecoveryRef.current ? 'RECOVERY' : 'PRIMARY'}`]);
+
+    try {
+        const profit = await runSingleTrade(currentTrade, stake);
+        lastTradeTimeRef.current = Date.now();
+        const isWin = profit > 0;
+
+        if (isWin) {
+            consecutiveLossesRef.current = 0;
+            currentMartingaleStakeRef.current = baseStakeRef.current;
+            isRecoveryRef.current = false;
+            recoveryTradeRef.current = null;
+            setTerminalDashboard(p => [...p, `✅ WIN +${profit.toFixed(2)} ${currency} | Reset to $${baseStakeRef.current.toFixed(2)}`]);
+        } else {
+            consecutiveLossesRef.current += 1;
+            if (!isRecoveryRef.current) {
+                // First loss: switch to recovery using the CURRENT best trade
+                isRecoveryRef.current = true;
+                recoveryTradeRef.current = bestTradeRef.current; // whatever is best NOW
+                currentMartingaleStakeRef.current = baseStakeRef.current * martingaleMultiplierRef.current;
+                setTerminalDashboard(p => [...p, `❌ LOSS. Recovery mode: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
+            } else {
+                // Consecutive recovery loss: martingale step up
+                currentMartingaleStakeRef.current = baseStakeRef.current * Math.pow(martingaleMultiplierRef.current, consecutiveLossesRef.current);
+                setTerminalDashboard(p => [...p, `❌ RECOVERY LOSS x${consecutiveLossesRef.current}. Next stake: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
+            }
+        }
+
+        const totalProfit = Number((sessionProfitRef.current + profit).toFixed(8));
+        completedRunsRef.current += 1;
+        sessionProfitRef.current = totalProfit;
+        setSessionProfit(totalProfit);
+        setTerminalDashboard(p => [...p, `📈 ${completedRunsRef.current}/${runsToCheckRef.current}: ${profit.toFixed(2)} ${currency} | P/L: ${totalProfit.toFixed(2)} ${currency}`]);
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Trade failed.';
+        setTerminalDashboard(p => [...p, `❌ Error: ${msg}`]);
+    } finally {
+        tradeInFlightRef.current = false;
+        // Immediately re-scan for next trade
+        if (tradeActiveRef.current && !shouldStopRef.current) {
+            const best = findBestTradeAcrossAllMarkets(marketsRef.current);
+            if (best) {
+                bestTradeRef.current = best;
+                setBestTradeDisplay(best);
+            }
+        }
+    }
+}, [currency, runSingleTrade, stopTrading]);
+Summary of What Changed
+
+
+Issue	Fix
+Only trading Over 1 on Vol 10 (1s)	findBestTradeAcrossAllMarkets now evaluates all 17 contracts × 10 markets without any restriction
+Threshold was 58% — too high	Lowered to 52% — any contract with any edge can trade
+Recovery trade was stuck on same contract	executeTrade now uses bestTradeRef.current (whatever is best RIGHT NOW) for recovery
+3 extra markets (15s, 30s, 90s)	Removed from MARKETS — now only 10 markets
+Rise/Fall wasn't being evaluated	Added proper tick-direction ratio calculation for CALL/PUT contracts

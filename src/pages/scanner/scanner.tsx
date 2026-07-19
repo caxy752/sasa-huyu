@@ -47,15 +47,12 @@ const ALL_CONTRACTS = {
 
 type ContractKey = keyof typeof ALL_CONTRACTS;
 
-// ALL volatility indices — auto-scanned
+// ALL volatility indices — auto-scanned (15s, 30s, 90s removed)
 const MARKETS = [
     { label: 'Volatility 10 (1s) Index', symbol: '1HZ10V' },
-    { label: 'Volatility 15 (1s) Index', symbol: '1HZ15V' },
     { label: 'Volatility 25 (1s) Index', symbol: '1HZ25V' },
-    { label: 'Volatility 30 (1s) Index', symbol: '1HZ30V' },
     { label: 'Volatility 50 (1s) Index', symbol: '1HZ50V' },
     { label: 'Volatility 75 (1s) Index', symbol: '1HZ75V' },
-    { label: 'Volatility 90 (1s) Index', symbol: '1HZ90V' },
     { label: 'Volatility 100 (1s) Index', symbol: '1HZ100V' },
     { label: 'Volatility 10 Index', symbol: 'R_10' },
     { label: 'Volatility 25 Index', symbol: 'R_25' },
@@ -400,11 +397,12 @@ const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>): Be
 
         const marketLabel = MARKETS.find(m => m.symbol === symbol)?.label || symbol;
 
-        // Evaluate every contract type
+        // Evaluate EVERY contract type without restriction
         for (const key of Object.keys(ALL_CONTRACTS) as ContractKey[]) {
             const c = ALL_CONTRACTS[key];
             let prob = 0.5;
 
+            // Compute probability based on contract category
             if (c.cat === 'over' || c.cat === 'under') {
                 prob = evaluateOverUnder(ms.pm, key);
             } else if (c.cat === 'parity') {
@@ -413,15 +411,18 @@ const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>): Be
                 prob = evaluateRiseFall(ms.pm, key);
             }
 
-            // Streak reversal bonus
-            if (ms.streak.streakCount >= 3) {
-                const isOver = c.cat === 'over';
-                const isUnder = c.cat === 'under';
+            // Streak reversal bonus — applies to Over/Under
+            if (ms.streak.streakCount >= 3 && (c.cat === 'over' || c.cat === 'under')) {
                 const highStreak = ms.streak.lastRange === 'high';
                 const lowStreak = ms.streak.lastRange === 'low';
+                const isOver = c.cat === 'over';
+                const isUnder = c.cat === 'under';
+
+                // After 3+ highs, under is favored. After 3+ lows, over is favored.
                 if ((highStreak && isUnder) || (lowStreak && isOver)) {
                     prob += 0.08;
                 }
+                // Streak reversion from matrix data
                 if (highStreak && isUnder && ms.pm.streakReversion.high.total > 3) {
                     prob += (ms.pm.streakReversion.high.flipped / ms.pm.streakReversion.high.total) * 0.12;
                 }
@@ -430,9 +431,41 @@ const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>): Be
                 }
             }
 
-            // Clamp
+            // Parity bonus for Even/Odd
+            if (c.cat === 'parity' && ms.pm.totalSamples > 50) {
+                const hiddenIsEven = (ms.pm.lastHiddenDigit ?? 0) % 2 === 0;
+                const isEven = key === 'EVEN';
+                const totalParity = ms.pm.parityCorrelation.hiddenEven_to_nextEven + ms.pm.parityCorrelation.hiddenEven_to_nextOdd
+                    + ms.pm.parityCorrelation.hiddenOdd_to_nextEven + ms.pm.parityCorrelation.hiddenOdd_to_nextOdd;
+                if (totalParity > 5) {
+                    let correctParity = 0;
+                    let totalForHidden = 0;
+                    if (hiddenIsEven) {
+                        totalForHidden = ms.pm.parityCorrelation.hiddenEven_to_nextEven + ms.pm.parityCorrelation.hiddenEven_to_nextOdd;
+                        correctParity = isEven ? ms.pm.parityCorrelation.hiddenEven_to_nextEven : ms.pm.parityCorrelation.hiddenEven_to_nextOdd;
+                    } else {
+                        totalForHidden = ms.pm.parityCorrelation.hiddenOdd_to_nextEven + ms.pm.parityCorrelation.hiddenOdd_to_nextOdd;
+                        correctParity = isEven ? ms.pm.parityCorrelation.hiddenOdd_to_nextEven : ms.pm.parityCorrelation.hiddenOdd_to_nextOdd;
+                    }
+                    if (totalForHidden > 0) {
+                        const parProb = correctParity / totalForHidden;
+                        prob = prob * 0.3 + parProb * 0.7; // 70% hidden parity correlation
+                    }
+                }
+            }
+
+            // Rise/Fall — use tick direction data
+            if (c.cat === 'risefall' && ms.pm.tickDirectionTotal > 10) {
+                const upRatio = ms.pm.tickDirectionToDigitUp / ms.pm.tickDirectionTotal;
+                const downRatio = ms.pm.tickDirectionToDigitDown / ms.pm.tickDirectionTotal;
+                if (key === 'RISE') prob = Math.min(0.85, Math.max(0.15, 0.5 + (upRatio - 0.5) * 1.5));
+                else prob = Math.min(0.85, Math.max(0.15, 0.5 + (downRatio - 0.5) * 1.5));
+            }
+
+            // Clamp to realistic range
             prob = Math.min(0.98, Math.max(0.08, prob));
 
+            // NO RESTRICTION — pick the absolute best across everything
             if (prob > (best?.probability || 0)) {
                 best = {
                     symbol,
@@ -447,8 +480,8 @@ const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>): Be
         }
     }
 
-    // Only return if probability is significantly above random
-    if (best && best.probability >= 58) return best;
+    // Lower threshold to 52 — trade any contract with a slight edge
+    if (best && best.probability >= 52) return best;
     return null;
 };
 
@@ -641,9 +674,12 @@ const Scanner = observer(() => {
             setShowTPSLPopup(true); setTpSlSettings(p => ({ ...p, isActive: true })); stopTrading(); return;
         }
 
+        // Use recovery trade if in recovery mode, otherwise use the current best trade
         const currentTrade = isRecoveryRef.current && recoveryTradeRef.current ? recoveryTradeRef.current : trade;
         tradeInFlightRef.current = true;
         const stake = currentMartingaleStakeRef.current;
+
+        setTerminalDashboard(p => [...p, `🎯 ${currentTrade.contractLabel} on ${currentTrade.label} @ ${currentTrade.probability}% | Stake: ${stake.toFixed(2)} ${currency} | ${isRecoveryRef.current ? 'RECOVERY' : 'PRIMARY'}`]);
 
         try {
             const profit = await runSingleTrade(currentTrade, stake);
@@ -659,13 +695,15 @@ const Scanner = observer(() => {
             } else {
                 consecutiveLossesRef.current += 1;
                 if (!isRecoveryRef.current) {
+                    // First loss: switch to recovery using the CURRENT best trade
                     isRecoveryRef.current = true;
-                    recoveryTradeRef.current = bestTradeRef.current;
+                    recoveryTradeRef.current = bestTradeRef.current; // whatever is best NOW
                     currentMartingaleStakeRef.current = baseStakeRef.current * martingaleMultiplierRef.current;
-                    setTerminalDashboard(p => [...p, `❌ LOSS. Recovery: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
+                    setTerminalDashboard(p => [...p, `❌ LOSS. Recovery mode: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
                 } else {
+                    // Consecutive recovery loss: martingale step up
                     currentMartingaleStakeRef.current = baseStakeRef.current * Math.pow(martingaleMultiplierRef.current, consecutiveLossesRef.current);
-                    setTerminalDashboard(p => [...p, `❌ RECOVERY LOSS. Martingale: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
+                    setTerminalDashboard(p => [...p, `❌ RECOVERY LOSS x${consecutiveLossesRef.current}. Next stake: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
                 }
             }
 
@@ -679,6 +717,14 @@ const Scanner = observer(() => {
             setTerminalDashboard(p => [...p, `❌ Error: ${msg}`]);
         } finally {
             tradeInFlightRef.current = false;
+            // Immediately re-scan for next trade
+            if (tradeActiveRef.current && !shouldStopRef.current) {
+                const best = findBestTradeAcrossAllMarkets(marketsRef.current);
+                if (best) {
+                    bestTradeRef.current = best;
+                    setBestTradeDisplay(best);
+                }
+            }
         }
     }, [currency, runSingleTrade, stopTrading]);
 
