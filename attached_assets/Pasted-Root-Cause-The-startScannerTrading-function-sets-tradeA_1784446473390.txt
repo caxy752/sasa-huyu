@@ -1,0 +1,177 @@
+Root Cause
+The startScannerTrading function sets tradeActiveRef.current = true, but the executeBestTrade is called via a separate useEffect with a 3-second interval. The problem is:
+
+executeBestTrade checks bestMarketRef.current — but bestMarketRef is only updated inside applyLiveTick which runs on EVERY tick
+The bestMarketRef.current might be null at the moment the trade starts because no tick has arrived yet to evaluate all markets
+Even if it's set, executeBestTrade runs on a 3-second interval — but tradeInFlightRef.current might be false incorrectly
+The real bug: When the bot starts in startScannerTrading, it doesn't immediately trigger executeBestTrade. It relies on the 3-second interval, and by then bestMarketRef might be stale or null.
+
+Also, looking more carefully: executeBestTrade checks if (!best || best.confidence < 65) return; — if no market has been evaluated yet (no tick arrived), best is null, so nothing happens.
+
+The Fix
+Add an immediate trade attempt right after starting, and also fix the condition where the bot starts but no best market is selected yet.
+
+Replace the useEffect that watches for trades with this improved version that also triggers immediately when trading starts:
+
+typescript
+
+
+
+// ── Execute best trade — also fires immediately when trading starts ──
+const executeBestTrade = useCallback(async () => {
+    if (!tradeActiveRef.current || tradeInFlightRef.current || shouldStopRef.current) return;
+
+    const best = bestMarketRef.current;
+    
+    // If no best market yet, try to find one NOW from current data
+    let targetSymbol = best?.symbol;
+    let targetConfidence = best?.confidence || 0;
+    let targetSignal = best?.signal || '';
+
+    if (!targetSymbol || targetConfidence < 65) {
+        // Emergency scan: pick the first market with any bias
+        for (const market of MARKETS) {
+            const ticks = ticksRef.current[market.symbol];
+            const cal = calibrationsRef.current[market.symbol];
+            if (!ticks || ticks.length < 200 || !cal || cal.totalSamples < CALIBRATION_TICKS) continue;
+            if (cal.bestOverUnder && cal.bestOverUnder.probability > 0.55) {
+                targetSymbol = market.symbol;
+                targetConfidence = Math.round(cal.bestOverUnder.probability * 100);
+                targetSignal = cal.bestOverUnder.contractType === 'DIGITOVER' 
+                    ? `Over ${cal.bestOverUnder.barrier}` 
+                    : `Under ${cal.bestOverUnder.barrier}`;
+                const info = { symbol: targetSymbol, label: market.label, confidence: targetConfidence, signal: targetSignal };
+                bestMarketRef.current = info;
+                setBestMarketInfo(info);
+                break;
+            }
+        }
+    }
+
+    // Still no market found? Fallback: just use any market with streak reversion
+    if (!targetSymbol) {
+        for (const market of MARKETS) {
+            const ticks = ticksRef.current[market.symbol];
+            if (!ticks || ticks.length < 200) continue;
+            const lastDigits = ticks.slice(-10).map(t => getLastDigitFromQuote(t.quote, market.symbol));
+            const freq: Record<number, number> = {};
+            for (const d of lastDigits) freq[d] = (freq[d] || 0) + 1;
+            let mostFreq = 0, mostFreqCount = 0;
+            for (const d in freq) { if (freq[d] > mostFreqCount) { mostFreqCount = freq[d]; mostFreq = Number(d); } }
+            if (mostFreqCount >= 3) {
+                targetSymbol = market.symbol;
+                const isOver = mostFreq >= 5;
+                targetConfidence = 62;
+                targetSignal = isOver ? 'Under 5' : 'Over 4';
+                const info = { symbol: targetSymbol, label: market.label, confidence: targetConfidence, signal: targetSignal + ' (streak)' };
+                bestMarketRef.current = info;
+                setBestMarketInfo(info);
+                break;
+            }
+        }
+    }
+
+    if (!targetSymbol) {
+        // Absolutely no market ready — try again later
+        setTerminalDashboard(p => [...p, '⏳ No market ready yet. Waiting for calibration...']);
+        return;
+    }
+
+    const ticks = ticksRef.current[targetSymbol];
+    const cal = calibrationsRef.current[targetSymbol];
+    if (!ticks || ticks.length < 200 || !cal) return;
+
+    const analysis = buildOverUnderAnalysis(ticks, targetSymbol, cal);
+    const primarySignal = analysis.signal;
+
+    // Store recovery signals
+    if (primarySignal.recoveryBarrier && primarySignal.recoveryContractType) {
+        primarySignalRef.current = { symbol: targetSymbol, signal: { barrier: primarySignal.barrier, contractType: primarySignal.contractType, label: primarySignal.label } };
+        recoverySignalRef.current = { symbol: targetSymbol, signal: { barrier: primarySignal.recoveryBarrier, contractType: primarySignal.recoveryContractType, label: primarySignal.recoveryLabel ?? '' } };
+    }
+
+    // Check SL/TP
+    if (sessionProfitRef.current <= -stopLossRef.current) {
+        setTerminalDashboard(p => [...p, `STOP LOSS! ${sessionProfitRef.current.toFixed(2)} ${currency}`]);
+        setShowTPSLPopup(true); setTpSlSettings(prev => ({ ...prev, isActive: true, stopLoss: String(stopLossRef.current) })); stopTrading(); return;
+    }
+    if (sessionProfitRef.current >= takeProfitRef.current) {
+        setTerminalDashboard(p => [...p, `TAKE PROFIT! ${sessionProfitRef.current.toFixed(2)} ${currency}`]);
+        setShowTPSLPopup(true); setTpSlSettings(prev => ({ ...prev, isActive: true, takeProfit: String(takeProfitRef.current) })); stopTrading(); return;
+    }
+    if (completedRunsRef.current >= runsToCheckRef.current && sessionProfitRef.current > 0.1) {
+        setTerminalDashboard(p => [...p, `${runsToCheckRef.current} runs done, profit: ${sessionProfitRef.current.toFixed(2)} ${currency}`]);
+        setShowTPSLPopup(true); setTpSlSettings(prev => ({ ...prev, isActive: true })); stopTrading(); return;
+    }
+
+    const currentSignal = isRecoveryTradeRef.current && recoverySignalRef.current
+        ? recoverySignalRef.current.signal : primarySignal;
+    const currentSymbol = isRecoveryTradeRef.current && recoverySignalRef.current
+        ? recoverySignalRef.current.symbol : targetSymbol;
+    const signalType = isRecoveryTradeRef.current ? 'RECOVERY' : 'PRIMARY';
+
+    tradeInFlightRef.current = true;
+    const tradeStake = currentMartingaleStakeRef.current;
+
+    setTerminalDashboard(p => [...p, `🎯 ${signalType}: ${currentSignal.label} on ${MARKETS.find(m=>m.symbol===currentSymbol)?.label||currentSymbol} | Stake: ${tradeStake.toFixed(2)} ${currency} | Losses: ${consecutiveLossesRef.current}`]);
+
+    try {
+        const profit = await runSingleTrade(currentSignal, tradeStake, currentSymbol);
+        const isWin = profit > 0;
+
+        if (isWin) {
+            consecutiveLossesRef.current = 0; consecutiveRecoveryLossesRef.current = 0;
+            currentMartingaleStakeRef.current = baseStakeRef.current;
+            isRecoveryTradeRef.current = false;
+            setTerminalDashboard(p => [...p, `✅ WIN! Reset.`]);
+        } else {
+            consecutiveLossesRef.current += 1;
+            if (isRecoveryTradeRef.current) {
+                consecutiveRecoveryLossesRef.current += 1;
+                currentMartingaleStakeRef.current = baseStakeRef.current * Math.pow(martingaleMultiplierRef.current, consecutiveRecoveryLossesRef.current);
+                setTerminalDashboard(p => [...p, `❌ RECOVERY LOSS! Next: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
+            } else {
+                isRecoveryTradeRef.current = true;
+                consecutiveRecoveryLossesRef.current = 1;
+                currentMartingaleStakeRef.current = baseStakeRef.current * martingaleMultiplierRef.current;
+                setTerminalDashboard(p => [...p, `❌ LOSS! Switching to RECOVERY: Stake: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
+            }
+        }
+
+        const totalProfit = Number((sessionProfitRef.current + profit).toFixed(8));
+        completedRunsRef.current += 1;
+        sessionProfitRef.current = totalProfit;
+        setSessionProfit(totalProfit);
+        setTerminalDashboard(p => [...p, `📈 Run ${completedRunsRef.current}/${runsToCheckRef.current}: ${profit.toFixed(2)} ${currency} | P/L: ${totalProfit.toFixed(2)} ${currency}`]);
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Trade failed.';
+        setTerminalDashboard(p => [...p, `Error: ${msg}`]); stopTrading();
+    } finally {
+        tradeInFlightRef.current = false;
+    }
+}, [currency, runSingleTrade, stopTrading]);
+
+// ── Watch for best market and trade ──
+const tradeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+useEffect(() => {
+    if (tradeActiveRef.current) {
+        // Fire immediately, then every 3 seconds
+        setTimeout(() => { void executeBestTrade(); }, 100);
+        tradeIntervalRef.current = setInterval(() => { void executeBestTrade(); }, 3000);
+    } else {
+        if (tradeIntervalRef.current) { clearInterval(tradeIntervalRef.current); tradeIntervalRef.current = null; }
+    }
+    return () => { if (tradeIntervalRef.current) { clearInterval(tradeIntervalRef.current); tradeIntervalRef.current = null; } };
+}, [tradeActiveRef.current, executeBestTrade]); // eslint-disable-line
+Make these exact replacements in your Scanner.tsx:
+
+Replace the entire executeBestTrade function with the version above (it has the emergency fallback scan)
+Replace the useEffect that watches for trades (the one with setInterval(executeBestTrade, 3000)) with the version above that fires immediately and uses tradeIntervalRef
+Summary of the fix
+
+
+Problem	Fix
+bestMarketRef is null when bot starts	Emergency scan: iterate ALL markets right now, pick the first one with any bias >55%
+No hidden digit bias at all?	Fallback to streak reversion (3+ consecutive high/low digits)
+3-second interval too slow for first trade	Fire executeBestTrade() immediately (100ms delay), then every 3 seconds after
+tradeActiveRef stale in useEffect	Use tradeActiveRef.current as dependency to trigger immediate execution

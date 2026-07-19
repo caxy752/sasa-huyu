@@ -546,24 +546,76 @@ const Scanner = observer(() => {
         return Number(settledContract.profit ?? 0);
     }, [buildTradeParameters, currency, pushContract]);
 
-    // ── Execute best trade ──
+    // ── Execute best trade — also fires immediately when trading starts ──
     const executeBestTrade = useCallback(async () => {
         if (!tradeActiveRef.current || tradeInFlightRef.current || shouldStopRef.current) return;
 
         const best = bestMarketRef.current;
-        if (!best || best.confidence < 65) return;
 
-        const ticks = ticksRef.current[best.symbol];
-        const cal = calibrationsRef.current[best.symbol];
-        if (!ticks || ticks.length < 200 || !cal || cal.totalSamples < CALIBRATION_TICKS) return;
+        // If no best market yet, try to find one NOW from current data
+        let targetSymbol = best?.symbol;
+        let targetConfidence = best?.confidence || 0;
+        let targetSignal = best?.signal || '';
 
-        const analysis = buildOverUnderAnalysis(ticks, best.symbol, cal);
+        if (!targetSymbol || targetConfidence < 65) {
+            // Emergency scan: pick the first market with any bias
+            for (const market of MARKETS) {
+                const ticks = ticksRef.current[market.symbol];
+                const cal = calibrationsRef.current[market.symbol];
+                if (!ticks || ticks.length < 200 || !cal || cal.totalSamples < CALIBRATION_TICKS) continue;
+                if (cal.bestOverUnder && cal.bestOverUnder.probability > 0.55) {
+                    targetSymbol = market.symbol;
+                    targetConfidence = Math.round(cal.bestOverUnder.probability * 100);
+                    targetSignal = cal.bestOverUnder.contractType === 'DIGITOVER'
+                        ? `Over ${cal.bestOverUnder.barrier}`
+                        : `Under ${cal.bestOverUnder.barrier}`;
+                    const info = { symbol: targetSymbol, label: market.label, confidence: targetConfidence, signal: targetSignal };
+                    bestMarketRef.current = info;
+                    setBestMarketInfo(info);
+                    break;
+                }
+            }
+        }
+
+        // Still no market found? Fallback: streak reversion
+        if (!targetSymbol) {
+            for (const market of MARKETS) {
+                const ticks = ticksRef.current[market.symbol];
+                if (!ticks || ticks.length < 200) continue;
+                const lastDigits = ticks.slice(-10).map(t => getLastDigitFromQuote(t.quote, market.symbol));
+                const freq: Record<number, number> = {};
+                for (const d of lastDigits) freq[d] = (freq[d] || 0) + 1;
+                let mostFreq = 0, mostFreqCount = 0;
+                for (const d in freq) { if (freq[d] > mostFreqCount) { mostFreqCount = freq[d]; mostFreq = Number(d); } }
+                if (mostFreqCount >= 3) {
+                    targetSymbol = market.symbol;
+                    const isOver = mostFreq >= 5;
+                    targetConfidence = 62;
+                    targetSignal = isOver ? 'Under 5' : 'Over 4';
+                    const info = { symbol: targetSymbol, label: market.label, confidence: targetConfidence, signal: targetSignal + ' (streak)' };
+                    bestMarketRef.current = info;
+                    setBestMarketInfo(info);
+                    break;
+                }
+            }
+        }
+
+        if (!targetSymbol) {
+            setTerminalDashboard(p => [...p, '⏳ No market ready yet. Waiting for calibration...']);
+            return;
+        }
+
+        const ticks = ticksRef.current[targetSymbol];
+        const cal = calibrationsRef.current[targetSymbol];
+        if (!ticks || ticks.length < 200 || !cal) return;
+
+        const analysis = buildOverUnderAnalysis(ticks, targetSymbol, cal);
         const primarySignal = analysis.signal;
 
         // Store recovery signals
         if (primarySignal.recoveryBarrier && primarySignal.recoveryContractType) {
-            primarySignalRef.current = { symbol: best.symbol, signal: { barrier: primarySignal.barrier, contractType: primarySignal.contractType, label: primarySignal.label } };
-            recoverySignalRef.current = { symbol: best.symbol, signal: { barrier: primarySignal.recoveryBarrier, contractType: primarySignal.recoveryContractType, label: primarySignal.recoveryLabel ?? '' } };
+            primarySignalRef.current = { symbol: targetSymbol, signal: { barrier: primarySignal.barrier, contractType: primarySignal.contractType, label: primarySignal.label } };
+            recoverySignalRef.current = { symbol: targetSymbol, signal: { barrier: primarySignal.recoveryBarrier, contractType: primarySignal.recoveryContractType, label: primarySignal.recoveryLabel ?? '' } };
         }
 
         // Check SL/TP
@@ -583,7 +635,7 @@ const Scanner = observer(() => {
         const currentSignal = isRecoveryTradeRef.current && recoverySignalRef.current
             ? recoverySignalRef.current.signal : primarySignal;
         const currentSymbol = isRecoveryTradeRef.current && recoverySignalRef.current
-            ? recoverySignalRef.current.symbol : best.symbol;
+            ? recoverySignalRef.current.symbol : targetSymbol;
         const signalType = isRecoveryTradeRef.current ? 'RECOVERY' : 'PRIMARY';
 
         tradeInFlightRef.current = true;
@@ -610,7 +662,7 @@ const Scanner = observer(() => {
                     isRecoveryTradeRef.current = true;
                     consecutiveRecoveryLossesRef.current = 1;
                     currentMartingaleStakeRef.current = baseStakeRef.current * martingaleMultiplierRef.current;
-                    setTerminalDashboard(p => [...p, `❌ PRIMARY LOSS! Switching to RECOVERY: Stake: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
+                    setTerminalDashboard(p => [...p, `❌ LOSS! Switching to RECOVERY: Stake: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
                 }
             }
 
@@ -698,13 +750,18 @@ const Scanner = observer(() => {
     };
 
     // ── Watch for best market and trade ──
-    // NOTE: always register the interval — refs don't trigger re-renders so
-    // checking tradeActiveRef.current here would lock the interval out forever.
-    // executeBestTrade already guards itself with the ref check internally.
+    const tradeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     useEffect(() => {
-        const iv = setInterval(() => { void executeBestTrade(); }, 3000);
-        return () => clearInterval(iv);
-    }, [executeBestTrade]);
+        if (tradeActiveRef.current) {
+            // Fire immediately (100ms), then every 3 seconds
+            setTimeout(() => { void executeBestTrade(); }, 100);
+            tradeIntervalRef.current = setInterval(() => { void executeBestTrade(); }, 3000);
+        } else {
+            if (tradeIntervalRef.current) { clearInterval(tradeIntervalRef.current); tradeIntervalRef.current = null; }
+        }
+        return () => { if (tradeIntervalRef.current) { clearInterval(tradeIntervalRef.current); tradeIntervalRef.current = null; } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tradeActiveRef.current, executeBestTrade]);
 
     const handleClosePopup = () => { stopTimerSound(); setPopupOpen(false); };
     const handleCloseTPSLPopup = () => { setShowTPSLPopup(false); setTpSlSettings(prev => ({ ...prev, isActive: false })); };
