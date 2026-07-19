@@ -45,10 +45,11 @@
             display: flex;
             justify-content: flex-end;
             align-items: center;
-            flex: 0 1 50%;
-            max-width: 50%;
+            flex: 0 0 auto;
+            max-width: 60%;
             box-sizing: border-box;
-            overflow: hidden;
+            overflow: visible;
+            gap: 0.4rem;
         }
     }
 

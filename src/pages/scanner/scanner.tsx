@@ -407,22 +407,8 @@ const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>, las
                 if ((highStreak && c.cat === 'under') || (lowStreak && c.cat === 'over')) prob += 0.10;
             }
 
-            // Normalize: remove the base random advantage so contracts compete on edge only
-            if (c.cat === 'over') {
-                const barrier = parseInt(c.barrier);
-                const winningCount = 9 - barrier; // Over 1 = 8, Over 7 = 2
-                const baseChance = winningCount / 10;
-                const edge = prob - baseChance;
-                prob = 0.5 + edge;
-            }
-            if (c.cat === 'under') {
-                const barrier = parseInt(c.barrier);
-                const winningCount = barrier; // Under 3 = 3, Under 7 = 7
-                const baseChance = winningCount / 10;
-                const edge = prob - baseChance;
-                prob = 0.5 + edge;
-            }
-
+            // evaluateOverUnder/evaluateParity/evaluateRiseFall already return edge-normalised values
+            // (all anchored to 0.5 baseline). No further normalisation needed here.
             prob = Math.min(0.92, Math.max(0.08, prob));
 
             const trade: BestTrade = {
