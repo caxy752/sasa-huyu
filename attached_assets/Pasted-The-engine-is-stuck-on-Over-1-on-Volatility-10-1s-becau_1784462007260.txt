@@ -1,0 +1,171 @@
+The engine is stuck on Over 1 on Volatility 10 (1s) because evaluateOverUnder is computing 98% for Over 1 every single time — and since 98% is the highest, it never picks anything else.
+
+The problem is the probability calculation is broken — it's giving Over 1 artificially high probability because of how the winning digits work (Over 1 wins if the digit is 2-9, which is 8 out of 10 digits = 80% base). The CSPRNG layers are adding bias on top, pushing it to 98%.
+
+The fix: We need to normalize probabilities so all contract types are compared fairly, and we need to add variety logic — if Over 1 keeps being selected, rotate to the next best different contract.
+
+Replace these 3 critical sections:
+
+Fix 1: Replace findBestTradeAcrossAllMarkets with variety logic
+typescript
+
+
+
+const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>, lastTradeKey?: string): BestTrade | null => {
+    let best: BestTrade | null = null;
+    let bestAlternative: BestTrade | null = null; // different contract/market from last trade
+
+    for (const symbol of Object.keys(markets)) {
+        const ms = markets[symbol];
+        if (!ms || ms.ticks.length < 100 || ms.pm.totalSamples < 50) continue;
+
+        const marketLabel = MARKETS.find(m => m.symbol === symbol)?.label || symbol;
+
+        for (const key of Object.keys(ALL_CONTRACTS) as ContractKey[]) {
+            const c = ALL_CONTRACTS[key];
+            let prob = 0.5;
+
+            if (c.cat === 'over' || c.cat === 'under') {
+                prob = evaluateOverUnder(ms.pm, key);
+            } else if (c.cat === 'parity') {
+                prob = evaluateParity(ms.pm, key);
+            } else if (c.cat === 'risefall') {
+                prob = evaluateRiseFall(ms.pm, key);
+            }
+
+            // Streak reversal bonus
+            if (ms.streak.streakCount >= 3 && (c.cat === 'over' || c.cat === 'under')) {
+                const highStreak = ms.streak.lastRange === 'high';
+                const lowStreak = ms.streak.lastRange === 'low';
+                if ((highStreak && c.cat === 'under') || (lowStreak && c.cat === 'over')) prob += 0.10;
+            }
+
+            // Normalize: Over 1 has 8 winning digits, Over 7 has 2 winning digits
+            // We need to adjust so they compete fairly
+            if (c.cat === 'over') {
+                const barrier = parseInt(c.barrier);
+                const winningCount = 9 - barrier; // Over 1 = 8, Over 7 = 2
+                // Subtract the base probability that comes from random chance
+                const baseChance = winningCount / 10;
+                // Only keep the EDGE above random, then re-add a fair baseline
+                const edge = prob - baseChance;
+                prob = 0.5 + edge; // Normalize to 0.5 baseline
+            }
+            if (c.cat === 'under') {
+                const barrier = parseInt(c.barrier);
+                const winningCount = barrier; // Under 3 = 3, Under 7 = 7
+                const baseChance = winningCount / 10;
+                const edge = prob - baseChance;
+                prob = 0.5 + edge;
+            }
+
+            prob = Math.min(0.92, Math.max(0.08, prob));
+
+            const trade: BestTrade = {
+                symbol, label: marketLabel, contractKey: key,
+                contractLabel: c.label, probability: Math.round(prob * 100),
+                barrier: c.barrier, contractType: c.type,
+            };
+
+            // Track best overall
+            if (prob > (best?.probability ?? 0) / 100) best = trade;
+
+            // Track best DIFFERENT from last trade
+            if (lastTradeKey && (key !== lastTradeKey || symbol !== markets[lastTradeKey?.split('|')[0]]?.ticks[0]?.toString())) {
+                if (prob > (bestAlternative?.probability ?? 0) / 100) bestAlternative = trade;
+            }
+        }
+    }
+
+    // If we have a last trade and an alternative within 10% of the best, use the alternative for variety
+    if (lastTradeKey && bestAlternative && best && (bestAlternative.probability >= best.probability - 10)) {
+        return bestAlternative;
+    }
+
+    return best && best.probability >= 50 ? best : null;
+};
+Fix 2: Fix evaluateOverUnder — normalize the base probability
+Replace the evaluateOverUnder function:
+
+typescript
+
+
+
+const evaluateOverUnder = (pm: ProbMatrix, key: ContractKey): number => {
+    const c = ALL_CONTRACTS[key];
+    if (c.cat !== 'over' && c.cat !== 'under') return 0.5;
+
+    const winningDigits = c.digits;
+    if (winningDigits.length === 0) return 0.08;
+
+    // Start with random baseline (fair comparison)
+    let prob = 0.5;
+
+    // CSPRNG hidden digit leakage adjustment (this is the REAL edge)
+    const currentHidden = pm.lastHiddenDigit;
+    if (currentHidden !== null && currentHidden >= 0 && currentHidden <= 9) {
+        const hiddenRow = pm.hiddenToNext[currentHidden];
+        const hiddenTotal = hiddenRow.reduce((a, b) => a + b, 0);
+        if (hiddenTotal >= 5) {
+            let winCount = 0;
+            for (const d of winningDigits) winCount += hiddenRow[d];
+            const hiddenProb = winCount / hiddenTotal;
+            // The edge is: hiddenProb - (winningDigits.length / 10)
+            const baseChance = winningDigits.length / 10;
+            const edge = hiddenProb - baseChance;
+            prob = 0.5 + edge * 3; // Amplify the edge by 3x but cap it
+        }
+    }
+
+    // Transition matrix gives additional signal
+    let transEdge = 0;
+    let transCount = 0;
+    for (let from = 0; from <= 9; from++) {
+        const row = pm.digitTransitions[from];
+        const rowTotal = row.reduce((a, b) => a + b, 0);
+        if (rowTotal > 5) {
+            let winCount = 0;
+            for (const d of winningDigits) winCount += row[d];
+            const transProb = winCount / rowTotal;
+            const baseChance = winningDigits.length / 10;
+            transEdge += transProb - baseChance;
+            transCount++;
+        }
+    }
+    if (transCount > 0) {
+        const avgTransEdge = transEdge / transCount;
+        prob += avgTransEdge * 2;
+    }
+
+    return Math.min(0.92, Math.max(0.08, prob));
+};
+Fix 3: Fix the applyLiveTick / trade trigger to pass last trade info
+In the loadAllMarkets function, find where executeTrade is called and replace with:
+
+typescript
+
+
+
+// Auto-trade if active — with variety
+if (tradeActiveRef.current && !tradeInFlightRef.current) {
+    const now = Date.now();
+    if (now - lastTradeTimeRef.current > 3000) { // min 3 seconds between trades
+        // Pass the last contract key to avoid repeating
+        const lastKey = bestTradeRef.current?.contractKey;
+        const best = findBestTradeAcrossAllMarkets(marketsRef.current, lastKey);
+        if (best) {
+            bestTradeRef.current = best;
+            setBestTradeDisplay(best);
+            setStatusMessage(`🎯 ${best.label} → ${best.contractLabel} @ ${best.probability}%`);
+            void executeTrade(best);
+        }
+    }
+}
+Summary
+
+
+Problem	Fix
+Over 1 has 8/10 winning digits = 80% random chance	Normalized: only the EDGE above random counts
+Same trade every time	Variety logic: if last trade was Over 1, try the next best different contract
+Even/Odd and Rise/Fall never selected	Normalized probabilities mean they compete fairly
+Only Vol 10 (1s) selected	All 10 markets evaluated equally

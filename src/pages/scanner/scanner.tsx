@@ -228,56 +228,46 @@ const evaluateOverUnder = (pm: ProbMatrix, key: ContractKey): number => {
     const winningDigits = c.digits;
     if (winningDigits.length === 0) return 0.08;
 
-    // Base probability from transition matrix
-    let transProb = 0;
-    let transTotal = 0;
-    for (let from = 0; from <= 9; from++) {
-        const row = pm.digitTransitions[from];
-        const rowTotal = row.reduce((a, b) => a + b, 0);
-        if (rowTotal > 0) {
-            for (const d of winningDigits) {
-                transProb += row[d] / rowTotal;
-            }
-            transTotal++;
-        }
-    }
-    let prob = transTotal > 0 ? transProb / transTotal : 0.5;
+    // Start with random baseline (fair comparison across all contract types)
+    let prob = 0.5;
 
-    // CSPRNG hidden digit leakage adjustment
+    // CSPRNG hidden digit leakage — this is the REAL edge
     const currentHidden = pm.lastHiddenDigit;
     if (currentHidden !== null && currentHidden >= 0 && currentHidden <= 9) {
         const hiddenRow = pm.hiddenToNext[currentHidden];
         const hiddenTotal = hiddenRow.reduce((a, b) => a + b, 0);
-        if (hiddenTotal >= 3) {
-            let overCount = 0, underCount = 0;
-            for (let d = 0; d <= 9; d++) {
-                const count = hiddenRow[d];
-                if (d >= parseInt(c.barrier)) overCount += count;
-                else underCount += count;
-            }
-            const hiddenProb = c.cat === 'over' ? overCount / hiddenTotal : underCount / hiddenTotal;
-            // Blend: 60% transition matrix, 40% hidden digit
-            prob = prob * 0.6 + hiddenProb * 0.4;
+        if (hiddenTotal >= 5) {
+            let winCount = 0;
+            for (const d of winningDigits) winCount += hiddenRow[d];
+            const hiddenProb = winCount / hiddenTotal;
+            // Edge = hiddenProb - base random chance; amplify 3x
+            const baseChance = winningDigits.length / 10;
+            const edge = hiddenProb - baseChance;
+            prob = 0.5 + edge * 3;
         }
     }
 
-    // Parity correlation bonus
-    if (c.cat === 'over' && pm.parityCorrelation.hiddenEven_to_nextOdd + pm.parityCorrelation.hiddenOdd_to_nextEven > pm.totalSamples * 0.55) {
-        prob += 0.03;
+    // Transition matrix adds additional signal (edge only, not raw rate)
+    let transEdge = 0;
+    let transCount = 0;
+    for (let from = 0; from <= 9; from++) {
+        const row = pm.digitTransitions[from];
+        const rowTotal = row.reduce((a, b) => a + b, 0);
+        if (rowTotal > 5) {
+            let winCount = 0;
+            for (const d of winningDigits) winCount += row[d];
+            const transProb = winCount / rowTotal;
+            const baseChance = winningDigits.length / 10;
+            transEdge += transProb - baseChance;
+            transCount++;
+        }
     }
-    if (c.cat === 'under' && pm.parityCorrelation.hiddenEven_to_nextEven + pm.parityCorrelation.hiddenOdd_to_nextOdd > pm.totalSamples * 0.55) {
-        prob += 0.03;
+    if (transCount > 0) {
+        const avgTransEdge = transEdge / transCount;
+        prob += avgTransEdge * 2;
     }
 
-    // Tick direction bonus
-    if (pm.tickDirectionTotal > 5) {
-        const upRatio = pm.tickDirectionToDigitUp / pm.tickDirectionTotal;
-        const downRatio = pm.tickDirectionToDigitDown / pm.tickDirectionTotal;
-        if (upRatio > 0.55 && c.cat === 'over') prob += 0.04;
-        if (downRatio > 0.55 && c.cat === 'under') prob += 0.04;
-    }
-
-    return Math.min(0.95, Math.max(0.08, prob));
+    return Math.min(0.92, Math.max(0.08, prob));
 };
 
 // ── Even/Odd probability ──
@@ -388,8 +378,9 @@ interface BestTrade {
     contractType: string;
 }
 
-const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>): BestTrade | null => {
+const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>, lastTradeKey?: string): BestTrade | null => {
     let best: BestTrade | null = null;
+    let bestAlternative: BestTrade | null = null; // different contract from last trade
 
     for (const symbol of Object.keys(markets)) {
         const ms = markets[symbol];
@@ -397,12 +388,10 @@ const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>): Be
 
         const marketLabel = MARKETS.find(m => m.symbol === symbol)?.label || symbol;
 
-        // Evaluate EVERY contract type without restriction
         for (const key of Object.keys(ALL_CONTRACTS) as ContractKey[]) {
             const c = ALL_CONTRACTS[key];
             let prob = 0.5;
 
-            // Compute probability based on contract category
             if (c.cat === 'over' || c.cat === 'under') {
                 prob = evaluateOverUnder(ms.pm, key);
             } else if (c.cat === 'parity') {
@@ -411,78 +400,53 @@ const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>): Be
                 prob = evaluateRiseFall(ms.pm, key);
             }
 
-            // Streak reversal bonus — applies to Over/Under
+            // Streak reversal bonus
             if (ms.streak.streakCount >= 3 && (c.cat === 'over' || c.cat === 'under')) {
                 const highStreak = ms.streak.lastRange === 'high';
                 const lowStreak = ms.streak.lastRange === 'low';
-                const isOver = c.cat === 'over';
-                const isUnder = c.cat === 'under';
-
-                // After 3+ highs, under is favored. After 3+ lows, over is favored.
-                if ((highStreak && isUnder) || (lowStreak && isOver)) {
-                    prob += 0.08;
-                }
-                // Streak reversion from matrix data
-                if (highStreak && isUnder && ms.pm.streakReversion.high.total > 3) {
-                    prob += (ms.pm.streakReversion.high.flipped / ms.pm.streakReversion.high.total) * 0.12;
-                }
-                if (lowStreak && isOver && ms.pm.streakReversion.low.total > 3) {
-                    prob += (ms.pm.streakReversion.low.flipped / ms.pm.streakReversion.low.total) * 0.12;
-                }
+                if ((highStreak && c.cat === 'under') || (lowStreak && c.cat === 'over')) prob += 0.10;
             }
 
-            // Parity bonus for Even/Odd
-            if (c.cat === 'parity' && ms.pm.totalSamples > 50) {
-                const hiddenIsEven = (ms.pm.lastHiddenDigit ?? 0) % 2 === 0;
-                const isEven = key === 'EVEN';
-                const totalParity = ms.pm.parityCorrelation.hiddenEven_to_nextEven + ms.pm.parityCorrelation.hiddenEven_to_nextOdd
-                    + ms.pm.parityCorrelation.hiddenOdd_to_nextEven + ms.pm.parityCorrelation.hiddenOdd_to_nextOdd;
-                if (totalParity > 5) {
-                    let correctParity = 0;
-                    let totalForHidden = 0;
-                    if (hiddenIsEven) {
-                        totalForHidden = ms.pm.parityCorrelation.hiddenEven_to_nextEven + ms.pm.parityCorrelation.hiddenEven_to_nextOdd;
-                        correctParity = isEven ? ms.pm.parityCorrelation.hiddenEven_to_nextEven : ms.pm.parityCorrelation.hiddenEven_to_nextOdd;
-                    } else {
-                        totalForHidden = ms.pm.parityCorrelation.hiddenOdd_to_nextEven + ms.pm.parityCorrelation.hiddenOdd_to_nextOdd;
-                        correctParity = isEven ? ms.pm.parityCorrelation.hiddenOdd_to_nextEven : ms.pm.parityCorrelation.hiddenOdd_to_nextOdd;
-                    }
-                    if (totalForHidden > 0) {
-                        const parProb = correctParity / totalForHidden;
-                        prob = prob * 0.3 + parProb * 0.7; // 70% hidden parity correlation
-                    }
-                }
+            // Normalize: remove the base random advantage so contracts compete on edge only
+            if (c.cat === 'over') {
+                const barrier = parseInt(c.barrier);
+                const winningCount = 9 - barrier; // Over 1 = 8, Over 7 = 2
+                const baseChance = winningCount / 10;
+                const edge = prob - baseChance;
+                prob = 0.5 + edge;
+            }
+            if (c.cat === 'under') {
+                const barrier = parseInt(c.barrier);
+                const winningCount = barrier; // Under 3 = 3, Under 7 = 7
+                const baseChance = winningCount / 10;
+                const edge = prob - baseChance;
+                prob = 0.5 + edge;
             }
 
-            // Rise/Fall — use tick direction data
-            if (c.cat === 'risefall' && ms.pm.tickDirectionTotal > 10) {
-                const upRatio = ms.pm.tickDirectionToDigitUp / ms.pm.tickDirectionTotal;
-                const downRatio = ms.pm.tickDirectionToDigitDown / ms.pm.tickDirectionTotal;
-                if (key === 'RISE') prob = Math.min(0.85, Math.max(0.15, 0.5 + (upRatio - 0.5) * 1.5));
-                else prob = Math.min(0.85, Math.max(0.15, 0.5 + (downRatio - 0.5) * 1.5));
-            }
+            prob = Math.min(0.92, Math.max(0.08, prob));
 
-            // Clamp to realistic range
-            prob = Math.min(0.98, Math.max(0.08, prob));
+            const trade: BestTrade = {
+                symbol, label: marketLabel, contractKey: key,
+                contractLabel: c.label, probability: Math.round(prob * 100),
+                barrier: c.barrier, contractType: c.type,
+            };
 
-            // NO RESTRICTION — pick the absolute best across everything
-            if (prob > (best?.probability || 0)) {
-                best = {
-                    symbol,
-                    label: marketLabel,
-                    contractKey: key,
-                    contractLabel: c.label,
-                    probability: Math.round(prob * 100),
-                    barrier: c.barrier,
-                    contractType: c.type,
-                };
+            // Track best overall
+            if (prob > (best?.probability ?? 0) / 100) best = trade;
+
+            // Track best DIFFERENT from last trade
+            if (lastTradeKey && key !== lastTradeKey) {
+                if (prob > (bestAlternative?.probability ?? 0) / 100) bestAlternative = trade;
             }
         }
     }
 
-    // Lower threshold to 52 — trade any contract with a slight edge
-    if (best && best.probability >= 52) return best;
-    return null;
+    // If last trade exists and alternative is within 10% of best, use alternative for variety
+    if (lastTradeKey && bestAlternative && best && (bestAlternative.probability >= best.probability - 10)) {
+        return bestAlternative;
+    }
+
+    return best && best.probability >= 50 ? best : null;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -807,21 +771,29 @@ const Scanner = observer(() => {
                         marketsRef.current[market.symbol] = { ticks: newTicks, pm: newPm, streak: sr.state, lastQuote: tick.quote };
 
                         // After every tick, find the best trade across ALL markets
-                        const best = findBestTradeAcrossAllMarkets(marketsRef.current);
-                        if (best) {
-                            bestTradeRef.current = best;
-                            setBestTradeDisplay(best);
-                            setStatusMessage(`🎯 BEST: ${best.label} → ${best.contractLabel} @ ${best.probability}%`);
-
-                            // Auto-trade if active
-                            if (tradeActiveRef.current && !tradeInFlightRef.current) {
-                                const now = Date.now();
-                                if (now - lastTradeTimeRef.current > 5000) {
+                        // Auto-trade if active — with variety
+                        if (tradeActiveRef.current && !tradeInFlightRef.current) {
+                            const now = Date.now();
+                            if (now - lastTradeTimeRef.current > 3000) {
+                                // Pass the last contract key to avoid repeating
+                                const lastKey = bestTradeRef.current?.contractKey;
+                                const best = findBestTradeAcrossAllMarkets(marketsRef.current, lastKey);
+                                if (best) {
+                                    bestTradeRef.current = best;
+                                    setBestTradeDisplay(best);
+                                    setStatusMessage(`🎯 ${best.label} → ${best.contractLabel} @ ${best.probability}%`);
                                     void executeTrade(best);
                                 }
                             }
                         } else {
-                            setStatusMessage('SCANNING — WAITING FOR BIAS >58%');
+                            const best = findBestTradeAcrossAllMarkets(marketsRef.current);
+                            if (best) {
+                                bestTradeRef.current = best;
+                                setBestTradeDisplay(best);
+                                setStatusMessage(`🎯 BEST: ${best.label} → ${best.contractLabel} @ ${best.probability}%`);
+                            } else {
+                                setStatusMessage('SCANNING — WAITING FOR EDGE >50%');
+                            }
                         }
                     } else {
                         marketsRef.current[market.symbol] = { ...ms, ticks: newTicks, lastQuote: tick.quote };
