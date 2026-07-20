@@ -100,6 +100,8 @@ interface ProbMatrix {
     tickDirectionToDigitUp: number; // price up AND digit increased
     tickDirectionToDigitDown: number; // price down AND digit decreased
     tickDirectionTotal: number;
+    priceUpCount: number; // raw count of ticks where price went up
+    priceTotalCount: number; // total tick pairs counted
     // Stats
     totalSamples: number;
     lastHiddenDigit: number | null;
@@ -122,6 +124,8 @@ const initProbMatrix = (): ProbMatrix => {
         tickDirectionToDigitUp: 0,
         tickDirectionToDigitDown: 0,
         tickDirectionTotal: 0,
+        priceUpCount: 0,
+        priceTotalCount: 0,
         totalSamples: 0,
         lastHiddenDigit: null,
         bestContract: null,
@@ -174,6 +178,8 @@ const updateProbMatrix = (pm: ProbMatrix, prevQuote: number, currentQuote: numbe
     if (priceUp && digitUp) newPm.tickDirectionToDigitUp += 1;
     else if (!priceUp && !digitUp && currDigit !== prevDigit) newPm.tickDirectionToDigitDown += 1;
     newPm.tickDirectionTotal += 1;
+    newPm.priceUpCount = pm.priceUpCount + (priceUp ? 1 : 0);
+    newPm.priceTotalCount = pm.priceTotalCount + 1;
 
     // ── Recompute best contracts after every update ──
     if (newPm.totalSamples >= 50) {
@@ -270,11 +276,42 @@ const evaluateOverUnder = (pm: ProbMatrix, key: ContractKey): number => {
     return Math.min(0.92, Math.max(0.08, prob));
 };
 
-// ── Even/Odd probability ──
+// ── Even/Odd probability — uses all 3 signals on equal footing with Over/Under ──
 const evaluateParity = (pm: ProbMatrix, key: ContractKey): number => {
     const isEven = key === 'EVEN';
+    const winningDigits = isEven ? [0, 2, 4, 6, 8] : [1, 3, 5, 7, 9];
 
-    // From transition matrix
+    // Signal 1: Hidden digit CSPRNG leakage (same method as Over/Under)
+    let hiddenEdge = 0;
+    const currentHidden = pm.lastHiddenDigit;
+    if (currentHidden !== null && currentHidden >= 0 && currentHidden <= 9) {
+        const hiddenRow = pm.hiddenToNext[currentHidden];
+        const hiddenTotal = hiddenRow.reduce((a, b) => a + b, 0);
+        if (hiddenTotal >= 5) {
+            let winCount = 0;
+            for (const d of winningDigits) winCount += hiddenRow[d];
+            hiddenEdge = (winCount / hiddenTotal - 0.5) * 2.5;
+        }
+    }
+
+    // Signal 2: Parity correlation (hidden digit parity predicts next digit parity)
+    let parityEdge = 0;
+    if (currentHidden !== null) {
+        const hiddenIsEven = currentHidden % 2 === 0;
+        const denom = hiddenIsEven
+            ? (pm.parityCorrelation.hiddenEven_to_nextEven + pm.parityCorrelation.hiddenEven_to_nextOdd)
+            : (pm.parityCorrelation.hiddenOdd_to_nextEven + pm.parityCorrelation.hiddenOdd_to_nextOdd);
+        if (denom >= 5) {
+            let matchCount = 0;
+            if (hiddenIsEven && isEven) matchCount = pm.parityCorrelation.hiddenEven_to_nextEven;
+            else if (hiddenIsEven && !isEven) matchCount = pm.parityCorrelation.hiddenEven_to_nextOdd;
+            else if (!hiddenIsEven && isEven) matchCount = pm.parityCorrelation.hiddenOdd_to_nextEven;
+            else matchCount = pm.parityCorrelation.hiddenOdd_to_nextOdd;
+            parityEdge = (matchCount / denom - 0.5) * 2.0;
+        }
+    }
+
+    // Signal 3: Overall parity trend from transition matrix
     let evenCount = 0, oddCount = 0;
     for (let from = 0; from <= 9; from++) {
         const row = pm.digitTransitions[from];
@@ -284,34 +321,18 @@ const evaluateParity = (pm: ProbMatrix, key: ContractKey): number => {
         }
     }
     const total = evenCount + oddCount;
-    let prob = total > 0 ? (isEven ? evenCount / total : oddCount / total) : 0.5;
+    const transEdge = total > 0 ? ((isEven ? evenCount / total : oddCount / total) - 0.5) * 1.0 : 0;
 
-    // Hidden digit parity correlation (strongest signal for Even/Odd)
-    const currentHidden = pm.lastHiddenDigit;
-    if (currentHidden !== null) {
-        const hiddenIsEven = currentHidden % 2 === 0;
-        const totalParity = pm.parityCorrelation.hiddenEven_to_nextEven + pm.parityCorrelation.hiddenEven_to_nextOdd
-            + pm.parityCorrelation.hiddenOdd_to_nextEven + pm.parityCorrelation.hiddenOdd_to_nextOdd;
-        if (totalParity > 5) {
-            let correctParity = 0;
-            if (hiddenIsEven && isEven) correctParity = pm.parityCorrelation.hiddenEven_to_nextEven;
-            else if (hiddenIsEven && !isEven) correctParity = pm.parityCorrelation.hiddenEven_to_nextOdd;
-            else if (!hiddenIsEven && isEven) correctParity = pm.parityCorrelation.hiddenOdd_to_nextEven;
-            else correctParity = pm.parityCorrelation.hiddenOdd_to_nextOdd;
-            const parProb = correctParity / (hiddenIsEven
-                ? (pm.parityCorrelation.hiddenEven_to_nextEven + pm.parityCorrelation.hiddenEven_to_nextOdd)
-                : (pm.parityCorrelation.hiddenOdd_to_nextEven + pm.parityCorrelation.hiddenOdd_to_nextOdd));
-            prob = prob * 0.4 + parProb * 0.6;
-        }
-    }
-
-    return Math.min(0.92, Math.max(0.08, prob));
+    return Math.min(0.92, Math.max(0.08, 0.5 + hiddenEdge + parityEdge + transEdge));
 };
 
-// ── Rise/Fall probability ──
+// ── Rise/Fall probability — computed from actual price direction data ──
 const evaluateRiseFall = (pm: ProbMatrix, key: ContractKey): number => {
     const isRise = key === 'RISE';
-    return isRise ? 0.55 : 0.45;
+    if (pm.priceTotalCount < 20) return 0.5;
+    const upRate = pm.priceUpCount / pm.priceTotalCount;
+    const edge = (isRise ? upRate : (1 - upRate)) - 0.5;
+    return Math.min(0.75, Math.max(0.25, 0.5 + edge * 2));
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -476,6 +497,7 @@ const Scanner = observer(() => {
     const timerSoundRef = useRef<HTMLAudioElement | null>(null);
     const bestTradeRef = useRef<BestTrade | null>(null);
     const lastTradeTimeRef = useRef(0);
+    const tradeInFlightStartRef = useRef(0);
     const recoveryTradeRef = useRef<BestTrade | null>(null);
     const isRecoveryRef = useRef(false);
     const streakStatesRef = useRef<Record<string, StreakState>>({});
@@ -606,7 +628,8 @@ const Scanner = observer(() => {
         return Number(settled.profit ?? 0);
     }, [buildTradeParameters, currency, pushContract]);
 
-    // ── Execute trade with martingale & recovery ──
+    // ── Execute trade with martingale ──
+    // Contract/symbol is ALWAYS whatever the engine says right now — never frozen.
     const executeTrade = useCallback(async (trade: BestTrade) => {
         if (!tradeActiveRef.current || tradeInFlightRef.current || shouldStopRef.current) return;
 
@@ -624,15 +647,16 @@ const Scanner = observer(() => {
             setShowTPSLPopup(true); setTpSlSettings(p => ({ ...p, isActive: true })); stopTrading(); return;
         }
 
-        // Use recovery trade if in recovery mode, otherwise use the current best trade
-        const currentTrade = isRecoveryRef.current && recoveryTradeRef.current ? recoveryTradeRef.current : trade;
+        // Lock flight + timestamp (for watchdog)
         tradeInFlightRef.current = true;
+        tradeInFlightStartRef.current = Date.now();
         const stake = currentMartingaleStakeRef.current;
+        const mode = isRecoveryRef.current ? 'RECOVERY' : 'PRIMARY';
 
-        setTerminalDashboard(p => [...p, `🎯 ${currentTrade.contractLabel} on ${currentTrade.label} @ ${currentTrade.probability}% | Stake: ${stake.toFixed(2)} ${currency} | ${isRecoveryRef.current ? 'RECOVERY' : 'PRIMARY'}`]);
+        setTerminalDashboard(p => [...p, `🎯 ${trade.contractLabel} on ${trade.label} @ ${trade.probability}% | Stake: ${stake.toFixed(2)} ${currency} | ${mode}`]);
 
         try {
-            const profit = await runSingleTrade(currentTrade, stake);
+            const profit = await runSingleTrade(trade, stake);
             lastTradeTimeRef.current = Date.now();
             const isWin = profit > 0;
 
@@ -640,21 +664,13 @@ const Scanner = observer(() => {
                 consecutiveLossesRef.current = 0;
                 currentMartingaleStakeRef.current = baseStakeRef.current;
                 isRecoveryRef.current = false;
-                recoveryTradeRef.current = null;
-                setTerminalDashboard(p => [...p, `✅ WIN +${profit.toFixed(2)} ${currency} | Reset to ${baseStakeRef.current.toFixed(2)}`]);
+                setTerminalDashboard(p => [...p, `✅ WIN +${profit.toFixed(2)} ${currency} | Stake reset to ${baseStakeRef.current.toFixed(2)}`]);
             } else {
                 consecutiveLossesRef.current += 1;
-                if (!isRecoveryRef.current) {
-                    // First loss: switch to recovery using the CURRENT best trade
-                    isRecoveryRef.current = true;
-                    recoveryTradeRef.current = bestTradeRef.current; // whatever is best NOW
-                    currentMartingaleStakeRef.current = baseStakeRef.current * martingaleMultiplierRef.current;
-                    setTerminalDashboard(p => [...p, `❌ LOSS. Recovery mode: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
-                } else {
-                    // Consecutive recovery loss: martingale step up
-                    currentMartingaleStakeRef.current = baseStakeRef.current * Math.pow(martingaleMultiplierRef.current, consecutiveLossesRef.current);
-                    setTerminalDashboard(p => [...p, `❌ RECOVERY LOSS x${consecutiveLossesRef.current}. Next stake: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency}`]);
-                }
+                isRecoveryRef.current = true;
+                // Martingale escalation — engine picks the next contract/symbol independently
+                currentMartingaleStakeRef.current = baseStakeRef.current * Math.pow(martingaleMultiplierRef.current, consecutiveLossesRef.current);
+                setTerminalDashboard(p => [...p, `❌ LOSS x${consecutiveLossesRef.current} | Next stake: ${currentMartingaleStakeRef.current.toFixed(2)} ${currency} — engine picks next contract`]);
             }
 
             const totalProfit = Number((sessionProfitRef.current + profit).toFixed(8));
@@ -667,7 +683,8 @@ const Scanner = observer(() => {
             setTerminalDashboard(p => [...p, `❌ Error: ${msg}`]);
         } finally {
             tradeInFlightRef.current = false;
-            // Immediately re-scan for next trade
+            tradeInFlightStartRef.current = 0;
+            // Re-scan for next best trade immediately
             if (tradeActiveRef.current && !shouldStopRef.current) {
                 const best = findBestTradeAcrossAllMarkets(marketsRef.current);
                 if (best) {
@@ -758,6 +775,13 @@ const Scanner = observer(() => {
 
                         // After every tick, find the best trade across ALL markets
                         // Auto-trade if active — with variety
+                        // Watchdog: if a trade has been in-flight >45s the API is hung — force reset
+                        if (tradeInFlightRef.current && tradeInFlightStartRef.current > 0 && Date.now() - tradeInFlightStartRef.current > 45000) {
+                            tradeInFlightRef.current = false;
+                            tradeInFlightStartRef.current = 0;
+                            setTerminalDashboard(p => [...p, '⚠️ Trade timed out (45s) — resetting. Check your connection.']);
+                        }
+
                         if (tradeActiveRef.current && !tradeInFlightRef.current) {
                             const now = Date.now();
                             if (now - lastTradeTimeRef.current > 3000) {
@@ -828,7 +852,7 @@ const Scanner = observer(() => {
         setShowTPSLPopup(false);
         setTpSlSettings({ stopLoss: String(sl), takeProfit: String(tp), isActive: false });
 
-        try { run_panel.setRunId(`exploit-${Date.now()}`); run_panel.setIsRunning(true); run_panel.setContractStage?.(contract_stages.RUNNING); run_panel.toggleDrawer(true); } catch {}
+        try { run_panel.setRunId(`exploit-${Date.now()}`); run_panel.setIsRunning(true); run_panel.setContractStage?.(contract_stages.RUNNING); if (isDesktop) run_panel.toggleDrawer(true); } catch {}
         dashboard.setActiveTradingModule('scanner');
         setTerminalDashboard(p => [...p, `🤖 EXPLOIT ENGINE ACTIVE | Stake: ${stake} ${currency} | SL: ${sl} | TP: ${tp} | x${multiplier} | ${runs} runs`]);
     }, [currency, dashboard, run_panel]);
@@ -884,6 +908,13 @@ const Scanner = observer(() => {
         }, 4000);
     }, [connected, playTimerSound, startTrading, stopTimerSound]);
 
+    // ── Controlled input state — initialized from sessionStorage so values survive re-renders ──
+    const [inputStake, setInputStake] = useState(() => sessionStorage.getItem('exploit_stake') || '0.5');
+    const [inputSL, setInputSL] = useState(() => sessionStorage.getItem('exploit_sl') || '20');
+    const [inputTP, setInputTP] = useState(() => sessionStorage.getItem('exploit_tp') || '0.5');
+    const [inputRuns, setInputRuns] = useState(() => sessionStorage.getItem('exploit_runs') || '5');
+    const [inputMul, setInputMul] = useState(() => sessionStorage.getItem('exploit_mul') || '2');
+
     // ── Settings change handlers ──
     const updateSetting = (key: string, value: string) => {
         sessionStorage.setItem(key, value);
@@ -907,25 +938,25 @@ const Scanner = observer(() => {
 
                 {/* ── Settings (minimal — just stake/SL/TP) ── */}
                 <label htmlFor='stake'>💰 BASE STAKE</label>
-                <input id='stake' className='dropdown' inputMode='decimal' defaultValue='0.5'
-                    onChange={e => { const v = e.target.value.replace(/[^\d.]/g,'').replace(/(\..*)\./g,'$1'); e.target.value = v; updateSetting('exploit_stake', v); }} />
+                <input id='stake' className='dropdown' inputMode='decimal' value={inputStake}
+                    onChange={e => { const v = e.target.value.replace(/[^\d.]/g,'').replace(/(\..*)\./g,'$1'); setInputStake(v); updateSetting('exploit_stake', v); }} />
 
                 <label htmlFor='stop-loss'>🛑 STOP LOSS</label>
-                <input id='stop-loss' className='dropdown' inputMode='decimal' defaultValue='20'
-                    onChange={e => { const v = e.target.value.replace(/[^\d.]/g,'').replace(/(\..*)\./g,'$1'); e.target.value = v; updateSetting('exploit_sl', v); }} />
+                <input id='stop-loss' className='dropdown' inputMode='decimal' value={inputSL}
+                    onChange={e => { const v = e.target.value.replace(/[^\d.]/g,'').replace(/(\..*)\./g,'$1'); setInputSL(v); updateSetting('exploit_sl', v); }} />
 
                 <label htmlFor='take-profit'>🎯 TAKE PROFIT</label>
-                <input id='take-profit' className='dropdown' inputMode='decimal' defaultValue='0.5'
-                    onChange={e => { const v = e.target.value.replace(/[^\d.]/g,'').replace(/(\..*)\./g,'$1'); e.target.value = v; updateSetting('exploit_tp', v); }} />
+                <input id='take-profit' className='dropdown' inputMode='decimal' value={inputTP}
+                    onChange={e => { const v = e.target.value.replace(/[^\d.]/g,'').replace(/(\..*)\./g,'$1'); setInputTP(v); updateSetting('exploit_tp', v); }} />
 
                 <label htmlFor='runs'>🔢 RUNS</label>
-                <input id='runs' className='dropdown' inputMode='numeric' defaultValue='5'
-                    onChange={e => { const v = e.target.value.replace(/[^\d]/g,''); e.target.value = v; updateSetting('exploit_runs', v); }} />
+                <input id='runs' className='dropdown' inputMode='numeric' value={inputRuns}
+                    onChange={e => { const v = e.target.value.replace(/[^\d]/g,''); setInputRuns(v); updateSetting('exploit_runs', v); }} />
 
                 <div className='martingale-row'>
                     <label>🎲 MARTINGALE</label>
-                    <select className='martingale-select' defaultValue='2'
-                        onChange={e => { updateSetting('exploit_mul', e.target.value); }}>
+                    <select className='martingale-select' value={inputMul}
+                        onChange={e => { setInputMul(e.target.value); updateSetting('exploit_mul', e.target.value); }}>
                         {[1,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2,2.2,2.5,3,3.5,4,5,6,7,8,9,10].map(m => <option key={m} value={m}>x{m}</option>)}
                     </select>
                 </div>
@@ -1035,6 +1066,13 @@ const Scanner = observer(() => {
                     </div>
                 </div>
             </div>
+
+            {/* ── Mobile floating STOP — always above run panel (z-index 9999) ── */}
+            {!isDesktop && run_panel.is_running && (
+                <button className='mobile-floating-stop' type='button' onClick={handleStopBot}>
+                    ⏹️ STOP
+                </button>
+            )}
 
             {/* ── Live trade overlay (bottom-right) ── */}
             {tradeActiveRef.current && bestTradeDisplay && (

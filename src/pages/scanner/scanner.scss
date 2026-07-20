@@ -453,54 +453,120 @@
 @media (max-width: 760px) {
     .scanner-page {
         align-items: flex-start;
-        // Fill the sub-tab content area naturally — no fixed vh
         height: var(--tab-content-height-mobile, calc(100vh - 12rem));
         min-height: 0;
-        padding: 10px 12px 3% 12px;
+        padding: 8px 10px 80px 10px; // extra bottom padding so content clears floating button
         overflow-y: auto;
-        // Needed so position:absolute popup children are bounded by this element
         position: relative;
 
         .container {
-            padding: 16px 15px;
-            margin-top: 2%;
-            border-radius: 28px;
+            width: 100%;
+            max-width: 100%;
+            padding: 14px 13px 18px;
+            margin-top: 0;
+            border-radius: 20px;
         }
 
         h1 {
-            font-size: 1.2rem;
-            margin-bottom: 14px;
-            letter-spacing: 1.5px;
+            font-size: 1.05rem;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
         }
 
         label {
-            font-size: 0.65rem;
-            margin-top: 12px;
+            font-size: 0.63rem;
+            margin-top: 10px;
         }
 
         .dropdown {
-            padding: 9px 14px;
+            padding: 8px 13px;
             font-size: 0.78rem;
+            border-radius: 36px;
         }
 
         .martingale-row {
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 8px;
-            padding: 6px 14px;
-            margin: 12px 0 6px;
+            padding: 6px 12px;
+            margin: 10px 0 4px;
+            border-radius: 40px;
+
+            label {
+                margin-top: 0;
+                font-size: 0.62rem;
+            }
 
             .martingale-select {
-                width: 100%;
-                max-width: 110px;
+                width: auto;
+                min-width: 80px;
+                padding: 6px 10px;
+            }
+        }
+
+        .calibration-bar {
+            margin: 12px 0 6px;
+            padding: 8px 12px;
+
+            .calibration-label {
+                font-size: 0.62rem;
+            }
+
+            .calibration-status {
+                font-size: 0.68rem;
+            }
+        }
+
+        .buttons {
+            margin-top: 16px;
+
+            button {
+                padding: 12px 16px;
+                font-size: 0.85rem;
+                letter-spacing: 1.5px;
+            }
+        }
+
+        // Mobile floating STOP button
+        .mobile-floating-stop {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            background: linear-gradient(105deg, #ff3333, #bb0000);
+            color: #fff;
+            border: none;
+            padding: 13px 36px;
+            border-radius: 40px;
+            font-weight: 800;
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            box-shadow: 0 6px 24px rgba(255, 0, 0, 0.65);
+            cursor: pointer;
+            text-transform: uppercase;
+            animation: pulse 1.5s ease-in-out infinite;
+
+            &:active {
+                transform: translateX(-50%) scale(0.95);
             }
         }
 
         .contain {
-            flex-direction: column;
-            gap: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 10px;
             text-align: center;
             padding: 10px 14px;
             margin: 16px 0 14px;
+
+            .latest-tick {
+                font-size: 0.68rem;
+
+                span {
+                    font-size: 0.9rem;
+                    margin-left: 4px;
+                }
+            }
         }
 
         // ── Popup: absolute, fills scanner-page, z-index BELOW run panel ─────
