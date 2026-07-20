@@ -399,7 +399,11 @@ interface BestTrade {
     contractType: string;
 }
 
-const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>, lastTradeKey?: string): BestTrade | null => {
+const findBestTradeAcrossAllMarkets = (
+    markets: Record<string, MarketState>,
+    lastTradeKey?: string,
+    blacklist?: Map<string, number>
+): BestTrade | null => {
     let best: BestTrade | null = null;
     let bestAlternative: BestTrade | null = null; // different contract from last trade
 
@@ -410,6 +414,9 @@ const findBestTradeAcrossAllMarkets = (markets: Record<string, MarketState>, las
         const marketLabel = MARKETS.find(m => m.symbol === symbol)?.label || symbol;
 
         for (const key of Object.keys(ALL_CONTRACTS) as ContractKey[]) {
+            // Skip contract+market combos that have failed repeatedly (API doesn't support them)
+            if (blacklist && (blacklist.get(`${key}|${symbol}`) ?? 0) >= 2) continue;
+
             const c = ALL_CONTRACTS[key];
             let prob = 0.5;
 
@@ -501,6 +508,9 @@ const Scanner = observer(() => {
     const recoveryTradeRef = useRef<BestTrade | null>(null);
     const isRecoveryRef = useRef(false);
     const streakStatesRef = useRef<Record<string, StreakState>>({});
+    // Tracks how many times each contract+market combo has failed with an API error.
+    // Combos with ≥2 failures are blacklisted from the engine for this session.
+    const failedContractsRef = useRef<Map<string, number>>(new Map());
 
     const currency = client.currency || 'USD';
     const showScanner = active_tab === DBOT_TABS.SCANNER;
@@ -570,6 +580,7 @@ const Scanner = observer(() => {
         currentMartingaleStakeRef.current = baseStakeRef.current;
         isRecoveryRef.current = false;
         recoveryTradeRef.current = null;
+        failedContractsRef.current.clear(); // reset blacklist for next session
         setStatusMessage('STOPPED');
         try { run_panel.setIsRunning(false); run_panel.setContractStage?.(contract_stages.NOT_RUNNING); } catch {}
         dashboard.setActiveTradingModule(null);
@@ -600,10 +611,16 @@ const Scanner = observer(() => {
     const runSingleTrade = useCallback(async (trade: BestTrade, stake: number): Promise<number> => {
         setTerminalDashboard(p => [...p, `🎯 ${trade.contractLabel} on ${trade.label} @ ${trade.probability}% | Stake: ${stake.toFixed(2)} ${currency}`]);
 
+        // buyContractForUi can reject with a plain object { error: { code, message }, echo_req }
+        // (from sendViaNewSystemWithPromise) rather than an Error instance.
+        // Normalise here so the upstream catch always sees a proper Error with the real message.
         const buy = await buyContractForUi({
             parameters: buildTradeParameters(trade, stake),
             price: stake,
             source: 'Scanner',
+        }).catch((e: any) => {
+            const msg = e?.error?.message || e?.message || (typeof e === 'string' ? e : JSON.stringify(e).slice(0, 300)) || 'API rejected contract';
+            throw new Error(`[API] ${msg}`);
         });
 
         pushContract({
@@ -679,14 +696,35 @@ const Scanner = observer(() => {
             setSessionProfit(totalProfit);
             setTerminalDashboard(p => [...p, `📈 ${completedRunsRef.current}/${runsToCheckRef.current}: ${profit.toFixed(2)} ${currency} | P/L: ${totalProfit.toFixed(2)} ${currency}`]);
         } catch (error) {
-            const msg = error instanceof Error ? error.message : 'Trade failed.';
+            // Normalise error — sendViaNewSystemWithPromise rejects with plain objects
+            // { error: { code, message }, echo_req }, never an Error instance.
+            const msg = error instanceof Error
+                ? error.message
+                : ((error as any)?.error?.message || (error as any)?.message
+                    || (typeof error === 'string' ? error : JSON.stringify(error).slice(0, 300))
+                    || 'Trade failed.');
             setTerminalDashboard(p => [...p, `❌ Error: ${msg}`]);
+
+            // Track per-contract+market failures.
+            // After 2 consecutive API errors on the same combo, blacklist it
+            // so findBestTradeAcrossAllMarkets stops selecting it.
+            const failKey = `${trade.contractKey}|${trade.symbol}`;
+            const failCount = (failedContractsRef.current.get(failKey) ?? 0) + 1;
+            failedContractsRef.current.set(failKey, failCount);
+            if (failCount === 2) {
+                setTerminalDashboard(p => [...p,
+                    `🚫 ${trade.contractLabel} on ${trade.label} blacklisted (API error x2) — engine will skip it`]);
+            }
+
+            // Back-off: treat the failed attempt as a cooldown so the tick handler
+            // doesn't immediately hammer the same contract again.
+            lastTradeTimeRef.current = Date.now();
         } finally {
             tradeInFlightRef.current = false;
             tradeInFlightStartRef.current = 0;
-            // Re-scan for next best trade immediately
+            // Re-scan for next best trade (respecting the blacklist)
             if (tradeActiveRef.current && !shouldStopRef.current) {
-                const best = findBestTradeAcrossAllMarkets(marketsRef.current);
+                const best = findBestTradeAcrossAllMarkets(marketsRef.current, undefined, failedContractsRef.current);
                 if (best) {
                     bestTradeRef.current = best;
                     setBestTradeDisplay(best);
@@ -785,9 +823,9 @@ const Scanner = observer(() => {
                         if (tradeActiveRef.current && !tradeInFlightRef.current) {
                             const now = Date.now();
                             if (now - lastTradeTimeRef.current > 3000) {
-                                // Pass the last contract key to avoid repeating
+                                // Pass last contract key (variety) + blacklist (skip API-rejected combos)
                                 const lastKey = bestTradeRef.current?.contractKey;
-                                const best = findBestTradeAcrossAllMarkets(marketsRef.current, lastKey);
+                                const best = findBestTradeAcrossAllMarkets(marketsRef.current, lastKey, failedContractsRef.current);
                                 if (best) {
                                     bestTradeRef.current = best;
                                     setBestTradeDisplay(best);
@@ -796,7 +834,7 @@ const Scanner = observer(() => {
                                 }
                             }
                         } else {
-                            const best = findBestTradeAcrossAllMarkets(marketsRef.current);
+                            const best = findBestTradeAcrossAllMarkets(marketsRef.current, undefined, failedContractsRef.current);
                             if (best) {
                                 bestTradeRef.current = best;
                                 setBestTradeDisplay(best);
