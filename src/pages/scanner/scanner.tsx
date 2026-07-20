@@ -729,6 +729,51 @@ const Scanner = observer(() => {
         ...(trade.barrier ? { barrier: trade.barrier } : {}),
     }), [currency]);
 
+    // ── Balance refresh ──────────────────────────────────────────────────────
+    // After every trade the header balance must update immediately.
+    //
+    // Why it doesn't auto-update reliably:
+    //   • OAuth / Bearer-token users: CoreStoreProvider intentionally SKIPS
+    //     the WS balance subscription and relies on a 30-second REST poll
+    //     instead (line 630: `if (isNewLoggedIn()) return`).
+    //   • Legacy WS users: the WS push usually arrives, but can be delayed by
+    //     several seconds under load.
+    //   • The scanner never triggers any explicit balance re-fetch itself.
+    //
+    // Fix: send a one-shot `balance` request through api_base after every
+    // settled contract.  The response flows through onMessage() → 
+    // CoreStoreProvider.handleMessages → client.setAllAccountsBalance(), so
+    // both auth flows get an immediate, correct balance reading.
+    const refreshBalance = useCallback(async () => {
+        try {
+            if (!api_base.api) return;
+            const res = await (api_base.api as any).send({ balance: 1, account: 'all' });
+            if (!res?.balance) return;
+
+            if (res.balance.accounts) {
+                // Full accounts map — handed straight to the store
+                client.setAllAccountsBalance(res.balance);
+            } else if (res.balance.loginid) {
+                // Single-account update — merge into existing map
+                const b = res.balance;
+                const existing = client.all_accounts_balance?.accounts ?? {};
+                client.setAllAccountsBalance({
+                    accounts: {
+                        ...existing,
+                        [b.loginid]: {
+                            balance:  b.balance  ?? 0,
+                            currency: b.currency || '',
+                            loginid:  b.loginid,
+                        },
+                    },
+                    loginid: b.loginid,
+                });
+            }
+        } catch {
+            // silent — never block a trade result on a balance refresh failure
+        }
+    }, [client]);
+
     // ── Payout drift detection (Mechanism #1) ──
     // Sends two proposals 100ms apart; if payout differs >2% engine is adjusting against us
     const checkPayoutDrift = useCallback(async (trade: BestTrade, stake: number): Promise<boolean> => {
@@ -913,6 +958,15 @@ const Scanner = observer(() => {
             sessionProfitRef.current = totalProfit;
             setSessionProfit(totalProfit);
             setTerminalDashboard(p => [...p, `📈 ${completedRunsRef.current}/${runsToCheckRef.current}: ${profit.toFixed(2)} ${currency} | P/L: ${totalProfit.toFixed(2)} ${currency}`]);
+
+            // ── Immediate balance refresh after every settled trade ──────────
+            // This fixes the balance lag for BOTH auth flows:
+            //   • OAuth users: CoreStoreProvider skips the WS balance
+            //     subscription (isNewLoggedIn check); their balance only
+            //     updates via a 30-second REST poll without this call.
+            //   • WS-auth users: WS push can lag several seconds under load.
+            // We fire-and-forget so it never blocks the trade loop.
+            void refreshBalance();
         } catch (error) {
             const msg = error instanceof Error ? error.message
                 : ((error as any)?.error?.message || (error as any)?.message || JSON.stringify(error).slice(0, 300) || 'Trade failed.');
@@ -922,6 +976,8 @@ const Scanner = observer(() => {
             failedContractsRef.current.set(failKey, failCount);
             if (failCount === 2) setTerminalDashboard(p => [...p, `🚫 ${trade.contractLabel} on ${trade.label} blacklisted`]);
             lastTradeTimeRef.current = Date.now();
+            // Refresh balance even on error — trade may have partially executed
+            void refreshBalance();
         } finally {
             tradeInFlightRef.current = false;
             tradeInFlightStartRef.current = 0;
@@ -930,7 +986,7 @@ const Scanner = observer(() => {
                 if (best) { bestTradeRef.current = best; setBestTradeDisplay(best); }
             }
         }
-    }, [checkPayoutDrift, currency, runSingleTrade, stopTrading]);
+    }, [checkPayoutDrift, currency, refreshBalance, runSingleTrade, stopTrading]);
 
     // ── Load ALL markets ──
     const loadAllMarkets = useCallback(async () => {
@@ -1077,6 +1133,19 @@ const Scanner = observer(() => {
             shouldStopRef.current = true; tradeActiveRef.current = false;
         };
     }, [dashboard, showScanner, stopTrading]);
+
+    // ── Active-trading balance poller ────────────────────────────────────────
+    // Belt-and-suspenders: poll every 10 s while the engine is running so the
+    // header balance stays current even if the one-shot post-trade refresh
+    // above misses a cycle (network blip, fast consecutive trades, etc.).
+    // 10 s is aggressive enough to feel live yet cheap on the WS.
+    useEffect(() => {
+        if (!isWorking && !tradeActiveRef.current) return;
+        const iv = setInterval(() => {
+            if (tradeActiveRef.current || isWorking) void refreshBalance();
+        }, 10_000);
+        return () => clearInterval(iv);
+    }, [isWorking, refreshBalance]);
 
     const startTrading = useCallback((stake: number, sl: number, tp: number, multiplier: number, runs: number) => {
         baseStakeRef.current = stake;
