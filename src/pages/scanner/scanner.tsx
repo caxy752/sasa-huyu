@@ -20,29 +20,32 @@ import './scanner.scss';
 
 type TTickPoint = { epoch: number; quote: number; };
 
-// Every contract type Deriv offers for digit predictions
+// Every contract type Deriv offers for digit predictions.
+// breakEven = minimum win probability to be profitable at typical payout for that contract.
+// Typical digit payout is roughly: payoutPct ≈ (baseChance / (1 - baseChance)) * 0.90
+// breakEven = 1 / (1 + payoutPct). Contracts with condProb < breakEven are losing bets.
 const ALL_CONTRACTS = {
     // Over contracts — barrier is the digit to be "Over"
-    OVER_1:  { type: 'DIGITOVER', barrier: '1', digits: [2,3,4,5,6,7,8,9], label: 'Over 1', cat: 'over' as const },
-    OVER_2:  { type: 'DIGITOVER', barrier: '2', digits: [3,4,5,6,7,8,9],   label: 'Over 2', cat: 'over' as const },
-    OVER_3:  { type: 'DIGITOVER', barrier: '3', digits: [4,5,6,7,8,9],     label: 'Over 3', cat: 'over' as const },
-    OVER_4:  { type: 'DIGITOVER', barrier: '4', digits: [5,6,7,8,9],       label: 'Over 4', cat: 'over' as const },
-    OVER_5:  { type: 'DIGITOVER', barrier: '5', digits: [6,7,8,9],         label: 'Over 5', cat: 'over' as const },
-    OVER_6:  { type: 'DIGITOVER', barrier: '6', digits: [7,8,9],           label: 'Over 6', cat: 'over' as const },
-    OVER_7:  { type: 'DIGITOVER', barrier: '7', digits: [8,9],             label: 'Over 7', cat: 'over' as const },
+    OVER_1:  { type: 'DIGITOVER', barrier: '1', digits: [2,3,4,5,6,7,8,9], label: 'Over 1', cat: 'over' as const,  breakEven: 0.893 },
+    OVER_2:  { type: 'DIGITOVER', barrier: '2', digits: [3,4,5,6,7,8,9],   label: 'Over 2', cat: 'over' as const,  breakEven: 0.820 },
+    OVER_3:  { type: 'DIGITOVER', barrier: '3', digits: [4,5,6,7,8,9],     label: 'Over 3', cat: 'over' as const,  breakEven: 0.730 },
+    OVER_4:  { type: 'DIGITOVER', barrier: '4', digits: [5,6,7,8,9],       label: 'Over 4', cat: 'over' as const,  breakEven: 0.526 },
+    OVER_5:  { type: 'DIGITOVER', barrier: '5', digits: [6,7,8,9],         label: 'Over 5', cat: 'over' as const,  breakEven: 0.417 },
+    OVER_6:  { type: 'DIGITOVER', barrier: '6', digits: [7,8,9],           label: 'Over 6', cat: 'over' as const,  breakEven: 0.313 },
+    OVER_7:  { type: 'DIGITOVER', barrier: '7', digits: [8,9],             label: 'Over 7', cat: 'over' as const,  breakEven: 0.208 },
     // Under contracts
-    UNDER_2: { type: 'DIGITUNDER', barrier: '2', digits: [0,1],            label: 'Under 2', cat: 'under' as const },
-    UNDER_3: { type: 'DIGITUNDER', barrier: '3', digits: [0,1,2],          label: 'Under 3', cat: 'under' as const },
-    UNDER_4: { type: 'DIGITUNDER', barrier: '4', digits: [0,1,2,3],        label: 'Under 4', cat: 'under' as const },
-    UNDER_5: { type: 'DIGITUNDER', barrier: '5', digits: [0,1,2,3,4],      label: 'Under 5', cat: 'under' as const },
-    UNDER_6: { type: 'DIGITUNDER', barrier: '6', digits: [0,1,2,3,4,5],    label: 'Under 6', cat: 'under' as const },
-    UNDER_7: { type: 'DIGITUNDER', barrier: '7', digits: [0,1,2,3,4,5,6],  label: 'Under 7', cat: 'under' as const },
+    UNDER_2: { type: 'DIGITUNDER', barrier: '2', digits: [0,1],            label: 'Under 2', cat: 'under' as const, breakEven: 0.208 },
+    UNDER_3: { type: 'DIGITUNDER', barrier: '3', digits: [0,1,2],          label: 'Under 3', cat: 'under' as const, breakEven: 0.313 },
+    UNDER_4: { type: 'DIGITUNDER', barrier: '4', digits: [0,1,2,3],        label: 'Under 4', cat: 'under' as const, breakEven: 0.417 },
+    UNDER_5: { type: 'DIGITUNDER', barrier: '5', digits: [0,1,2,3,4],      label: 'Under 5', cat: 'under' as const, breakEven: 0.526 },
+    UNDER_6: { type: 'DIGITUNDER', barrier: '6', digits: [0,1,2,3,4,5],    label: 'Under 6', cat: 'under' as const, breakEven: 0.730 },
+    UNDER_7: { type: 'DIGITUNDER', barrier: '7', digits: [0,1,2,3,4,5,6],  label: 'Under 7', cat: 'under' as const, breakEven: 0.820 },
     // Even / Odd
-    EVEN:    { type: 'DIGITEVEN', barrier: '', digits: [0,2,4,6,8],        label: 'Even',    cat: 'parity' as const },
-    ODD:     { type: 'DIGITODD',  barrier: '', digits: [1,3,5,7,9],        label: 'Odd',     cat: 'parity' as const },
+    EVEN:    { type: 'DIGITEVEN', barrier: '', digits: [0,2,4,6,8],        label: 'Even',    cat: 'parity' as const, breakEven: 0.513 },
+    ODD:     { type: 'DIGITODD',  barrier: '', digits: [1,3,5,7,9],        label: 'Odd',     cat: 'parity' as const, breakEven: 0.513 },
     // Rise / Fall (CALL/PUT)
-    RISE:    { type: 'CALL', barrier: '', digits: [],                       label: 'Rise',    cat: 'risefall' as const },
-    FALL:    { type: 'PUT',  barrier: '', digits: [],                       label: 'Fall',    cat: 'risefall' as const },
+    RISE:    { type: 'CALL', barrier: '', digits: [],                       label: 'Rise',    cat: 'risefall' as const, breakEven: 0.513 },
+    FALL:    { type: 'PUT',  barrier: '', digits: [],                       label: 'Fall',    cat: 'risefall' as const, breakEven: 0.513 },
 };
 
 type ContractKey = keyof typeof ALL_CONTRACTS;
@@ -62,11 +65,18 @@ const MARKETS = [
 ];
 
 // ═══════════════════════════════════════════════════════════════
-// LAYER 1: HIDDEN DIGIT EXTRACTION (CSPRNG STATE LEAKAGE)
-// Deriv's CSPRNG generates prices with high precision.
-// The 5th, 6th, 7th decimal places are internal PRNG state bits
-// that leak information about the NEXT tick's last digit.
+// DIGIT EXTRACTION HELPERS
 // ═══════════════════════════════════════════════════════════════
+
+// Settlement digit: matches Deriv's exact formula floor(price*1000) % 10
+const getSettlementDigit = (quote: number): number =>
+    Math.floor(Math.abs(quote) * 1000) % 10;
+
+// 4th decimal digit (first hidden position) — carry-over signal at low prices
+const getFourthDecimal = (quote: number): number =>
+    Math.floor(Math.abs(quote) * 10000) % 10;
+
+// CSPRNG hidden digit leakage (5th–7th decimal positions)
 const extractHiddenDigits = (quote: number): number[] => {
     const s = quote.toFixed(8);
     const parts = s.split('.');
@@ -90,8 +100,18 @@ const extractHiddenDigits = (quote: number): number[] => {
 interface ProbMatrix {
     // Hidden digit CSPRNG leakage: hiddenDigit -> count of each next last digit
     hiddenToNext: Record<number, number[]>;
-    // Digit transition: fromDigit -> count of each toDigit
+    // 1-step digit transition: fromDigit -> count of each toDigit (tick N → N+1)
     digitTransitions: number[][];
+    // ── FIX FLAW #2: 2-step transition matrix (tick N → N+2) ──
+    // Accounts for the real entry gap: you observe tick N, server enters at N+1, exits at N+2.
+    // This is the PRIMARY prediction signal replacing the 1-step matrix.
+    digitTransitions2: number[][];
+    // Previous two digits for building the 2-step matrix each tick
+    lastTwoDigits: [number, number] | null;
+    // Current settlement digit (3rd decimal) — used for 2-step lookup
+    lastSettlementDigit: number | null;
+    // 4th decimal digit — carry-over signal when ≥8 at low prices
+    lastFourthDecimal: number | null;
     // Streak reversion: how often 3+ high/low digits reverse
     streakReversion: { high: { flipped: number; total: number }; low: { flipped: number; total: number } };
     // Parity correlation
@@ -102,6 +122,18 @@ interface ProbMatrix {
     tickDirectionTotal: number;
     priceUpCount: number; // raw count of ticks where price went up
     priceTotalCount: number; // total tick pairs counted
+    // ── Integer boundary crossing detection ──
+    // When price crosses a whole integer (e.g. 1234.999 → 1235.000 or vice versa),
+    // the digit resets and price momentum creates a measurable directional bias.
+    integerBoundaryCrossDir: 'up' | 'down' | null;
+    integerBoundaryTicksAgo: number;  // ticks since last crossing; 0 = no active signal
+    // ── Chi-square seed rotation detection ──
+    // Tracks digit frequency over a rolling 100-tick window to detect distribution shifts
+    // (indicating the PRNG seed may have rotated, making the existing matrix stale).
+    recentDigitCounts: number[];   // 10-element: digit frequency in last 100 ticks
+    recentDigitBuffer: number[];   // ring buffer of last 100 settlement digits
+    recentDigitIdx: number;        // write head into ring buffer (mod 100)
+    seedRotationDetected: boolean; // true when chi-square > critical value (matrix stale)
     // Stats
     totalSamples: number;
     lastHiddenDigit: number | null;
@@ -118,7 +150,11 @@ const initProbMatrix = (): ProbMatrix => {
     for (let d = 0; d <= 9; d++) hiddenToNext[d] = new Array(10).fill(0);
     return {
         hiddenToNext,
-        digitTransitions: Array.from({ length: 10 }, () => new Array(10).fill(0)),
+        digitTransitions:  Array.from({ length: 10 }, () => new Array(10).fill(0)),
+        digitTransitions2: Array.from({ length: 10 }, () => new Array(10).fill(0)),
+        lastTwoDigits: null,
+        lastSettlementDigit: null,
+        lastFourthDecimal: null,
         streakReversion: { high: { flipped: 0, total: 0 }, low: { flipped: 0, total: 0 } },
         parityCorrelation: { hiddenEven_to_nextEven: 0, hiddenEven_to_nextOdd: 0, hiddenOdd_to_nextEven: 0, hiddenOdd_to_nextOdd: 0 },
         tickDirectionToDigitUp: 0,
@@ -126,6 +162,12 @@ const initProbMatrix = (): ProbMatrix => {
         tickDirectionTotal: 0,
         priceUpCount: 0,
         priceTotalCount: 0,
+        integerBoundaryCrossDir: null,
+        integerBoundaryTicksAgo: 0,
+        recentDigitCounts: new Array(10).fill(0),
+        recentDigitBuffer: new Array(100).fill(-1),
+        recentDigitIdx: 0,
+        seedRotationDetected: false,
         totalSamples: 0,
         lastHiddenDigit: null,
         bestContract: null,
@@ -144,27 +186,39 @@ const updateProbMatrix = (pm: ProbMatrix, prevQuote: number, currentQuote: numbe
     const newPm: ProbMatrix = {
         ...pm,
         hiddenToNext: { ...pm.hiddenToNext },
-        digitTransitions: pm.digitTransitions.map(row => [...row]),
+        digitTransitions:  pm.digitTransitions.map(row => [...row]),
+        digitTransitions2: pm.digitTransitions2.map(row => [...row]),
         streakReversion: { high: { ...pm.streakReversion.high }, low: { ...pm.streakReversion.low } },
         parityCorrelation: { ...pm.parityCorrelation },
+        recentDigitCounts: [...pm.recentDigitCounts],
+        recentDigitBuffer: [...pm.recentDigitBuffer],
         totalSamples: pm.totalSamples + 1,
         lastHiddenDigit: primaryHidden,
+        lastSettlementDigit: currDigit,
+        lastFourthDecimal: getFourthDecimal(currentQuote),
     };
 
-    // 1. Hidden digit → next last digit
+    // 1. Hidden digit → next last digit (CSPRNG leakage)
     if (primaryHidden >= 0 && primaryHidden <= 9) {
         const row = [...newPm.hiddenToNext[primaryHidden]];
         row[currDigit] += 1;
         newPm.hiddenToNext[primaryHidden] = row;
     }
 
-    // 2. Digit transition matrix
+    // 2. 1-step digit transition matrix (tick N → N+1)
     newPm.digitTransitions[prevDigit][currDigit] += 1;
 
-    // 3. Streak reversion — track on every tick via context outside
-    // (handled separately with streak tracking)
+    // ── FIX FLAW #2: 2-step transition matrix (tick N → N+2) ──
+    // prevDigit = tick[N-1], currDigit = tick[N]
+    // lastTwoDigits[0] = tick[N-2] from the previous call
+    // So: digitTransitions2[tick[N-2]][tick[N]] = N→N+2 gap
+    if (pm.lastTwoDigits !== null) {
+        const twoBack = pm.lastTwoDigits[0]; // tick N-2
+        newPm.digitTransitions2[twoBack][currDigit] += 1;
+    }
+    newPm.lastTwoDigits = [prevDigit, currDigit];
 
-    // 4. Parity correlation
+    // 3. Parity correlation
     const hiddenIsEven = primaryHidden % 2 === 0;
     const currIsEven = currDigit % 2 === 0;
     if (hiddenIsEven && currIsEven) newPm.parityCorrelation.hiddenEven_to_nextEven += 1;
@@ -172,7 +226,7 @@ const updateProbMatrix = (pm: ProbMatrix, prevQuote: number, currentQuote: numbe
     else if (!hiddenIsEven && currIsEven) newPm.parityCorrelation.hiddenOdd_to_nextEven += 1;
     else newPm.parityCorrelation.hiddenOdd_to_nextOdd += 1;
 
-    // 5. Tick direction vs digit change
+    // 4. Tick direction vs digit change
     const priceUp = currentQuote > prevQuote;
     const digitUp = currDigit > prevDigit;
     if (priceUp && digitUp) newPm.tickDirectionToDigitUp += 1;
@@ -180,6 +234,42 @@ const updateProbMatrix = (pm: ProbMatrix, prevQuote: number, currentQuote: numbe
     newPm.tickDirectionTotal += 1;
     newPm.priceUpCount = pm.priceUpCount + (priceUp ? 1 : 0);
     newPm.priceTotalCount = pm.priceTotalCount + 1;
+
+    // ── Integer boundary crossing detection ──
+    // When price crosses a whole number (e.g. 1234.999→1235.000), digit resets and
+    // price momentum creates a directional bias for the next 5-15 ticks.
+    const prevFloor = Math.floor(prevQuote);
+    const currFloor = Math.floor(currentQuote);
+    if (prevFloor !== currFloor) {
+        newPm.integerBoundaryCrossDir = currentQuote > prevQuote ? 'up' : 'down';
+        newPm.integerBoundaryTicksAgo = 1;
+    } else if (pm.integerBoundaryTicksAgo > 0 && pm.integerBoundaryTicksAgo < 20) {
+        newPm.integerBoundaryTicksAgo = pm.integerBoundaryTicksAgo + 1;
+    } else {
+        newPm.integerBoundaryCrossDir = null;
+        newPm.integerBoundaryTicksAgo = 0;
+    }
+
+    // ── Chi-square seed rotation detection ──
+    // Track digit frequency in a rolling 100-tick window.
+    // If distribution deviates significantly from uniform (χ² > 21.67, df=9, p=0.01),
+    // flag the matrix as stale so evaluateOverUnder reduces its confidence.
+    const outgoingIdx = newPm.recentDigitIdx % 100;
+    const outgoingDigit = newPm.recentDigitBuffer[outgoingIdx];
+    if (outgoingDigit >= 0) newPm.recentDigitCounts[outgoingDigit] -= 1;
+    newPm.recentDigitBuffer[outgoingIdx] = currDigit;
+    newPm.recentDigitCounts[currDigit] += 1;
+    newPm.recentDigitIdx = (newPm.recentDigitIdx + 1) % 100;
+
+    if (newPm.totalSamples >= 100 && newPm.totalSamples % 50 === 0) {
+        // χ² against uniform (expected = 10 per digit in 100-tick window)
+        let chiSq = 0;
+        for (let d = 0; d <= 9; d++) {
+            const obs = newPm.recentDigitCounts[d];
+            chiSq += Math.pow(obs - 10, 2) / 10;
+        }
+        newPm.seedRotationDetected = chiSq > 21.67; // p=0.01 threshold
+    }
 
     // ── Recompute best contracts after every update ──
     if (newPm.totalSamples >= 50) {
@@ -226,113 +316,173 @@ const computeBestContracts = (pm: ProbMatrix) => {
     pm.bestRiseFall = bestRF;
 };
 
-// ── Over/Under probability ──
+// ═══════════════════════════════════════════════════════════════
+// CORRECTED OVER/UNDER PROBABILITY ENGINE
+//
+// Returns the TRUE conditional probability (0–1), not an amplified score.
+// This value is directly comparable to breakEven for +EV filtering.
+//
+// Signal hierarchy (highest to lowest reliability):
+//   1. 2-step transition matrix [tick N → N+2] — accounts for real entry gap
+//   2. CSPRNG hidden digit leakage (5th decimal)
+//   3. Integer boundary crossing momentum
+//   4. 4th decimal carry-over at low prices
+//
+// Minimum samples per matrix cell: 10. Cells below this threshold contribute
+// nothing (noise floor) so we fall back to the base rate.
+// ═══════════════════════════════════════════════════════════════
 const evaluateOverUnder = (pm: ProbMatrix, key: ContractKey): number => {
     const c = ALL_CONTRACTS[key];
     if (c.cat !== 'over' && c.cat !== 'under') return 0.5;
 
     const winningDigits = c.digits;
-    if (winningDigits.length === 0) return 0.08;
+    if (winningDigits.length === 0) return 0.05;
 
-    // Start with random baseline (fair comparison across all contract types)
-    let prob = 0.5;
+    const baseChance = winningDigits.length / 10;
 
-    // CSPRNG hidden digit leakage — this is the REAL edge
+    // Reduce confidence when seed rotation detected (matrix is stale)
+    if (pm.seedRotationDetected) return baseChance;
+
+    let condProb = baseChance; // default: no edge information
+
+    // ── Signal 1: 2-step transition matrix (primary) ──
+    // P(digit at N+2 | current digit N) — correct for the real entry gap
+    const currentDigit = pm.lastSettlementDigit;
+    if (currentDigit !== null) {
+        const row2 = pm.digitTransitions2[currentDigit];
+        const cellTotal = row2.reduce((a, b) => a + b, 0);
+        if (cellTotal >= 10) { // FIX: minimum 10 samples per cell — below this is pure noise
+            let winCount = 0;
+            for (const d of winningDigits) winCount += row2[d];
+            const twoStepProb = winCount / cellTotal;
+            // Blend: 2-step gets 70% weight (primary signal)
+            condProb = condProb * 0.30 + twoStepProb * 0.70;
+        }
+    }
+
+    // ── Signal 2: CSPRNG hidden digit leakage (secondary) ──
     const currentHidden = pm.lastHiddenDigit;
     if (currentHidden !== null && currentHidden >= 0 && currentHidden <= 9) {
         const hiddenRow = pm.hiddenToNext[currentHidden];
         const hiddenTotal = hiddenRow.reduce((a, b) => a + b, 0);
-        if (hiddenTotal >= 5) {
+        if (hiddenTotal >= 10) {
             let winCount = 0;
             for (const d of winningDigits) winCount += hiddenRow[d];
             const hiddenProb = winCount / hiddenTotal;
-            // Edge = hiddenProb - base random chance; amplify 3x
-            const baseChance = winningDigits.length / 10;
-            const edge = hiddenProb - baseChance;
-            prob = 0.5 + edge * 3;
+            // Blend: hidden leakage 30% weight — supplements but doesn't override 2-step
+            condProb = condProb * 0.70 + hiddenProb * 0.30;
         }
     }
 
-    // Transition matrix adds additional signal (edge only, not raw rate)
-    let transEdge = 0;
-    let transCount = 0;
-    for (let from = 0; from <= 9; from++) {
-        const row = pm.digitTransitions[from];
-        const rowTotal = row.reduce((a, b) => a + b, 0);
-        if (rowTotal > 5) {
-            let winCount = 0;
-            for (const d of winningDigits) winCount += row[d];
-            const transProb = winCount / rowTotal;
-            const baseChance = winningDigits.length / 10;
-            transEdge += transProb - baseChance;
-            transCount++;
+    // ── Signal 3: Integer boundary crossing momentum ──
+    // After upward crossing (9→0): price momentum → Over 5/6 favorable (ticks 2–15)
+    // After downward crossing (0→9): price momentum → Under 4/5 favorable (ticks 2–15)
+    if (pm.integerBoundaryCrossDir !== null &&
+        pm.integerBoundaryTicksAgo >= 2 &&
+        pm.integerBoundaryTicksAgo <= 15) {
+        const strength = (16 - pm.integerBoundaryTicksAgo) / 14; // 1.0 → 0.07 over 14 ticks
+        const boost = strength * 0.09;
+        if (pm.integerBoundaryCrossDir === 'up' && c.cat === 'over' && parseInt(c.barrier) >= 5) {
+            condProb = condProb + boost;
+        } else if (pm.integerBoundaryCrossDir === 'down' && c.cat === 'under' && parseInt(c.barrier) <= 5) {
+            condProb = condProb + boost;
+        } else if (pm.integerBoundaryCrossDir === 'up' && c.cat === 'under' && parseInt(c.barrier) <= 4) {
+            condProb = condProb - boost * 0.6; // penalise opposing direction
+        } else if (pm.integerBoundaryCrossDir === 'down' && c.cat === 'over' && parseInt(c.barrier) >= 6) {
+            condProb = condProb - boost * 0.6;
         }
     }
-    if (transCount > 0) {
-        const avgTransEdge = transEdge / transCount;
-        prob += avgTransEdge * 2;
+
+    // ── Signal 4: 4th decimal carry-over (effective only at low absolute prices) ──
+    // When 4th decimal is 8 or 9, a tiny upward move increments the 3rd decimal.
+    // This is a real signal but only meaningful when price < 500 (small per-tick moves).
+    if (pm.lastFourthDecimal !== null && pm.lastSettlementDigit !== null) {
+        const fourth = pm.lastFourthDecimal;
+        const settl = pm.lastSettlementDigit;
+        if (fourth >= 8 && settl < 9) {
+            // 3rd decimal is likely to increment next tick
+            const nextDigit = settl + 1;
+            if (winningDigits.includes(nextDigit)) condProb = condProb + 0.04;
+        } else if (fourth <= 1 && settl > 0) {
+            // 3rd decimal is likely to decrement next tick
+            const nextDigit = settl - 1;
+            if (winningDigits.includes(nextDigit)) condProb = condProb + 0.04;
+        }
     }
 
-    return Math.min(0.92, Math.max(0.08, prob));
+    return Math.min(0.95, Math.max(0.05, condProb));
 };
 
-// ── Even/Odd probability — uses all 3 signals on equal footing with Over/Under ──
+// ── Even/Odd probability — same mathematical treatment as Over/Under ──
+// Returns TRUE conditional probability (0–1), not amplified score.
 const evaluateParity = (pm: ProbMatrix, key: ContractKey): number => {
     const isEven = key === 'EVEN';
     const winningDigits = isEven ? [0, 2, 4, 6, 8] : [1, 3, 5, 7, 9];
 
-    // Signal 1: Hidden digit CSPRNG leakage (same method as Over/Under)
-    let hiddenEdge = 0;
+    if (pm.seedRotationDetected) return 0.5;
+
+    let condProb = 0.5; // even/odd base rate is always exactly 50%
+
+    // ── Signal 1: 2-step transition matrix (primary) ──
+    const currentDigit = pm.lastSettlementDigit;
+    if (currentDigit !== null) {
+        const row2 = pm.digitTransitions2[currentDigit];
+        const cellTotal = row2.reduce((a, b) => a + b, 0);
+        if (cellTotal >= 10) {
+            let winCount = 0;
+            for (const d of winningDigits) winCount += row2[d];
+            const twoStepProb = winCount / cellTotal;
+            condProb = condProb * 0.30 + twoStepProb * 0.70;
+        }
+    }
+
+    // ── Signal 2: Hidden digit CSPRNG leakage ──
     const currentHidden = pm.lastHiddenDigit;
     if (currentHidden !== null && currentHidden >= 0 && currentHidden <= 9) {
         const hiddenRow = pm.hiddenToNext[currentHidden];
         const hiddenTotal = hiddenRow.reduce((a, b) => a + b, 0);
-        if (hiddenTotal >= 5) {
+        if (hiddenTotal >= 10) {
             let winCount = 0;
             for (const d of winningDigits) winCount += hiddenRow[d];
-            hiddenEdge = (winCount / hiddenTotal - 0.5) * 2.5;
+            condProb = condProb * 0.70 + (winCount / hiddenTotal) * 0.30;
         }
     }
 
-    // Signal 2: Parity correlation (hidden digit parity predicts next digit parity)
-    let parityEdge = 0;
+    // ── Signal 3: Parity correlation (hidden parity predicts next digit parity) ──
     if (currentHidden !== null) {
         const hiddenIsEven = currentHidden % 2 === 0;
         const denom = hiddenIsEven
             ? (pm.parityCorrelation.hiddenEven_to_nextEven + pm.parityCorrelation.hiddenEven_to_nextOdd)
             : (pm.parityCorrelation.hiddenOdd_to_nextEven + pm.parityCorrelation.hiddenOdd_to_nextOdd);
-        if (denom >= 5) {
+        if (denom >= 10) {
             let matchCount = 0;
             if (hiddenIsEven && isEven) matchCount = pm.parityCorrelation.hiddenEven_to_nextEven;
             else if (hiddenIsEven && !isEven) matchCount = pm.parityCorrelation.hiddenEven_to_nextOdd;
             else if (!hiddenIsEven && isEven) matchCount = pm.parityCorrelation.hiddenOdd_to_nextEven;
             else matchCount = pm.parityCorrelation.hiddenOdd_to_nextOdd;
-            parityEdge = (matchCount / denom - 0.5) * 2.0;
+            const parityProb = matchCount / denom;
+            // Blend the parity signal in gently (10% weight)
+            condProb = condProb * 0.90 + parityProb * 0.10;
         }
     }
 
-    // Signal 3: Overall parity trend from transition matrix
-    let evenCount = 0, oddCount = 0;
-    for (let from = 0; from <= 9; from++) {
-        const row = pm.digitTransitions[from];
-        for (let d = 0; d <= 9; d++) {
-            if (d % 2 === 0) evenCount += row[d];
-            else oddCount += row[d];
-        }
-    }
-    const total = evenCount + oddCount;
-    const transEdge = total > 0 ? ((isEven ? evenCount / total : oddCount / total) - 0.5) * 1.0 : 0;
-
-    return Math.min(0.92, Math.max(0.08, 0.5 + hiddenEdge + parityEdge + transEdge));
+    return Math.min(0.95, Math.max(0.05, condProb));
 };
 
-// ── Rise/Fall probability — computed from actual price direction data ──
+// ── Rise/Fall probability — price direction momentum, returns true condProb (0–1) ──
 const evaluateRiseFall = (pm: ProbMatrix, key: ContractKey): number => {
     const isRise = key === 'RISE';
-    if (pm.priceTotalCount < 20) return 0.5;
+    if (pm.priceTotalCount < 30 || pm.seedRotationDetected) return 0.5;
     const upRate = pm.priceUpCount / pm.priceTotalCount;
-    const edge = (isRise ? upRate : (1 - upRate)) - 0.5;
-    return Math.min(0.75, Math.max(0.25, 0.5 + edge * 2));
+    // upRate is the empirical probability price goes up on the next tick
+    const condProb = isRise ? upRate : (1 - upRate);
+    // Integer boundary: after upward crossing price momentum = bullish → Rise
+    if (pm.integerBoundaryCrossDir !== null && pm.integerBoundaryTicksAgo >= 2 && pm.integerBoundaryTicksAgo <= 12) {
+        const strength = (13 - pm.integerBoundaryTicksAgo) / 11;
+        if (pm.integerBoundaryCrossDir === 'up' && isRise)       return Math.min(0.80, condProb + strength * 0.08);
+        if (pm.integerBoundaryCrossDir === 'down' && !isRise)    return Math.min(0.80, condProb + strength * 0.08);
+    }
+    return Math.min(0.80, Math.max(0.20, condProb));
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -399,68 +549,131 @@ interface BestTrade {
     contractType: string;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// MARKET SCANNER — FINDS THE SINGLE BEST +EV TRADE
+//
+// Key fixes vs old version:
+//   1. Break-even gate: condProb must exceed contract's breakEven + EDGE_MARGIN.
+//      Trades below break-even are losing bets regardless of how the scanner ranks them.
+//   2. Cross-market bias confirmation: only select a direction when ≥2 markets
+//      independently show the same directional bias. Single-market signals are weaker.
+//   3. Minimum samples: 2-step matrix needs ≥100 total samples; below this the
+//      cell estimates are noise (wide confidence intervals).
+//   4. Seed rotation guard: markets with stale matrices (seed rotation detected) are
+//      deprioritised — their probability estimates may describe a different sequence.
+// ═══════════════════════════════════════════════════════════════
+const EDGE_MARGIN = 0.03; // minimum condProb above break-even to trade
+
+// Compute directional bias for a market (used for cross-market confirmation)
+const getMarketBias = (pm: ProbMatrix): 'over' | 'under' | 'none' => {
+    if (pm.totalSamples < 100) return 'none';
+    // Count recent digit distribution in last 100 ticks
+    const highCount = pm.recentDigitCounts.slice(6).reduce((a, b) => a + b, 0); // 6,7,8,9
+    const lowCount  = pm.recentDigitCounts.slice(0, 4).reduce((a, b) => a + b, 0); // 0,1,2,3
+    if (highCount > 55) return 'over';   // >55% of last 100 ticks are high digits
+    if (lowCount  > 55) return 'under';
+    // Integer boundary signal counts as directional bias
+    if (pm.integerBoundaryCrossDir === 'up'   && pm.integerBoundaryTicksAgo <= 15) return 'over';
+    if (pm.integerBoundaryCrossDir === 'down' && pm.integerBoundaryTicksAgo <= 15) return 'under';
+    return 'none';
+};
+
 const findBestTradeAcrossAllMarkets = (
     markets: Record<string, MarketState>,
     lastTradeKey?: string,
     blacklist?: Map<string, number>
 ): BestTrade | null => {
+    // ── Cross-market bias confirmation ──
+    // Count how many markets independently show the same directional bias.
+    // Trading only when ≥2 markets agree filters out noise from single-market signals.
+    let overCount = 0, underCount = 0, neutralCount = 0;
+    for (const symbol of Object.keys(markets)) {
+        const ms = markets[symbol];
+        if (!ms || ms.pm.totalSamples < 100) continue;
+        const bias = getMarketBias(ms.pm);
+        if (bias === 'over') overCount++;
+        else if (bias === 'under') underCount++;
+        else neutralCount++;
+    }
+    const dominantBias: 'over' | 'under' | 'neutral' =
+        overCount >= 2 && overCount > underCount * 1.5 ? 'over' :
+        underCount >= 2 && underCount > overCount * 1.5 ? 'under' :
+        'neutral';
+
     let best: BestTrade | null = null;
-    let bestAlternative: BestTrade | null = null; // different contract from last trade
+    let bestEdge = 0; // condProb - breakEven for the best candidate
+    let bestAlternative: BestTrade | null = null;
+    let bestAltEdge = 0;
 
     for (const symbol of Object.keys(markets)) {
         const ms = markets[symbol];
-        if (!ms || ms.ticks.length < 100 || ms.pm.totalSamples < 50) continue;
+        // ── FIX: Require ≥100 samples before trusting matrix estimates ──
+        if (!ms || ms.ticks.length < 100 || ms.pm.totalSamples < 100) continue;
 
         const marketLabel = MARKETS.find(m => m.symbol === symbol)?.label || symbol;
 
         for (const key of Object.keys(ALL_CONTRACTS) as ContractKey[]) {
-            // Skip contract+market combos that have failed repeatedly (API doesn't support them)
+            // Skip API-blacklisted combos
             if (blacklist && (blacklist.get(`${key}|${symbol}`) ?? 0) >= 2) continue;
 
             const c = ALL_CONTRACTS[key];
-            let prob = 0.5;
 
+            // Under cross-market bias confirmation: if dominant bias is 'over', skip Under contracts;
+            // if dominant bias is 'under', skip Over contracts (unless no bias detected = neutral).
+            if (dominantBias === 'over'  && c.cat === 'under') continue;
+            if (dominantBias === 'under' && c.cat === 'over')  continue;
+
+            // Compute true conditional probability
+            let condProb: number;
             if (c.cat === 'over' || c.cat === 'under') {
-                prob = evaluateOverUnder(ms.pm, key);
+                condProb = evaluateOverUnder(ms.pm, key);
             } else if (c.cat === 'parity') {
-                prob = evaluateParity(ms.pm, key);
-            } else if (c.cat === 'risefall') {
-                prob = evaluateRiseFall(ms.pm, key);
+                condProb = evaluateParity(ms.pm, key);
+            } else {
+                condProb = evaluateRiseFall(ms.pm, key);
             }
 
-            // Streak reversal bonus
+            // Streak reversal bonus — add to condProb directly (max 5% bump)
             if (ms.streak.streakCount >= 3 && (c.cat === 'over' || c.cat === 'under')) {
                 const highStreak = ms.streak.lastRange === 'high';
-                const lowStreak = ms.streak.lastRange === 'low';
-                if ((highStreak && c.cat === 'under') || (lowStreak && c.cat === 'over')) prob += 0.10;
+                const lowStreak  = ms.streak.lastRange === 'low';
+                if ((highStreak && c.cat === 'under') || (lowStreak && c.cat === 'over')) {
+                    condProb = Math.min(0.95, condProb + 0.05);
+                }
             }
 
-            // evaluateOverUnder/evaluateParity/evaluateRiseFall already return edge-normalised values
-            // (all anchored to 0.5 baseline). No further normalisation needed here.
-            prob = Math.min(0.92, Math.max(0.08, prob));
+            // ── FIX FLAW #3: Break-even gate ──
+            // Only trade when condProb > breakEven + EDGE_MARGIN.
+            // Without this check we could trade on a 55% estimate that requires 73% to profit.
+            const edge = condProb - c.breakEven;
+            if (edge < EDGE_MARGIN) continue; // not +EV — skip
+
+            // Deprioritise markets with stale matrices
+            const effectiveEdge = ms.pm.seedRotationDetected ? edge * 0.5 : edge;
 
             const trade: BestTrade = {
                 symbol, label: marketLabel, contractKey: key,
-                contractLabel: c.label, probability: Math.round(prob * 100),
+                contractLabel: c.label,
+                probability: Math.round(condProb * 100),
                 barrier: c.barrier, contractType: c.type,
             };
 
-            // Track best overall
-            if (prob > (best?.probability ?? 0) / 100) best = trade;
+            // Rank by edge (condProb - breakEven), not raw condProb
+            if (effectiveEdge > bestEdge) { bestEdge = effectiveEdge; best = trade; }
 
-            // Track best DIFFERENT from last trade
+            // Track best DIFFERENT from last trade (variety)
             if (lastTradeKey && key !== lastTradeKey) {
-                if (prob > (bestAlternative?.probability ?? 0) / 100) bestAlternative = trade;
+                if (effectiveEdge > bestAltEdge) { bestAltEdge = effectiveEdge; bestAlternative = trade; }
             }
         }
     }
 
-    // If last trade exists and alternative is within 10% of best, use alternative for variety
-    if (lastTradeKey && bestAlternative && best && (bestAlternative.probability >= best.probability - 10)) {
+    // Prefer variety: if an alternative has ≥80% of best's edge, use it
+    if (lastTradeKey && bestAlternative && bestAltEdge >= bestEdge * 0.80) {
         return bestAlternative;
     }
 
-    return best && best.probability >= 50 ? best : null;
+    return best; // null if no +EV trade found — engine will wait for next tick
 };
 
 // ═══════════════════════════════════════════════════════════════
