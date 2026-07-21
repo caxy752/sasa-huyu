@@ -36,19 +36,44 @@ type TTickPoint = { epoch: number; quote: number; };
 // Over/Under 0-4, Even, Odd, Rise, Fall: break-even > realistic win rate → never trade
 // Over/Under 5-8: break-even (41% / 31% / 20% / 11%) is achievable at correct price ranges
 const ALL_CONTRACTS = {
-    OVER_5:  { type: 'DIGITOVER',  barrier: '5', digits: [6,7,8,9],         label: 'Over 5',  cat: 'over' as const,  breakEven: 0.417 },
-    OVER_6:  { type: 'DIGITOVER',  barrier: '6', digits: [7,8,9],           label: 'Over 6',  cat: 'over' as const,  breakEven: 0.313 },
-    OVER_7:  { type: 'DIGITOVER',  barrier: '7', digits: [8,9],             label: 'Over 7',  cat: 'over' as const,  breakEven: 0.208 },
-    OVER_8:  { type: 'DIGITOVER',  barrier: '8', digits: [9],               label: 'Over 8',  cat: 'over' as const,  breakEven: 0.110 },
-    UNDER_5: { type: 'DIGITUNDER', barrier: '5', digits: [0,1,2,3,4],       label: 'Under 5', cat: 'under' as const, breakEven: 0.526 },
-    UNDER_6: { type: 'DIGITUNDER', barrier: '6', digits: [0,1,2,3,4,5],     label: 'Under 6', cat: 'under' as const, breakEven: 0.313 },
-    UNDER_7: { type: 'DIGITUNDER', barrier: '7', digits: [0,1,2,3,4,5,6],   label: 'Under 7', cat: 'under' as const, breakEven: 0.208 },
-    UNDER_8: { type: 'DIGITUNDER', barrier: '8', digits: [0,1,2,3,4,5,6,7], label: 'Under 8', cat: 'under' as const, breakEven: 0.110 },
+    // ── OVER contracts (kept for matrix analysis only — NOT in VIABLE_CONTRACTS) ──
+    OVER_5:     { type: 'DIGITOVER',   barrier: '5', digits: [6,7,8,9],               label: 'Over 5',     cat: 'over' as const,    breakEven: 0.417 },
+    OVER_6:     { type: 'DIGITOVER',   barrier: '6', digits: [7,8,9],                 label: 'Over 6',     cat: 'over' as const,    breakEven: 0.313 },
+    OVER_7:     { type: 'DIGITOVER',   barrier: '7', digits: [8,9],                   label: 'Over 7',     cat: 'over' as const,    breakEven: 0.208 },
+    OVER_8:     { type: 'DIGITOVER',   barrier: '8', digits: [9],                     label: 'Over 8',     cat: 'over' as const,    breakEven: 0.110 },
+    // ── HIGH-PROBABILITY UNDER contracts (70–90% base win rate) ──
+    UNDER_7:    { type: 'DIGITUNDER',  barrier: '7', digits: [0,1,2,3,4,5,6],         label: 'Under 7',    cat: 'under' as const,   breakEven: 0.208 },
+    UNDER_8:    { type: 'DIGITUNDER',  barrier: '8', digits: [0,1,2,3,4,5,6,7],       label: 'Under 8',    cat: 'under' as const,   breakEven: 0.110 },
+    UNDER_9:    { type: 'DIGITUNDER',  barrier: '9', digits: [0,1,2,3,4,5,6,7,8],     label: 'Under 9',    cat: 'under' as const,   breakEven: 0.110 },
+    // ── DIGITDIFFERS (90% base win rate — nine winning digits each) ──
+    DIFFERS_0:  { type: 'DIGITDIFFERS', barrier: '0', digits: [1,2,3,4,5,6,7,8,9],   label: 'Differs 0',  cat: 'differs' as const, breakEven: 0.111 },
+    DIFFERS_1:  { type: 'DIGITDIFFERS', barrier: '1', digits: [0,2,3,4,5,6,7,8,9],   label: 'Differs 1',  cat: 'differs' as const, breakEven: 0.111 },
+    DIFFERS_2:  { type: 'DIGITDIFFERS', barrier: '2', digits: [0,1,3,4,5,6,7,8,9],   label: 'Differs 2',  cat: 'differs' as const, breakEven: 0.111 },
+    DIFFERS_3:  { type: 'DIGITDIFFERS', barrier: '3', digits: [0,1,2,4,5,6,7,8,9],   label: 'Differs 3',  cat: 'differs' as const, breakEven: 0.111 },
+    DIFFERS_4:  { type: 'DIGITDIFFERS', barrier: '4', digits: [0,1,2,3,5,6,7,8,9],   label: 'Differs 4',  cat: 'differs' as const, breakEven: 0.111 },
+    DIFFERS_5:  { type: 'DIGITDIFFERS', barrier: '5', digits: [0,1,2,3,4,6,7,8,9],   label: 'Differs 5',  cat: 'differs' as const, breakEven: 0.111 },
+    DIFFERS_6:  { type: 'DIGITDIFFERS', barrier: '6', digits: [0,1,2,3,4,5,7,8,9],   label: 'Differs 6',  cat: 'differs' as const, breakEven: 0.111 },
+    DIFFERS_7:  { type: 'DIGITDIFFERS', barrier: '7', digits: [0,1,2,3,4,5,6,8,9],   label: 'Differs 7',  cat: 'differs' as const, breakEven: 0.111 },
+    DIFFERS_8:  { type: 'DIGITDIFFERS', barrier: '8', digits: [0,1,2,3,4,5,6,7,9],   label: 'Differs 8',  cat: 'differs' as const, breakEven: 0.111 },
+    DIFFERS_9:  { type: 'DIGITDIFFERS', barrier: '9', digits: [0,1,2,3,4,5,6,7,8],   label: 'Differs 9',  cat: 'differs' as const, breakEven: 0.111 },
+    // ── LOW-PROB kept for future reference only ──
+    UNDER_5:    { type: 'DIGITUNDER',  barrier: '5', digits: [0,1,2,3,4],             label: 'Under 5',    cat: 'under' as const,   breakEven: 0.526 },
+    UNDER_6:    { type: 'DIGITUNDER',  barrier: '6', digits: [0,1,2,3,4,5],           label: 'Under 6',    cat: 'under' as const,   breakEven: 0.313 },
 };
 
 type ContractKey = keyof typeof ALL_CONTRACTS;
-// All Over/Under contracts — empirical engine picks the best one per market
-const VIABLE_CONTRACTS: ContractKey[] = ['OVER_5', 'OVER_6', 'OVER_7', 'OVER_8', 'UNDER_5', 'UNDER_6', 'UNDER_7', 'UNDER_8'];
+
+// ── HIGH-PROBABILITY contracts only — targeting ≥ 90% accuracy ──
+// DIGITDIFFERS: 90% theoretical (nine winning digits)
+// UNDER_9:      90% theoretical
+// UNDER_8:      80% theoretical — only traded when empirical confirms ≥ break-even
+// UNDER_7:      70% theoretical — only traded when empirical shows strong bias
+// OVER contracts intentionally excluded (10–40% win rate → impossible to hit 90% accuracy)
+const VIABLE_CONTRACTS: ContractKey[] = [
+    'UNDER_7', 'UNDER_8', 'UNDER_9',
+    'DIFFERS_0', 'DIFFERS_1', 'DIFFERS_2', 'DIFFERS_3', 'DIFFERS_4',
+    'DIFFERS_5', 'DIFFERS_6', 'DIFFERS_7', 'DIFFERS_8', 'DIFFERS_9',
+];
 
 // ALL volatility indices — scanned simultaneously
 const MARKETS = [
@@ -75,12 +100,14 @@ const getFourthDecimal = (quote: number): number =>
     Math.floor(Math.abs(quote) * 10000) % 10;
 
 // ── Theoretical win probability (white-noise model — fixed, no history needed) ──
-// Over X:  P(digit > X) = (9 - X) / 10  e.g. Over 7 = 20%
-// Under X: P(digit < X) = X / 10         e.g. Under 7 = 70%
+// Over X:     P(digit > X) = (9 - X) / 10  e.g. Over 7 = 20%
+// Under X:    P(digit < X) = X / 10         e.g. Under 7 = 70%
+// Differs X:  P(digit ≠ X) = 9 / 10 = 90%  (nine winning digits)
 const getTheoreticalProb = (contractType: string, barrier: string): number => {
     const b = parseInt(barrier, 10);
-    if (contractType === 'DIGITOVER')  return (9 - b) / 10;
-    if (contractType === 'DIGITUNDER') return b / 10;
+    if (contractType === 'DIGITOVER')    return (9 - b) / 10;
+    if (contractType === 'DIGITUNDER')   return b / 10;
+    if (contractType === 'DIGITDIFFERS') return 0.9;
     return 0.5;
 };
 
@@ -650,6 +677,11 @@ const Scanner = observer(() => {
     const currentMartingaleStakeRef = useRef(0.35);
     const baseStakeRef = useRef(0.35);
     const consecutiveLossesRef = useRef(0);
+    // ── Per-contract consecutive-loss streak (key = `contractKey|symbol`) ──
+    // After 2 consecutive losses on the SAME contract+market, that slot is
+    // cooled down for 8 trade cycles to prevent chasing bad conditions.
+    const contractLossStreakRef = useRef<Map<string, number>>(new Map());
+    const contractCooldownRef = useRef<Map<string, number>>(new Map()); // cycle count remaining
     const subscriptionRefs = useRef<Record<string, { unsubscribe?: () => void }>>({});
     const requestVersionRef = useRef(0);
     const timerSoundRef = useRef<HTMLAudioElement | null>(null);
@@ -977,6 +1009,17 @@ const Scanner = observer(() => {
             // Don't block on edge check failure — proceed to trade
         }
 
+        // ── Per-contract loss-streak cooldown ──
+        // If this exact contract+market lost 2 consecutive times, skip until cooldown expires.
+        const contractSlotKey = `${trade.contractKey}|${trade.symbol}`;
+        const cooldownRemaining = contractCooldownRef.current.get(contractSlotKey) ?? 0;
+        if (cooldownRemaining > 0) {
+            contractCooldownRef.current.set(contractSlotKey, cooldownRemaining - 1);
+            setStatusMessage(`🧊 Cooldown: ${trade.contractLabel} on ${trade.label} (${cooldownRemaining} cycles left)`);
+            lastTradeTimeRef.current = Date.now();
+            return;
+        }
+
         // ── Stealth: stake variation ±30% (Mechanism #7 escape) ──
         const stakeVariation = 0.70 + Math.random() * 0.60; // 0.70 to 1.30
         const stake = Math.max(0.35, Math.round(currentMartingaleStakeRef.current * stakeVariation * 100) / 100);
@@ -994,6 +1037,21 @@ const Scanner = observer(() => {
             const profit = await runSingleTrade(trade, stake);
             lastTradeTimeRef.current = Date.now();
             const isWin = profit > 0;
+
+            // ── Per-contract streak update ──
+            if (isWin) {
+                contractLossStreakRef.current.set(contractSlotKey, 0); // reset on win
+            } else {
+                const prevStreak = contractLossStreakRef.current.get(contractSlotKey) ?? 0;
+                const newStreak = prevStreak + 1;
+                contractLossStreakRef.current.set(contractSlotKey, newStreak);
+                if (newStreak >= 2) {
+                    // 2 consecutive losses on same contract → 8-cycle cooldown
+                    contractCooldownRef.current.set(contractSlotKey, 8);
+                    contractLossStreakRef.current.set(contractSlotKey, 0);
+                    setTerminalDashboard(p => [...p, `🧊 ${trade.contractLabel} on ${trade.label} cooled down (2 losses)`]);
+                }
+            }
 
             if (isWin) {
                 consecutiveLossesRef.current = 0;
@@ -1233,6 +1291,8 @@ const Scanner = observer(() => {
         consecutiveLossesRef.current = 0;
         consecutiveWinsRef.current = 0;
         skipNextTradesRef.current = 0;
+        contractLossStreakRef.current.clear();
+        contractCooldownRef.current.clear();
         stakeRef.current = stake;
         stopLossRef.current = sl;
         takeProfitRef.current = tp;
