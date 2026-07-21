@@ -47,8 +47,8 @@ const ALL_CONTRACTS = {
 };
 
 type ContractKey = keyof typeof ALL_CONTRACTS;
-// Only OVER/UNDER 7 and 8 — highest-payout contracts where mispricing edge is detectable
-const VIABLE_CONTRACTS: ContractKey[] = ['OVER_7', 'OVER_8', 'UNDER_7', 'UNDER_8'];
+// All Over/Under contracts — empirical engine picks the best one per market
+const VIABLE_CONTRACTS: ContractKey[] = ['OVER_5', 'OVER_6', 'OVER_7', 'OVER_8', 'UNDER_5', 'UNDER_6', 'UNDER_7', 'UNDER_8'];
 
 // ALL volatility indices — scanned simultaneously
 const MARKETS = [
@@ -546,9 +546,10 @@ interface BestTrade {
 const findBestTradeAcrossAllMarkets = (
     markets: Record<string, MarketState>,
     lastTradeKey?: string,
-    blacklist?: Map<string, number>
+    blacklist?: Map<string, number>,
+    engines?: Record<string, EmpiricalProbabilityEngine>
 ): BestTrade | null => {
-    const candidates: Array<BestTrade & { _key: ContractKey; _tProb: number }> = [];
+    const candidates: Array<BestTrade & { _key: ContractKey; _tProb: number; _empScore: number }> = [];
 
     for (const symbol of Object.keys(markets)) {
         const ms = markets[symbol];
@@ -558,6 +559,7 @@ const findBestTradeAcrossAllMarkets = (
         if (ms.pm.inBurst) continue;
 
         const marketLabel = MARKETS.find(m => m.symbol === symbol)?.label || symbol;
+        const engine = engines?.[symbol];
 
         for (const key of VIABLE_CONTRACTS) {
             if (blacklist && (blacklist.get(`${key}|${symbol}`) ?? 0) >= 2) continue;
@@ -565,17 +567,25 @@ const findBestTradeAcrossAllMarkets = (
             const c = ALL_CONTRACTS[key];
             const theoreticalProb = getTheoreticalProb(c.type, c.barrier);
 
+            // Compute empirical deviation from expected (positive = market biased in our favour)
+            let empScore = 0; // 0 = no data yet
+            if (engine && engine.tickCount >= 25) {
+                const emp = engine.getEmpiricalProbability(c.type, parseInt(c.barrier));
+                // Score = how much empirical win rate exceeds theoretical (bias size)
+                empScore = emp.probability - theoreticalProb;
+            }
+
             candidates.push({
                 symbol,
                 label: marketLabel,
                 contractKey: key,
                 contractLabel: c.label,
-                // probability shown in UI = theoretical win probability (white noise)
                 probability: Math.round(theoreticalProb * 100),
                 barrier: c.barrier,
                 contractType: c.type,
                 _key: key,
                 _tProb: theoreticalProb,
+                _empScore: empScore,
             });
         }
     }
@@ -588,11 +598,17 @@ const findBestTradeAcrossAllMarkets = (
         : candidates;
     const pool = alternatives.length > 0 ? alternatives : candidates;
 
-    // Sort by theoretical probability descending so UNDER_8 (80%) is tried first
-    pool.sort((a, b) => b._tProb - a._tProb);
+    // If any empirical data available, sort by empirical deviation (highest bias first)
+    // Otherwise fall back to theoretical probability
+    const hasEmpiricalData = pool.some(c => c._empScore !== 0);
+    if (hasEmpiricalData) {
+        pool.sort((a, b) => b._empScore - a._empScore);
+    } else {
+        pool.sort((a, b) => b._tProb - a._tProb);
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { _key, _tProb, ...best } = pool[0];
+    const { _key, _tProb, _empScore, ...best } = pool[0];
     return best as BestTrade;
 };
 
@@ -890,8 +906,8 @@ const Scanner = observer(() => {
             return;
         }
 
-        // ── Stealth: 60% random skip on favorable entries ──
-        if (Math.random() < 0.60) {
+        // ── Stealth: 20% random skip (reduced from 60% — empirical engine has 10 markets) ──
+        if (Math.random() < 0.20) {
             lastTradeTimeRef.current = Date.now();
             return;
         }
@@ -938,7 +954,7 @@ const Scanner = observer(() => {
                 const { ask_price: askPrice, payout } = edgeProposal.proposal;
                 if (askPrice > 0 && payout > 0) {
                     const engine = engines[trade.symbol];
-                    if (engine && engine.tickCount >= 50) {
+                    if (engine && engine.tickCount >= 25) {
                         const decision = engine.evaluateContract(
                             trade.contractType,
                             trade.barrier,
@@ -951,17 +967,9 @@ const Scanner = observer(() => {
                         }
                         setTerminalDashboard(p => [...p, decision.reason]);
                     } else {
-                        // Insufficient tick history — fall back to theoretical check
-                        const payoutPct = (payout - askPrice) / askPrice;
-                        const actualBreakEven = 1 / (1 + payoutPct);
-                        const theoreticalProb = getTheoreticalProb(trade.contractType, trade.barrier);
-                        if (theoreticalProb <= actualBreakEven + 0.01) {
-                            setStatusMessage(`⏳ Collecting ticks for empirical engine (${engine?.tickCount ?? 0}/50 min)…`);
-                            lastTradeTimeRef.current = Date.now();
-                            return;
-                        }
+                        // Still warming up — allow trades; log the warm-up count
                         setTerminalDashboard(p => [...p,
-                            `⚠️ Empirical engine warming up — using theoretical fallback: ${(theoreticalProb * 100).toFixed(1)}% vs ${(actualBreakEven * 100).toFixed(1)}% break-even → EXECUTING`]);
+                            `⚙️ Engine warming (${engine?.tickCount ?? 0}/25 ticks) — executing on theoretical basis`]);
                     }
                 }
             }
@@ -1037,7 +1045,7 @@ const Scanner = observer(() => {
             tradeInFlightRef.current = false;
             tradeInFlightStartRef.current = 0;
             if (tradeActiveRef.current && !shouldStopRef.current) {
-                const best = findBestTradeAcrossAllMarkets(marketsRef.current, undefined, failedContractsRef.current);
+                const best = findBestTradeAcrossAllMarkets(marketsRef.current, undefined, failedContractsRef.current, engines);
                 if (best) { bestTradeRef.current = best; setBestTradeDisplay(best); }
             }
         }
@@ -1090,6 +1098,17 @@ const Scanner = observer(() => {
 
                 marketsRef.current[market.symbol] = { ticks: histTicks, pm, streak, lastQuote };
                 streakStatesRef.current[market.symbol] = streak;
+
+                // ── Prime empirical engine with historical ticks ──
+                // Without this the engine starts cold and waits for 25+ live ticks
+                // before it can rank or vote on any contract. Priming it here means
+                // the engine is ready to produce scores the moment live ticks arrive.
+                if (engines[market.symbol]) {
+                    engines[market.symbol].reset();
+                    for (const t of histTicks) {
+                        engines[market.symbol].feedTick(t);
+                    }
+                }
             } catch {}
         }));
 
@@ -1153,7 +1172,7 @@ const Scanner = observer(() => {
                             const now = Date.now();
                             if (now - lastTradeTimeRef.current > 3000) {
                                 const lastKey = bestTradeRef.current?.contractKey;
-                                const best = findBestTradeAcrossAllMarkets(marketsRef.current, lastKey, failedContractsRef.current);
+                                const best = findBestTradeAcrossAllMarkets(marketsRef.current, lastKey, failedContractsRef.current, engines);
                                 if (best) {
                                     bestTradeRef.current = best;
                                     setBestTradeDisplay(best);
@@ -1162,7 +1181,7 @@ const Scanner = observer(() => {
                                 }
                             }
                         } else {
-                            const best = findBestTradeAcrossAllMarkets(marketsRef.current, undefined, failedContractsRef.current);
+                            const best = findBestTradeAcrossAllMarkets(marketsRef.current, undefined, failedContractsRef.current, engines);
                             if (best) {
                                 bestTradeRef.current = best;
                                 setBestTradeDisplay(best);
@@ -1285,7 +1304,7 @@ const Scanner = observer(() => {
                 ]);
             });
 
-            const best = findBestTradeAcrossAllMarkets(marketsRef.current);
+            const best = findBestTradeAcrossAllMarkets(marketsRef.current, undefined, undefined, engines);
             if (best) {
                 setTerminalDashboard(p => [...p,
                     `🎯 CANDIDATE: ${best.label} → ${best.contractLabel} @ ${best.probability}% theoretical`,

@@ -227,8 +227,8 @@ export class EmpiricalProbabilityEngine {
         // Edge = empirical probability - break-even (NOT theoretical - break-even)
         const edge = bestProb - breakEven;
 
-        // Decision: edge > 0.5% AND at least 50 samples
-        const shouldTrade = edge > 0.005 && emp.confidence >= 0.6;
+        // Decision: any positive edge AND at least 30 samples (confidence ≥ 0.4)
+        const shouldTrade = edge > 0.001 && emp.confidence >= 0.4;
 
         let reason: string;
         if (shouldTrade) {
