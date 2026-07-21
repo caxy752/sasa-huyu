@@ -1,0 +1,873 @@
+d EMPIRICAL_ENGINE_FIX.md and follow it precisely:
+
+PHASE 1 — DIAGNOSTIC (Run This First)
+Create a new file diagnostic.ts:
+
+typescript
+
+
+
+// ═══════════════════════════════════════════════════════════════
+// DIAGNOSTIC: Is the digit distribution ACTUALLY uniform?
+// Run this BEFORE touching anything else
+// ═══════════════════════════════════════════════════════════════
+
+import { getLastDigitFromQuote } from '@/utils/market-data';
+import { TTickPoint } from '@/types';
+
+interface DiagnosticResult {
+    isUniform: boolean;
+    chiSquare: number;
+    criticalValue: number;
+    digitDistribution: { digit: number; count: number; pct: number; deviationPct: number }[];
+    contractEdges: { contract: string; empiricalPct: number; theoreticalPct: number }[];
+    recommendation: string;
+}
+
+export const runDigitDistributionDiagnostic = (ticks: TTickPoint[]): DiagnosticResult => {
+    if (ticks.length < 100) {
+        return {
+            isUniform: true,
+            chiSquare: 0,
+            criticalValue: 16.92,
+            digitDistribution: [],
+            contractEdges: [],
+            recommendation: '❌ INSUFFICIENT DATA: Need at least 100 ticks. Currently have ' + ticks.length,
+        };
+    }
+
+    // Count each digit (0-9)
+    const counts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for (const t of ticks) {
+        const d = getLastDigitFromQuote(t.quote);
+        counts[d]++;
+    }
+
+    const total = ticks.length;
+    const expected = total / 10; // Expected count per digit if uniform
+
+    // Chi-square test
+    const chi2 = counts.reduce((sum, c) => sum + (c - expected) ** 2 / expected, 0);
+    // Critical value for 9 degrees of freedom at p=0.05: 16.92
+    // Critical value for 9 degrees of freedom at p=0.01: 21.67
+    const CRITICAL_005 = 16.92;
+    const isUniform = chi2 <= CRITICAL_005;
+
+    // Digit distribution table
+    const digitDistribution = counts.map((count, digit) => ({
+        digit,
+        count,
+        pct: (count / total) * 100,
+        deviationPct: ((count / total) - 0.10) * 100,
+    }));
+
+    // Check every contract type empirically
+    const contractEdges: { contract: string; empiricalPct: number; theoreticalPct: number }[] = [];
+    const contracts = [
+        { name: 'OVER_0', type: 'OVER', barrier: 0, theory: 90 },
+        { name: 'OVER_1', type: 'OVER', barrier: 1, theory: 80 },
+        { name: 'OVER_2', type: 'OVER', barrier: 2, theory: 70 },
+        { name: 'OVER_3', type: 'OVER', barrier: 3, theory: 60 },
+        { name: 'OVER_4', type: 'OVER', barrier: 4, theory: 50 },
+        { name: 'OVER_5', type: 'OVER', barrier: 5, theory: 40 },
+        { name: 'OVER_6', type: 'OVER', barrier: 6, theory: 30 },
+        { name: 'OVER_7', type: 'OVER', barrier: 7, theory: 20 },
+        { name: 'OVER_8', type: 'OVER', barrier: 8, theory: 10 },
+        { name: 'UNDER_1', type: 'UNDER', barrier: 1, theory: 10 },
+        { name: 'UNDER_2', type: 'UNDER', barrier: 2, theory: 20 },
+        { name: 'UNDER_3', type: 'UNDER', barrier: 3, theory: 30 },
+        { name: 'UNDER_4', type: 'UNDER', barrier: 4, theory: 40 },
+        { name: 'UNDER_5', type: 'UNDER', barrier: 5, theory: 50 },
+        { name: 'UNDER_6', type: 'UNDER', barrier: 6, theory: 60 },
+        { name: 'UNDER_7', type: 'UNDER', barrier: 7, theory: 70 },
+        { name: 'UNDER_8', type: 'UNDER', barrier: 8, theory: 80 },
+        { name: 'UNDER_9', type: 'UNDER', barrier: 9, theory: 90 },
+        { name: 'EVEN', type: 'EVEN', barrier: -1, theory: 50 },
+        { name: 'ODD', type: 'ODD', barrier: -1, theory: 50 },
+    ];
+
+    for (const c of contracts) {
+        let wins = 0;
+        // Simulate: settlement is the NEXT tick after the observation tick
+        for (let i = 0; i < ticks.length - 1; i++) {
+            const settlementTick = ticks[i + 1]; // Next tick = settlement for "1 tick" contract
+            if (!settlementTick) continue;
+
+            const digit = getLastDigitFromQuote(settlementTick.quote);
+            let won = false;
+
+            if (c.type === 'OVER' && digit > c.barrier) won = true;
+            else if (c.type === 'UNDER' && digit < c.barrier) won = true;
+            else if (c.type === 'EVEN' && digit % 2 === 0) won = true;
+            else if (c.type === 'ODD' && digit % 2 === 1) won = true;
+
+            if (won) wins++;
+        }
+
+        const empiricalPct = (wins / (ticks.length - 1)) * 100;
+        contractEdges.push({
+            contract: c.name,
+            empiricalPct: parseFloat(empiricalPct.toFixed(2)),
+            theoreticalPct: c.theory,
+        });
+    }
+
+    // Find contracts where empirical differs from theoretical by more than 1%
+    const anomalies = contractEdges.filter(c => Math.abs(c.empiricalPct - c.theoreticalPct) > 1.5);
+
+    let recommendation: string;
+    if (!isUniform) {
+        recommendation = `🔴 NON-UNIFORM DISTRIBUTION DETECTED (χ²=${chi2.toFixed(2)} > ${CRITICAL_005})\n`
+            + `The digit stream has exploitable structure!\n`
+            + `Contracts with anomalous empirical probability:\n`
+            + anomalies.map(a => `  ${a.contract}: empirical=${a.empiricalPct}% vs theory=${a.theoreticalPct}% (diff=${(a.empiricalPct - a.theoreticalPct).toFixed(2)}%)`).join('\n')
+            + `\n→ The empirical engine will find positive edge trades.`;
+    } else {
+        // Even if uniform, check if ANY contract has empirical > theoretical + 1.5%
+        const bestUpside = contractEdges.filter(c => c.empiricalPct > c.theoreticalPct + 1.5);
+        if (bestUpside.length > 0) {
+            recommendation = `🟡 Distribution is uniform (χ²=${chi2.toFixed(2)} ≤ ${CRITICAL_005})\n`
+                + `BUT some contracts show empirical > theoretical:\n`
+                + bestUpside.map(a => `  ${a.contract}: empirical=${a.empiricalPct}% vs theory=${a.theoreticalPct}%`).join('\n')
+                + `\n→ The empirical engine may STILL find trades.`;
+        } else {
+            recommendation = `✅ Distribution is truly uniform (χ²=${chi2.toFixed(2)} ≤ ${CRITICAL_005})\n`
+                + `All contract empirical probabilities match theoretical within ±1.5%.\n`
+                + `→ No exploitable structure exists. Engine will remain stuck correctly.`;
+        }
+    }
+
+    return {
+        isUniform,
+        chiSquare: parseFloat(chi2.toFixed(2)),
+        criticalValue: CRITICAL_005,
+        digitDistribution,
+        contractEdges,
+        recommendation,
+    };
+};
+HOW TO RUN THE DIAGNOSTIC
+In your scanner component's useEffect or wherever you have tick data, add:
+
+typescript
+
+
+
+import { runDigitDistributionDiagnostic } from './diagnostic';
+
+// After you have at least 100 ticks per market
+const diagnostic = runDigitDistributionDiagnostic(market.ticks);
+console.log(`[DIAGNOSTIC] ${market.symbol}:`);
+console.table(diagnostic.digitDistribution);
+console.log(diagnostic.recommendation);
+The diagnostic will tell you exactly whether the digit stream is uniform or has structure.
+
+PHASE 2 — THE EMPIRICAL PROBABILITY ENGINE
+Create empiricalEngine.ts:
+
+typescript
+
+
+
+// ═══════════════════════════════════════════════════════════════
+// EMPIRICAL PROBABILITY ENGINE v1.0
+// Replaces the theoretical probability approach
+// Uses Deriv's OWN tick history to compute win rates
+// ═══════════════════════════════════════════════════════════════
+
+import { getLastDigitFromQuote } from '@/utils/market-data';
+import { TTickPoint } from '@/types';
+
+interface EmpiricalResult {
+    probability: number;    // 0-1
+    samples: number;
+    confidence: number;     // 0-1, higher = more reliable
+    winRate: number;        // 0-1
+    loseRate: number;       // 0-1
+}
+
+interface ContractDecision {
+    contractType: string;
+    barrier: string;
+    empiricalProb: number;
+    theoreticalProb: number;
+    breakEven: number;      // From live API proposal
+    edge: number;           // empiricalProb - breakEven
+    confidence: number;
+    shouldTrade: boolean;
+    reason: string;
+}
+
+export class EmpiricalProbabilityEngine {
+    private tickBuffer: TTickPoint[] = [];
+    private readonly MAX_BUFFER = 500;
+    private digitCounts: number[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    private totalTicks = 0;
+
+    // ── FEED TICKS FROM DERIV API ──────────────────────────
+    feedTick(tick: TTickPoint): void {
+        this.tickBuffer.push(tick);
+        if (this.tickBuffer.length > this.MAX_BUFFER) {
+            this.tickBuffer.shift();
+        }
+
+        const digit = getLastDigitFromQuote(tick.quote);
+        this.digitCounts[digit]++;
+        this.totalTicks++;
+    }
+
+    // ── RESET FOR SEED ROTATION ────────────────────────────
+    reset(): void {
+        this.tickBuffer = [];
+        this.digitCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        this.totalTicks = 0;
+    }
+
+    get tickCount(): number {
+        return this.tickBuffer.length;
+    }
+
+    // ── EMPIRICAL PROBABILITY FOR ANY CONTRACT ─────────────
+    // This checks: "If I had traded this contract on every 
+    // observation→next-tick pair in the buffer, what % would win?"
+    getEmpiricalProbability(
+        contractType: string,
+        barrier: number
+    ): EmpiricalResult {
+        if (this.tickBuffer.length < 10) {
+            return { probability: 0.1, samples: 0, confidence: 0, winRate: 0, loseRate: 0 };
+        }
+
+        let wins = 0;
+        let losses = 0;
+
+        // Simulate: observation at index i, settlement at index i+1
+        for (let i = 0; i < this.tickBuffer.length - 1; i++) {
+            const settlementTick = this.tickBuffer[i + 1];
+            if (!settlementTick) continue;
+
+            const digit = getLastDigitFromQuote(settlementTick.quote);
+            let won = false;
+
+            switch (contractType) {
+                case 'DIGITOVER':
+                    won = digit > barrier;
+                    break;
+                case 'DIGITUNDER':
+                    won = digit < barrier;
+                    break;
+                case 'DIGITEVEN':
+                    won = digit % 2 === 0;
+                    break;
+                case 'DIGITODD':
+                    won = digit % 2 === 1;
+                    break;
+                case 'DIGITMATCH':
+                    won = digit === barrier;
+                    break;
+                case 'DIGITDIFFERS':
+                    won = digit !== barrier;
+                    break;
+                default:
+                    won = false;
+            }
+
+            if (won) wins++;
+            else losses++;
+        }
+
+        const total = wins + losses;
+        const prob = total > 0 ? wins / total : 0.1;
+        const confidence = total >= 200 ? 0.95
+            : total >= 100 ? 0.80
+            : total >= 50 ? 0.60
+            : total >= 20 ? 0.40
+            : 0.10;
+
+        return {
+            probability: parseFloat(prob.toFixed(4)),
+            samples: total,
+            confidence,
+            winRate: total > 0 ? wins / total : 0,
+            loseRate: total > 0 ? losses / total : 0,
+        };
+    }
+
+    // ── MULTI-GAP ANALYSIS (1-tick, 2-tick, 3-tick) ──────
+    // The "1 tick" contract on Deriv settles on Tick_{N+2} due to 
+    // processing delay. This measures actual gaps that occurred.
+    getMultiGapProbability(
+        contractType: string,
+        barrier: number,
+        gapTicks: number // 1, 2, or 3
+    ): EmpiricalResult {
+        if (this.tickBuffer.length < gapTicks + 2) {
+            return { probability: 0.1, samples: 0, confidence: 0, winRate: 0, loseRate: 0 };
+        }
+
+        let wins = 0;
+        let losses = 0;
+
+        for (let i = 0; i < this.tickBuffer.length - gapTicks; i++) {
+            const settlementTick = this.tickBuffer[i + gapTicks];
+            if (!settlementTick) continue;
+
+            const digit = getLastDigitFromQuote(settlementTick.quote);
+            let won = false;
+
+            switch (contractType) {
+                case 'DIGITOVER':
+                    won = digit > barrier;
+                    break;
+                case 'DIGITUNDER':
+                    won = digit < barrier;
+                    break;
+                case 'DIGITEVEN':
+                    won = digit % 2 === 0;
+                    break;
+                case 'DIGITODD':
+                    won = digit % 2 === 1;
+                    break;
+                default:
+                    won = false;
+            }
+
+            if (won) wins++;
+            else losses++;
+        }
+
+        const total = wins + losses;
+        const prob = total > 0 ? wins / total : 0.1;
+        const confidence = total >= 200 ? 0.95 : total >= 100 ? 0.80 : total >= 50 ? 0.60 : 0.10;
+
+        return {
+            probability: parseFloat(prob.toFixed(4)),
+            samples: total,
+            confidence,
+            winRate: total > 0 ? wins / total : 0,
+            loseRate: total > 0 ? losses / total : 0,
+        };
+    }
+
+    // ── THE DECISION FUNCTION ──────────────────────────────
+    // This is what replaces the old theoretical check.
+    // It requires a LIVE proposal from Deriv's API.
+    evaluateContract(
+        contractType: string,
+        barrier: string,
+        liveProposal: { payout: number; ask_price: number }
+    ): ContractDecision {
+        const b = parseInt(barrier);
+
+        // Get empirical probability from Deriv's own tick data
+        const emp = this.getEmpiricalProbability(contractType, b);
+
+        // Also check 2-tick gap (more realistic for actual settlement)
+        const emp2Tick = this.getMultiGapProbability(contractType, b, 2);
+        const emp3Tick = this.getMultiGapProbability(contractType, b, 3);
+
+        // Best estimate: weighted average of 1, 2, 3 tick gaps
+        let bestProb = emp.probability;
+        if (emp2Tick.samples >= 50) {
+            // Weight by inverse variance (more samples = more weight)
+            const w1 = emp.samples;
+            const w2 = emp2Tick.samples;
+            bestProb = (emp.probability * w1 + emp2Tick.probability * w2) / (w1 + w2);
+        }
+        const totalSamples = emp.samples + emp2Tick.samples;
+
+        // Theoretical probability (for comparison)
+        let theoreticalProb: number;
+        switch (contractType) {
+            case 'DIGITOVER':
+                theoreticalProb = (9 - b) / 10;
+                break;
+            case 'DIGITUNDER':
+                theoreticalProb = b / 10;
+                break;
+            case 'DIGITEVEN':
+            case 'DIGITODD':
+                theoreticalProb = 0.5;
+                break;
+            default:
+                theoreticalProb = 0.1;
+        }
+
+        // Break-even from Deriv's LIVE payout
+        const payoutPct = (liveProposal.payout - liveProposal.ask_price) / liveProposal.ask_price;
+        const breakEven = 1 / (1 + payoutPct);
+
+        // Edge = empirical probability - break-even
+        // (NOT theoretical - break-even)
+        const edge = bestProb - breakEven;
+
+        // Decision
+        const shouldTrade = edge > 0.005 && emp.confidence >= 0.6;
+        // edge > 0.005 means at least 0.5% edge above break-even
+        // confidence >= 0.6 means at least 50 samples
+
+        let reason: string;
+        if (shouldTrade) {
+            reason = `✅ EDGE FOUND: empirical=${(bestProb * 100).toFixed(1)}% vs break-even=${(breakEven * 100).toFixed(1)}% → edge=${(edge * 100).toFixed(2)}% (${totalSamples} samples)`;
+        } else if (edge > 0) {
+            reason = `⏳ Small edge but low confidence: ${(edge * 100).toFixed(2)}% edge, confidence=${emp.confidence}, samples=${totalSamples}`;
+        } else {
+            reason = `❌ No edge: empirical=${(bestProb * 100).toFixed(1)}% ≤ break-even=${(breakEven * 100).toFixed(1)}% → edge=${(edge * 100).toFixed(2)}% (${totalSamples} samples)`;
+        }
+
+        const bestConfidence = emp.samples >= 200 ? 0.95 : emp.samples >= 100 ? 0.80 : emp.samples >= 50 ? 0.60 : 0.30;
+
+        return {
+            contractType,
+            barrier,
+            empiricalProb: bestProb,
+            theoreticalProb,
+            breakEven,
+            edge: parseFloat(edge.toFixed(4)),
+            confidence: bestConfidence,
+            shouldTrade,
+            reason,
+        };
+    }
+
+    // ── SCAN ALL CONTRACTS ON THIS MARKET ───────────────────
+    scanAllContracts(
+        liveProposals: Record<string, { payout: number; ask_price: number }>
+    ): ContractDecision[] {
+        const contracts = [
+            { type: 'DIGITOVER', barrier: '0' },
+            { type: 'DIGITOVER', barrier: '1' },
+            { type: 'DIGITOVER', barrier: '2' },
+            { type: 'DIGITOVER', barrier: '3' },
+            { type: 'DIGITOVER', barrier: '4' },
+            { type: 'DIGITOVER', barrier: '5' },
+            { type: 'DIGITOVER', barrier: '6' },
+            { type: 'DIGITOVER', barrier: '7' },
+            { type: 'DIGITOVER', barrier: '8' },
+            { type: 'DIGITUNDER', barrier: '1' },
+            { type: 'DIGITUNDER', barrier: '2' },
+            { type: 'DIGITUNDER', barrier: '3' },
+            { type: 'DIGITUNDER', barrier: '4' },
+            { type: 'DIGITUNDER', barrier: '5' },
+            { type: 'DIGITUNDER', barrier: '6' },
+            { type: 'DIGITUNDER', barrier: '7' },
+            { type: 'DIGITUNDER', barrier: '8' },
+            { type: 'DIGITUNDER', barrier: '9' },
+            { type: 'DIGITEVEN', barrier: '0' },
+            { type: 'DIGITODD', barrier: '0' },
+            { type: 'DIGITMATCH', barrier: '0' },
+            { type: 'DIGITMATCH', barrier: '1' },
+            { type: 'DIGITMATCH', barrier: '2' },
+            { type: 'DIGITMATCH', barrier: '3' },
+            { type: 'DIGITMATCH', barrier: '4' },
+            { type: 'DIGITMATCH', barrier: '5' },
+            { type: 'DIGITMATCH', barrier: '6' },
+            { type: 'DIGITMATCH', barrier: '7' },
+            { type: 'DIGITMATCH', barrier: '8' },
+            { type: 'DIGITMATCH', barrier: '9' },
+            { type: 'DIGITDIFFERS', barrier: '0' },
+            { type: 'DIGITDIFFERS', barrier: '1' },
+            { type: 'DIGITDIFFERS', barrier: '2' },
+            { type: 'DIGITDIFFERS', barrier: '3' },
+            { type: 'DIGITDIFFERS', barrier: '4' },
+            { type: 'DIGITDIFFERS', barrier: '5' },
+            { type: 'DIGITDIFFERS', barrier: '6' },
+            { type: 'DIGITDIFFERS', barrier: '7' },
+            { type: 'DIGITDIFFERS', barrier: '8' },
+            { type: 'DIGITDIFFERS', barrier: '9' },
+        ];
+
+        const results: ContractDecision[] = [];
+        for (const c of contracts) {
+            const key = `${c.type}_${c.barrier}`;
+            const proposal = liveProposals[key];
+            if (proposal) {
+                results.push(this.evaluateContract(c.type, c.barrier, proposal));
+            }
+        }
+
+        // Sort by edge descending (best trades first)
+        results.sort((a, b) => b.edge - a.edge);
+        return results;
+    }
+
+    // ── CHI-SQUARE TEST (Detection Layer: Seed Rotation) ───
+    // Run every 100 ticks. If chi² > 21.67 (p<0.01), 
+    // the distribution has shifted → reset buffer
+    detectSeedRotation(): boolean {
+        if (this.totalTicks < 100) return false;
+
+        const expected = this.totalTicks / 10;
+        const chi2 = this.digitCounts.reduce(
+            (sum, c) => sum + (c - expected) ** 2 / expected,
+            0
+        );
+
+        // Critical value at 9 df, p<0.01 = 21.67
+        return chi2 > 21.67;
+    }
+}
+PHASE 3 — INTEGRATE INTO THE SCANNER
+STEP 3A: Replace the import structure
+In scanner.tsx, replace the current imports:
+
+typescript
+
+
+
+// REPLACE THESE:
+import { getLastDigitFromQuote } from '@/utils/market-data';
+
+// WITH THESE:
+import { getLastDigitFromQuote } from '@/utils/market-data';
+import { EmpiricalProbabilityEngine } from './empiricalEngine';
+import { runDigitDistributionDiagnostic } from './diagnostic';
+STEP 3B: Add the engine to component state
+Inside the Scanner component, add:
+
+typescript
+
+
+
+const [engines] = useState<Record<string, EmpiricalProbabilityEngine>>({});
+const [diagnostics, setDiagnostics] = useState<Record<string, any>>({});
+
+// Initialize engines for each market
+useEffect(() => {
+    const marketSymbols = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', 
+        '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V'];
+    
+    for (const sym of marketSymbols) {
+        if (!engines[sym]) {
+            engines[sym] = new EmpiricalProbabilityEngine();
+        }
+    }
+}, []);
+STEP 3C: Feed ticks into the engine
+Wherever you receive ticks, add:
+
+typescript
+
+
+
+// In your tick subscription callback:
+const onTick = (tick: TTickPoint, symbol: string) => {
+    if (engines[symbol]) {
+        engines[symbol].feedTick(tick);
+    }
+    
+    // Run diagnostic every 500 ticks
+    // (diagnostics are stored per-market and shown in UI)
+};
+STEP 3D: Replace the decision function
+Replace your current findBestTradeAcrossAllMarkets or equivalent decision function with:
+
+typescript
+
+
+
+const findBestTradeEmpirically = async (
+    engines: Record<string, EmpiricalProbabilityEngine>,
+    fetchProposal: (symbol: string, contractType: string, barrier: string) => Promise<{ payout: number; ask_price: number } | null>
+): Promise<{
+    shouldTrade: boolean;
+    symbol: string | null;
+    contractType: string;
+    barrier: string;
+    edge: number;
+    confidence: number;
+    reason: string;
+} | null> => {
+    
+    const candidates: Array<{
+        symbol: string;
+        contractType: string;
+        barrier: string;
+        edge: number;
+        confidence: number;
+        reason: string;
+    }> = [];
+
+    // Step 1: For EVERY market, check EVERY contract
+    for (const [symbol, engine] of Object.entries(engines)) {
+        if (engine.tickCount < 50) continue; // Need minimum history
+
+        // The contracts most likely to show edge:
+        const contractsToCheck = [
+            // Over/Under (sweet spot: win rate 20-80%)
+            { type: 'DIGITOVER', barrier: '7' },  // theory 20%
+            { type: 'DIGITOVER', barrier: '8' },  // theory 10%
+            { type: 'DIGITUNDER', barrier: '7' }, // theory 70%
+            { type: 'DIGITUNDER', barrier: '8' }, // theory 80%
+            { type: 'DIGITEVEN', barrier: '0' },  // theory 50%
+            { type: 'DIGITODD', barrier: '0' },   // theory 50%
+            { type: 'DIGITOVER', barrier: '5' },  // theory 40%
+            { type: 'DIGITUNDER', barrier: '5' }, // theory 50%
+            { type: 'DIGITMATCH', barrier: '0' }, // theory 10%
+            { type: 'DIGITMATCH', barrier: '1' }, // theory 10%
+            { type: 'DIGITMATCH', barrier: '2' }, // theory 10%
+            { type: 'DIGITMATCH', barrier: '3' }, // theory 10%
+            { type: 'DIGITMATCH', barrier: '4' }, // theory 10%
+            { type: 'DIGITMATCH', barrier: '5' }, // theory 10%
+            { type: 'DIGITMATCH', barrier: '6' }, // theory 10%
+            { type: 'DIGITMATCH', barrier: '7' }, // theory 10%
+            { type: 'DIGITMATCH', barrier: '8' }, // theory 10%
+            { type: 'DIGITMATCH', barrier: '9' }, // theory 10%
+        ];
+
+        for (const c of contractsToCheck) {
+            // Step 2: Get live proposal from Deriv API
+            const proposal = await fetchProposal(symbol, c.type, c.barrier);
+            if (!proposal) continue;
+
+            // Step 3: Evaluate using empirical probabilities
+            const decision = engine.evaluateContract(c.type, c.barrier, proposal);
+
+            // Step 4: Collect candidates that pass
+            if (decision.shouldTrade) {
+                candidates.push({
+                    symbol,
+                    contractType: c.type,
+                    barrier: c.barrier,
+                    edge: decision.edge,
+                    confidence: decision.confidence,
+                    reason: decision.reason,
+                });
+            }
+        }
+    }
+
+    // Step 5: Sort all candidates by edge (highest first)
+    candidates.sort((a, b) => b.edge - a.edge);
+
+    if (candidates.length > 0) {
+        const best = candidates[0];
+        return {
+            shouldTrade: true,
+            symbol: best.symbol,
+            contractType: best.contractType,
+            barrier: best.barrier,
+            edge: best.edge,
+            confidence: best.confidence,
+            reason: `🎯 ${best.symbol} → ${best.contractType} ${best.barrier} @ ${(best.edge * 100).toFixed(2)}% edge (${best.reason})`,
+        };
+    }
+
+    // Step 6: If no trade, report why
+    return {
+        shouldTrade: false,
+        symbol: null,
+        contractType: '',
+        barrier: '',
+        edge: 0,
+        confidence: 0,
+        reason: '⏳ Scanning all 10 markets × all contracts — no empirical edge detected yet',
+    };
+};
+STEP 3E: Add proposal fetching helper
+typescript
+
+
+
+// Uses Deriv's API to get a REAL payout quote
+const fetchLiveProposal = async (
+    api: any,
+    symbol: string,
+    contractType: string,
+    barrier: string,
+    stake: number,
+    currency: string
+): Promise<{ payout: number; ask_price: number } | null> => {
+    try {
+        const response = await api.send({
+            proposal: 1,
+            amount: stake,
+            basis: 'stake',
+            contract_type: contractType,
+            currency,
+            duration: 1,
+            duration_unit: 't',
+            symbol,
+            ...(barrier && barrier !== '0' ? { barrier } : {}),
+        });
+
+        if (response?.proposal) {
+            return {
+                payout: response.proposal.payout,
+                ask_price: response.proposal.ask_price,
+            };
+        }
+        return null;
+    } catch (err) {
+        console.error('Proposal fetch failed:', err);
+        return null;
+    }
+};
+PHASE 4 — UI STATUS MESSAGES
+Replace all status messages with these:
+
+typescript
+
+
+
+// Status display logic
+const getStatusMessage = (
+    decision: { shouldTrade: boolean; reason: string } | null,
+    engines: Record<string, EmpiricalProbabilityEngine>,
+    diagnostics: Record<string, any>
+): string => {
+    // If we have a decision, show it
+    if (decision) {
+        if (decision.shouldTrade) {
+            return decision.reason;
+        }
+        return decision.reason;
+    }
+
+    // Show engine status per market
+    const marketStatuses = Object.entries(engines).map(([sym, eng]) => {
+        const samples = eng.tickCount;
+        const hasRotation = eng.detectSeedRotation();
+        return `${sym}: ${samples} ticks${hasRotation ? ' 🔄 SEED ROTATED' : ''}`;
+    });
+
+    return [
+        '📡 EMPIRICAL PROBABILITY ENGINE ACTIVE',
+        '🔍 Comparing real tick history vs live Deriv payout on all 10 markets × 20+ contracts',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+        ...marketStatuses,
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+        '⏳ Waiting for empirical edge > 0.5% with confidence ≥ 60%',
+        '🛡️ Stealth: 60% skip | Stake ±30% | Delay 300-3000ms',
+    ].join('\n');
+};
+PHASE 5 — THE COMPLETE TRADE PIPELINE (Final)
+typescript
+
+
+
+const executeTradeWithEmpiricalEngine = async () => {
+    // Step 1: Scan all markets empirically
+    const decision = await findBestTradeEmpirically(engines, (symbol, type, barrier) =>
+        fetchLiveProposal(api, symbol, type, barrier, stake, currency)
+    );
+
+    setDecision(decision);
+
+    if (!decision || !decision.shouldTrade) {
+        setStatus(getStatusMessage(decision, engines, diagnostics));
+        return;
+    }
+
+    // Step 2: Apply stealth layer
+    const stealth = applyStealth(stakeRef.current, decision.contractType);
+    if (!stealth.shouldProceed) {
+        setStatus('🕵️ Stealth skip (60% random)');
+        return;
+    }
+
+    // Step 3: Wait random delay (300-3000ms)
+    await sleep(stealth.delay);
+
+    // Step 4: Re-fetch proposal to verify payout hasn't changed
+    const freshProposal = await fetchLiveProposal(
+        api, decision.symbol!, decision.contractType, decision.barrier,
+        stealth.finalStake, currency
+    );
+
+    if (!freshProposal) {
+        setStatus('⚠️ Proposal expired — re-scanning');
+        return;
+    }
+
+    // Step 5: Re-verify edge with fresh proposal
+    const freshDecision = engines[decision.symbol!]?.evaluateContract(
+        decision.contractType, decision.barrier, freshProposal
+    );
+
+    if (!freshDecision || !freshDecision.shouldTrade) {
+        setStatus('⚠️ Edge evaporated on re-check — skipping');
+        return;
+    }
+
+    // Step 6: Execute buy
+    const buyResponse = await api.send({
+        buy: freshProposal.id,
+        price: stealth.finalStake,
+    });
+
+    if (buyResponse?.buy?.contract_id) {
+        setStatus(`✅ TRADE EXECUTED: ${decision.symbol} ${decision.contractType} ${decision.barrier} @ ${(decision.edge * 100).toFixed(2)}% edge`);
+    }
+};
+PHASE 6 — WHAT THE UI SHOULD DISPLAY
+
+
+
+═══════════════════════════════════════
+ DEEP EXPLOIT ENGINE v6.0
+ EMPIRICAL PROBABILITY MODE
+═══════════════════════════════════════
+
+📊 10 Markets × 20+ Contracts Scanning
+
+━━━ MARKET STATUS ━━━
+📈 R_10 (1s):   9424.85 → 500 ticks | χ²=9.2 ✅ Uniform
+📈 R_25 (1s):   805518.66 → 500 ticks | χ²=11.4 ✅ Uniform
+📈 R_50 (1s):   267661.72 → 500 ticks | χ²=8.7 ✅ Uniform
+📈 R_75 (1s):   7045.80 → 500 ticks | χ²=10.1 ✅ Uniform
+📈 R_100 (1s):  745.93 → 500 ticks | χ²=13.2 ✅ Uniform
+📈 R_10 (2s):   4868.69 → 500 ticks | χ²=9.8 ✅ Uniform
+📈 R_25 (2s):   2546.06 → 500 ticks | χ²=14.1 ✅ Uniform
+📈 R_50 (2s):   89.59 → 500 ticks | χ²=15.3 ✅ Uniform
+📈 R_75 (2s):   51634.87 → 500 ticks | χ²=7.2 ✅ Uniform
+📈 R_100 (2s):  530.96 → 500 ticks | χ²=11.9 ✅ Uniform
+
+━━━ EMPIRICAL VS THEORETICAL CHECK ━━━
+Best candidate this tick:
+  R_50 (2s) DIGITUNDER 7: empirical=69.3% vs break-even=71.4% → edge=-2.1% ❌
+  R_50 (2s) DIGITOVER 7: empirical=19.8% vs break-even=20.4% → edge=-0.6% ❌
+  R_100 (1s) EVEN: empirical=48.5% vs break-even=51.0% → edge=-2.5% ❌
+  ...all contracts show negative edge
+
+━━━ EXECUTION ━━━
+⏳ Waiting for empirical edge > 0.5% with confidence > 60%
+🛡️ Stealth: 60% skip | ±30% stake jitter | 300-3000ms delay
+💰 Stake: 0.35 USD | SL: 20 | TP: 0.5 | x1
+HOW TO USE THIS IN REPLIT
+Step 1: Create the files in order
+
+
+
+📁 src/
+  ├── diagnostic.ts           ← PHASE 1 (copy-paste)
+  ├── empiricalEngine.ts      ← PHASE 2 (copy-paste)
+  └── scanner.tsx             ← PHASE 3 (modify existing)
+Step 2: Run the diagnostic FIRST
+typescript
+
+
+
+// In browser console or a debug panel
+const diag = runDigitDistributionDiagnostic(engine.tickBuffer);
+console.table(diag.digitDistribution);
+console.log(diag.recommendation);
+If isUniform = false: The digit stream has structure. The empirical engine WILL find trades. You are unstuck.
+
+If isUniform = true and no anomalies: The digit stream is truly uniform. No contract has positive edge. The engine will remain stuck correctly — and that is the right behavior.
+
+Step 3: If stuck after diagnostic — the only three paths
+
+
+Path	What To Do	Result
+A. Wait (correct)	Keep engine running, refresh buffer, wait for price regime change	No trades for hours, days, or weeks — but zero losses
+B. Switch to Crash/Boom	These markets have non-uniform digit distributions by design (stochastic spikes)	Empirical engine will find structure
+C. Trade at -1% edge (user choice)	Lower threshold to edge > -0.005	Loses 0.5% per trade on average — user accepts the loss
+THE CRITICAL INSIGHT
+The engine was never broken. It was correctly detecting that no exploitable structure exists at these price levels on these markets at this time.
+
+The theoretical approach assumed uniform distribution and Deriv's payout always has -1% edge → always stuck.
+
+The empirical approach measures the ACTUAL distribution from Deriv's own server ticks. If the distribution is truly uniform, the empirical result equals the theoretical result → still stuck. But if there's ANY deviation (even 0.5%), the empirical engine finds it.
+
+The engine only trades when Deriv's own data says there's an edge. No assumptions. No theory. Just measured reality.

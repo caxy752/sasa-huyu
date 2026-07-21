@@ -8,6 +8,8 @@ import { useStore } from '@/hooks/useStore';
 import { getLastDigitFromQuote } from '@/utils/market-data';
 import { buyContractForUi, streamContractUntilSettled } from '@/utils/trade-purchase';
 import { safeSubscribe } from '@/utils/websocket-handler';
+import { EmpiricalProbabilityEngine } from './empiricalEngine';
+import { runDigitDistributionDiagnostic } from './diagnostic';
 import './scanner.scss';
 
 // ═══════════════════════════════════════════════════════════════
@@ -614,6 +616,8 @@ const Scanner = observer(() => {
     const [bestTradeDisplay, setBestTradeDisplay] = useState<BestTrade | null>(null);
     const [statusMessage, setStatusMessage] = useState('SCANNING — WAITING FOR STRUCTURE...');
     const [detectionLog, setDetectionLog] = useState<string[]>([]);
+    const [engines] = useState<Record<string, EmpiricalProbabilityEngine>>({});
+    const [diagnostics, setDiagnostics] = useState<Record<string, any>>({});
 
     // ── Refs ──
     const marketsRef = useRef<Record<string, MarketState>>({});
@@ -655,8 +659,11 @@ const Scanner = observer(() => {
                 marketsRef.current[m.symbol] = { ticks: [], pm: initProbMatrix(), streak: initStreakState(), lastQuote: null };
             }
             if (!streakStatesRef.current[m.symbol]) streakStatesRef.current[m.symbol] = initStreakState();
+            if (!engines[m.symbol]) {
+                engines[m.symbol] = new EmpiricalProbabilityEngine();
+            }
         });
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         timerSoundRef.current = new Audio('https://www.fesliyanstudios.com/play-mp3/4386');
@@ -911,10 +918,10 @@ const Scanner = observer(() => {
             return;
         }
 
-        // ── Payout arbitrage edge check — verify real API payout before every trade ──
-        // Theoretical win probability (white noise, fixed): Over X = (9-X)/10, Under X = X/10
-        // Break-even is computed from Deriv's actual proposal payout, not from a constant.
-        // If theoretical win probability ≤ actual break-even + 1%, skip — no edge.
+        // ── Empirical edge check — uses real tick history vs live Deriv payout ──
+        // Replaces the old theoretical-probability check.
+        // Empirical probability is measured from Deriv's own tick stream.
+        // If empirical win probability ≤ break-even + 0.5%, skip — no edge.
         try {
             const edgeProposal = await (api_base.api as any).send({
                 proposal: 1,
@@ -930,16 +937,32 @@ const Scanner = observer(() => {
             if (edgeProposal?.proposal) {
                 const { ask_price: askPrice, payout } = edgeProposal.proposal;
                 if (askPrice > 0 && payout > 0) {
-                    const payoutPct    = (payout - askPrice) / askPrice;
-                    const actualBreakEven = 1 / (1 + payoutPct);
-                    const theoreticalProb = getTheoreticalProb(trade.contractType, trade.barrier);
-                    if (theoreticalProb <= actualBreakEven + 0.01) {
-                        setStatusMessage(`📊 ${trade.contractLabel}: ${(theoreticalProb * 100).toFixed(1)}% theoretical ≤ ${(actualBreakEven * 100).toFixed(1)}% break-even — no edge, waiting`);
-                        lastTradeTimeRef.current = Date.now();
-                        return;
+                    const engine = engines[trade.symbol];
+                    if (engine && engine.tickCount >= 50) {
+                        const decision = engine.evaluateContract(
+                            trade.contractType,
+                            trade.barrier,
+                            { payout, ask_price: askPrice }
+                        );
+                        if (!decision.shouldTrade) {
+                            setStatusMessage(decision.reason);
+                            lastTradeTimeRef.current = Date.now();
+                            return;
+                        }
+                        setTerminalDashboard(p => [...p, decision.reason]);
+                    } else {
+                        // Insufficient tick history — fall back to theoretical check
+                        const payoutPct = (payout - askPrice) / askPrice;
+                        const actualBreakEven = 1 / (1 + payoutPct);
+                        const theoreticalProb = getTheoreticalProb(trade.contractType, trade.barrier);
+                        if (theoreticalProb <= actualBreakEven + 0.01) {
+                            setStatusMessage(`⏳ Collecting ticks for empirical engine (${engine?.tickCount ?? 0}/50 min)…`);
+                            lastTradeTimeRef.current = Date.now();
+                            return;
+                        }
+                        setTerminalDashboard(p => [...p,
+                            `⚠️ Empirical engine warming up — using theoretical fallback: ${(theoreticalProb * 100).toFixed(1)}% vs ${(actualBreakEven * 100).toFixed(1)}% break-even → EXECUTING`]);
                     }
-                    setTerminalDashboard(p => [...p,
-                        `✅ Edge confirmed: ${(theoreticalProb * 100).toFixed(1)}% vs ${(actualBreakEven * 100).toFixed(1)}% break-even → EXECUTING`]);
                 }
             }
         } catch {
@@ -1099,6 +1122,23 @@ const Scanner = observer(() => {
                         streakStatesRef.current[market.symbol] = sr.state;
                         marketsRef.current[market.symbol] = { ticks: newTicks, pm: newPm, streak: sr.state, lastQuote: tick.quote };
 
+                        // ── Feed tick into empirical engine ──
+                        if (engines[market.symbol]) {
+                            engines[market.symbol].feedTick(tick);
+                            // Detect seed rotation — reset buffer if distribution shifted
+                            if (engines[market.symbol].detectSeedRotation()) {
+                                engines[market.symbol].reset();
+                            }
+                            // Run diagnostic every 500 ticks
+                            if (newTicks.length > 0 && newTicks.length % 500 === 0) {
+                                const diag = runDigitDistributionDiagnostic(newTicks);
+                                setDiagnostics(prev => ({ ...prev, [market.symbol]: diag }));
+                                console.log(`[DIAGNOSTIC] ${market.symbol}:`);
+                                console.table(diag.digitDistribution);
+                                console.log(diag.recommendation);
+                            }
+                        }
+
                         // Watchdog: trade stuck > 45s
                         if (tradeInFlightRef.current && tradeInFlightStartRef.current > 0 && nowMs - tradeInFlightStartRef.current > 45000) {
                             tradeInFlightRef.current = false;
@@ -1207,11 +1247,11 @@ const Scanner = observer(() => {
         completedRunsRef.current = 0;
         setPopupOpen(true);
         setTerminalDashboard([
-            '🤖 PAYOUT ARBITRAGE ENGINE v6.0',
-            `📊 ${MARKETS.length} MARKETS SCANNING`,
-            '📡 4TH DECIMAL CARRY-OVER + PAYOUT ARBITRAGE ANALYSIS',
-            `🔍 Checking theoretical probability vs real Deriv payout on every tick`,
-            `🎯 Contracts: OVER_7 OVER_8 UNDER_7 UNDER_8 — all markets eligible`,
+            '🤖 DEEP EXPLOIT ENGINE v6.0 — EMPIRICAL PROBABILITY MODE',
+            `📊 ${MARKETS.length} Markets × 20+ Contracts Scanning`,
+            '🔍 Comparing real tick history vs live Deriv payout on all markets',
+            `⏳ Waiting for empirical edge > 0.5% with confidence ≥ 60%`,
+            `🛡️ Stealth: 60% skip | Stake ±30% | Delay 300-3000ms`,
         ]);
         setTerminalBody(['Scanning...']);
         playTimerSound();
@@ -1288,7 +1328,7 @@ const Scanner = observer(() => {
             <div className='container'>
                 <h1>⚡ RAMZFX 🚀 DEEP EXPLOIT ENGINE ⚡</h1>
                 <h2 style={{ fontSize: '0.75rem', color: '#0f0', textAlign: 'center', margin: '-10px 0 15px', opacity: 0.7 }}>
-                    🧠 v5.0 — 3-MATRIX | PRICE FILTER | PAYOUT DRIFT | STEALTH LAYER
+                    🧠 v6.0 — EMPIRICAL PROBABILITY ENGINE | 10 MARKETS × 20+ CONTRACTS
                 </h2>
 
                 <label htmlFor='stake'>💰 BASE STAKE</label>
