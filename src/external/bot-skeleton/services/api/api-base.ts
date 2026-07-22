@@ -355,13 +355,23 @@ class APIBase {
             }
         });
 
-        // Override send() – route trade messages through OTP WS when connected.
-        // Non-trade messages (active_symbols, contracts_for, ticks, etc.) always
-        // go through the legacy WS so the bot builder config loads correctly.
+        // Override send() – route trade messages + authenticated market-data requests
+        // through the OTP WS when connected.
+        //
+        // Why contracts_for and trading_times are here:
+        //   The legacy WS is unauthenticated for new-auth users.  Without auth,
+        //   contracts_for('R_100') returns OfferingsInvalidSymbol and trading_times
+        //   returns OutputValidationFailed — both cause "Not available" in the bot
+        //   builder trade-parameters panel.  The OTP WS is pre-authenticated via
+        //   OTP, so these calls succeed there.  active_symbols and ticks are left
+        //   on the legacy WS because they work without auth and the OTP WS may not
+        //   be ready when api_base.init() first runs.
         const TRADE_MSG_TYPES = new Set([
             'proposal', 'buy', 'sell',
             'proposal_open_contract', 'balance', 'transaction',
             'forget', 'forget_all',
+            // Market-data calls that require an authenticated connection:
+            'contracts_for', 'trading_times',
         ]);
         const originalSend = originalApi.send.bind(originalApi);
         originalApi.send = (data: any) => {

@@ -288,7 +288,11 @@ export async function handleNewCallback() {
   const code = urlParams.get("code")
   const returnedState = urlParams.get("state")
   
-  window.history.replaceState({}, '', '/callback')
+  // NOTE: Do NOT call window.history.replaceState here.
+  // React Router v6 intercepts replaceState and re-renders CallbackPage.
+  // A re-render with no ?code= param causes CallbackPage to fall through to
+  // the legacy <Callback> component, which redirects to Deriv login mid-exchange.
+  // URL cleanup happens naturally when window.location.href = '/' fires on success.
   
   if (!code) {
     throw new Error("Missing authorization code from Deriv")
