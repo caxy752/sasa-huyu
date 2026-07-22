@@ -373,31 +373,53 @@ class APIBase {
             // Market-data calls that require an authenticated connection:
             'contracts_for', 'trading_times',
         ]);
+        // Wait up to 10 s for the OTP WebSocket to open, then send via it.
+        // This prevents contracts_for / trading_times from falling through to the
+        // unauthenticated legacy WS when the bot builder mounts before the OTP WS
+        // has finished connecting (which causes "Not available" in trade parameters).
+        const waitForOtpWsAndSend = (data: any): Promise<any> =>
+            new Promise(resolve => {
+                const deadline = Date.now() + 10_000;
+                const poll = () => {
+                    if ((window as any)._newSystemWS?.readyState === WebSocket.OPEN) {
+                        resolve(sendViaNewSystemWithPromise(data));
+                    } else if (Date.now() >= deadline) {
+                        // OTP WS never opened — fall back to legacy WS
+                        resolve(originalSend(data));
+                    } else {
+                        setTimeout(poll, 150);
+                    }
+                };
+                poll();
+            });
+
         const originalSend = originalApi.send.bind(originalApi);
         originalApi.send = (data: any) => {
-            if (isNewLoggedIn() && (window as any)._newSystemWS?.readyState === WebSocket.OPEN) {
-                if (data && typeof data === 'object') {
-                    const firstKey = Object.keys(data)[0];
+            if (isNewLoggedIn() && data && typeof data === 'object') {
+                const firstKey = Object.keys(data)[0];
 
-                    // Market-data streams are created on the legacy WebSocket so they must also
-                    // be forgotten on that same socket. Sending `forget_all: 'ticks'` through the
-                    // new-auth WebSocket leaves the legacy subscription alive, which causes the
-                    // Bot Builder rerun error: "already subscribed to <symbol>".
-                    // NOTE: deriv-api's forgetAll() sends { forget_all: ['ticks'] } (ARRAY),
-                    // while direct api.send({ forget_all: 'ticks' }) sends a STRING.
-                    // Handle both formats.
-                    if (firstKey === 'forget_all') {
-                        const forgetTypes = Array.isArray(data.forget_all)
-                            ? data.forget_all
-                            : [data.forget_all];
-                        if (forgetTypes.some((t: string) => t === 'ticks' || t === 'candles')) {
-                            return originalSend(data);
-                        }
+                // Market-data streams are created on the legacy WebSocket so they must also
+                // be forgotten on that same socket. Sending `forget_all: 'ticks'` through the
+                // new-auth WebSocket leaves the legacy subscription alive, which causes the
+                // Bot Builder rerun error: "already subscribed to <symbol>".
+                // NOTE: deriv-api's forgetAll() sends { forget_all: ['ticks'] } (ARRAY),
+                // while direct api.send({ forget_all: 'ticks' }) sends a STRING.
+                // Handle both formats.
+                if (firstKey === 'forget_all') {
+                    const forgetTypes = Array.isArray(data.forget_all)
+                        ? data.forget_all
+                        : [data.forget_all];
+                    if (forgetTypes.some((t: string) => t === 'ticks' || t === 'candles')) {
+                        return originalSend(data);
                     }
+                }
 
-                    if (TRADE_MSG_TYPES.has(firstKey)) {
+                if (TRADE_MSG_TYPES.has(firstKey)) {
+                    if ((window as any)._newSystemWS?.readyState === WebSocket.OPEN) {
                         return sendViaNewSystemWithPromise(data);
                     }
+                    // OTP WS not ready yet — queue until it opens (avoids legacy WS auth failure)
+                    return waitForOtpWsAndSend(data);
                 }
             }
             return originalSend(data);

@@ -7,6 +7,7 @@ import { clearAuthData } from '@/utils/auth-utils';
 import { localize } from '@deriv-com/translations';
 import { URLUtils } from '@deriv-com/utils';
 import StandaloneLoginScreen from '@/components/login-screen/StandaloneLoginScreen';
+import { isNewLoggedIn } from '@/auth/NewDerivAuth';
 import App from './App';
 
 // Extend Window interface to include is_tmb_enabled property
@@ -121,6 +122,7 @@ export const AuthWrapper = () => {
 
     if (!isAuthComplete) {
         const hasLoginSession =
+            isNewLoggedIn() ||
             Cookies.get('logged_state') === 'true' ||
             Object.keys(JSON.parse(localStorage.getItem('accountsList') ?? '{}')).length > 0;
 

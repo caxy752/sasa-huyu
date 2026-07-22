@@ -36,6 +36,29 @@ without auth).
 deliberately kept unauthenticated for new-auth users (no legacy token available).
 Market-data calls that need auth must therefore go through the OTP WS.
 
+## Bot builder "Not available" — OTP WS timing race (recurring)
+
+Even with `contracts_for`/`trading_times` in `TRADE_MSG_TYPES`, the bot builder
+mounts and calls them before `createNewWebSocket()` finishes opening the OTP WS.
+The old guard `if (isNewLoggedIn() && _newSystemWS.readyState === OPEN)` fell
+straight through to the unauthenticated legacy WS → OfferingsInvalidSymbol.
+
+**Fix (api-base.ts):** Added `waitForOtpWsAndSend()` — when a `TRADE_MSG_TYPES`
+call arrives and `isNewLoggedIn()` is true but the WS isn't open yet, poll every
+150 ms (up to 10 s) until it opens, then send via OTP WS. After 10 s, fall back
+to legacy WS.
+
+## AuthWrapper login-page flash — isNewLoggedIn() guard
+
+`AuthWrapper` starts with `isAuthComplete=false`. Before the `useEffect` fires,
+it checks `hasLoginSession` (cookie + accountsList). New-auth users may not have
+`logged_state` cookie or `accountsList` populated yet when the page first renders,
+so `StandaloneLoginScreen` flashes briefly.
+
+**Fix (AuthWrapper.tsx):** Added `isNewLoggedIn()` as the first condition in
+`hasLoginSession`. If `NEW_AUTH_token` is in localStorage, skip the login screen
+entirely and show the loader instead.
+
 ## active-symbols.js simplification
 
 Removed null-guard fallback (`if (!api_base.active_symbols_promise) ...`) from
