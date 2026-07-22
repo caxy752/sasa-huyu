@@ -117,6 +117,61 @@ class APIBase {
             // For new auth users, route bot-skeleton sends through the OTP WS
             if (isNewLoggedIn()) {
                 this._setupNewSystemApiProxy();
+
+                // ── INIT-TIME AUTH SEED (page-refresh / tab-restore) ──────────
+                // On a fresh page load after the first login, createNewWebSocket()
+                // already wrote clientAccounts + active_loginid to localStorage.
+                // Seed the auth observables immediately here so the header and
+                // account switcher show the correct state without waiting for the
+                // OTP WebSocket to reconnect (which takes several seconds).
+                // On the very first post-callback load, clientAccounts may not
+                // exist yet — in that case createNewWebSocket() handles seeding.
+                try {
+                    const storedAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
+                    const activeId = localStorage.getItem('active_loginid') || '';
+                    const activeAcc = storedAccounts[activeId] || Object.values(storedAccounts)[0] as any;
+
+                    if (activeAcc && activeId) {
+                        const accountList = Object.values(storedAccounts).map((acc: any) => ({
+                            loginid:   acc.loginid,
+                            currency:  acc.currency || 'USD',
+                            is_virtual: acc.is_virtual || 0,
+                            account_type: 'trading',
+                            is_disabled: 0,
+                            created_at: 0,
+                            landing_company_name: 'virtual',
+                            account_category: 'trading',
+                            broker: '',
+                            currency_type: 'crypto',
+                            linked_to: [],
+                        }));
+                        setAccountList(accountList);
+                        setAuthData({
+                            loginid:   activeAcc.loginid,
+                            currency:  activeAcc.currency || 'USD',
+                            balance:   parseFloat(activeAcc.balance || '0'),
+                            email:     '',
+                            fullname:  '',
+                            is_virtual: activeAcc.is_virtual || 0,
+                            landing_company_fullname: '',
+                            landing_company_name:     'virtual',
+                            linked_to:      [],
+                            local_currencies: {},
+                            preferred_language: 'EN',
+                            scopes:     ['read', 'trade', 'admin'],
+                            upgradeable_landing_companies: [],
+                            user_id:    0,
+                            token:      activeAcc.loginid,
+                            country:    '',
+                            account_list: accountList,
+                        } as any);
+                        setIsAuthorized(true);
+                        setIsAuthorizing(false);
+                    }
+                } catch (_) {
+                    // Silent — createNewWebSocket() will seed auth when it runs
+                }
+                // ── END INIT-TIME AUTH SEED ───────────────────────────────────
             }
         }
 

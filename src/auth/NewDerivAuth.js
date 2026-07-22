@@ -510,6 +510,65 @@ export async function createNewWebSocket() {
     console.error("[NEW WS] No account ID found:", accountsData)
     return null
   }
+
+  // ── EARLY AUTH SEED ──────────────────────────────────────────────────────
+  // We already have full account data from the REST call.  Seed the auth
+  // observables NOW — before the OTP fetch and WebSocket handshake — so the
+  // header and account switcher show the correct logged-in state immediately
+  // instead of waiting several seconds for ws.onopen to fire.
+  // ws.onopen will call setIsAuthorized(true) again once the WS is live; the
+  // duplicate call is harmless (idempotent).
+  try {
+    const {
+      setAuthData, setAccountList,
+      setIsAuthorized, setIsAuthorizing,
+    } = await import(
+      /* webpackChunkName: "connection-status-stream" */
+      '@/external/bot-skeleton/services/api/observables/connection-status-stream'
+    )
+    const earlyAccountList = accountsArray.map(acc => ({
+      loginid:   acc.account_id || acc.id,
+      currency:  acc.currency || 'USD',
+      is_virtual: acc.account_type === 'demo' ? 1 : 0,
+      account_type: 'trading',
+      is_disabled: 0,
+      created_at: 0,
+      landing_company_name: 'virtual',
+      account_category: 'trading',
+      broker: '',
+      currency_type: 'crypto',
+      linked_to: [],
+    }))
+    // Wire active_loginid so useActiveAccount diagnostics resolve correctly
+    localStorage.setItem('active_loginid', accountId)
+    localStorage.setItem('authToken', accountId)
+    setAccountList(earlyAccountList)
+    setAuthData({
+      loginid:   accountId,
+      currency:  account.currency || 'USD',
+      balance:   parseFloat(account.balance || '0'),
+      email:     '',
+      fullname:  '',
+      is_virtual: account.account_type === 'demo' ? 1 : 0,
+      landing_company_fullname: '',
+      landing_company_name:     'virtual',
+      linked_to:      [],
+      local_currencies: {},
+      preferred_language: 'EN',
+      scopes:     ['read', 'trade', 'admin'],
+      upgradeable_landing_companies: [],
+      user_id:    0,
+      token:      accountId,
+      country:    '',
+      account_list: earlyAccountList,
+    })
+    setIsAuthorized(true)
+    setIsAuthorizing(false)
+    console.log("[NEW WS] Early auth state seeded for:", accountId)
+  } catch(e) {
+    console.warn("[NEW WS] Could not seed early auth state:", e)
+  }
+  // ── END EARLY AUTH SEED ──────────────────────────────────────────────────
   
   console.log("[NEW WS] Using account:", accountId)
   console.log("[NEW WS] Getting OTP...")
