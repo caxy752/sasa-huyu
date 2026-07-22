@@ -1,0 +1,172 @@
+I want to extend the Manual Trading tab by implementing true bulk trading using the existing Deriv trading engine.
+
+Current UI
+
+The manual trading form contains:
+
+Duration (ticks)
+Stake (USD)
+Runs
+
+Example:
+
+Duration: 1 tick
+Stake: $1
+Runs: 10
+Required Behavior
+
+The Runs field represents the number of contracts to open simultaneously.
+
+Example:
+
+Duration = 1 tick
+Stake = $1
+Runs = 10
+
+When the user clicks Buy (or Sell):
+
+Open 10 independent contracts
+Every contract must use:
+identical contract type
+identical stake
+identical duration
+identical symbol
+identical barrier (if applicable)
+All buy requests should be dispatched immediately without waiting for the previous one to finish.
+Do NOT execute them sequentially.
+Execution Requirements
+
+Use the existing Deriv API trading system.
+
+The current project already contains:
+
+authenticated WebSocket
+sendViaNewSystemWithPromise()
+buy request handling
+proposal handling
+contract monitoring
+
+Reuse the existing infrastructure.
+
+Do not rewrite authentication.
+
+Do not duplicate trading logic.
+
+Only extend it to support bulk execution.
+
+Parallel Execution
+
+Instead of:
+
+for (...) {
+   await buy();
+}
+
+which waits for each trade,
+
+execute all trades in parallel.
+
+Example:
+
+const promises = [];
+
+for (let i = 0; i < runs; i++) {
+    promises.push(placeTrade());
+}
+
+await Promise.all(promises);
+
+The goal is that all buy requests are sent nearly simultaneously.
+
+Trade Tracking
+
+Each successful buy returns a unique contract ID.
+
+Store every contract separately.
+
+Example:
+
+[
+  {
+     contract_id: 123,
+     run: 1
+  },
+  {
+     contract_id: 124,
+     run: 2
+  },
+  ...
+]
+
+Each contract must continue using the existing lifecycle:
+
+proposal_open_contract
+updates
+settlement
+profit/loss
+
+independently.
+
+UI
+
+After clicking Buy:
+
+Display something similar to:
+
+Executing 10 simultaneous trades...
+
+After completion:
+
+✓ 10/10 trades submitted
+
+If one fails:
+
+9 successful
+1 failed
+
+The successful trades must continue running.
+
+Do not cancel the successful ones because one failed.
+
+Validation
+
+Rules:
+
+Runs minimum = 1
+Runs maximum = configurable constant (example 100)
+Runs must be an integer
+
+Reject:
+
+0
+-1
+2.5
+abc
+Performance
+
+Do not create multiple WebSocket connections.
+
+Reuse the existing authenticated connection.
+
+Only send multiple buy requests.
+
+Important
+
+This feature must perform true simultaneous bulk execution.
+
+The purpose is that if:
+
+Duration = 4 ticks
+Runs = 10
+
+the system attempts to submit all 10 contracts immediately so they enter the market as close together as possible, allowing them to expire at approximately the same tick if accepted together by the Deriv backend.
+
+Do not introduce artificial delays, throttling, or sequential processing.
+
+Code Quality
+Reuse existing components and utilities.
+Follow the current project architecture.
+Keep the implementation modular and maintainable.
+Minimize code duplication.
+Ensure proper error handling for individual trades.
+Preserve all existing manual trading functionality when Runs = 1.

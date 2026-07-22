@@ -951,22 +951,17 @@ const ManualTrading = observer(() => {
         setRunCountInput(String(runCount));
 
         setTradeError('');
-        setTradeMessage(`Buying ${action.label} contract 1 of ${runCount}...`);
         setIsPurchasing(true);
         stopRequestedRef.current = false;
 
         const parameters = buildTradeParameters(action.contractType);
 
-        try {
-            let totalProfit = 0;
-
-            for (let runIndex = 1; runIndex <= runCount; runIndex++) {
-                if (stopRequestedRef.current) {
-                    break;
-                }
-                setTradeMessage(`Buying ${action.label} contract ${runIndex} of ${runCount}...`);
+        // ── Single trade: retain original sequential behaviour ──────────────
+        if (runCount === 1) {
+            setTradeMessage(`Buying ${action.label} contract...`);
+            try {
                 const tradeStartTime = Math.floor(Date.now() / 1000);
-                const verificationId = `manual_${selectedSymbol}_${tradeStartTime}_${runIndex}_${Math.random()
+                const verificationId = `manual_${selectedSymbol}_${tradeStartTime}_1_${Math.random()
                     .toString(36)
                     .slice(2, 11)}`;
                 const fallbackContract = {
@@ -974,7 +969,7 @@ const ManualTrading = observer(() => {
                     date_start: tradeStartTime,
                     display_name: selectedMarket.label,
                     underlying_symbol: selectedSymbol,
-                    shortcode: `MANUAL_${action.contractType}_${selectedSymbol}_${runIndex}`,
+                    shortcode: `MANUAL_${action.contractType}_${selectedSymbol}_1`,
                     contract_type: action.contractType,
                     currency,
                     verification_id: verificationId,
@@ -986,9 +981,7 @@ const ManualTrading = observer(() => {
                     contract_id: buy.contract_id,
                     transaction_ids: { buy: buy.transaction_id },
                 };
-
                 pushContract(buySnapshot);
-
                 const settledContract = await streamContractUntilSettled({
                     contractId: buy.contract_id,
                     fallback: buySnapshot,
@@ -996,27 +989,87 @@ const ManualTrading = observer(() => {
                     source: 'ManualTrading',
                 });
                 const profit = Number(settledContract.profit ?? 0);
-                totalProfit = Number((totalProfit + profit).toFixed(8));
-                if (stopRequestedRef.current && runIndex < runCount) {
-                    setTradeMessage(
-                        `${action.label} stopped after run ${runIndex}. Total P/L: ${totalProfit.toFixed(2)} ${currency}`
-                    );
-                    break;
-                }
                 setTradeMessage(
-                    `${action.label} run ${runIndex} of ${runCount} closed ${profit >= 0 ? 'with profit' : 'with loss'}: ${profit.toFixed(2)} ${currency}`
+                    `${action.label} closed ${profit >= 0 ? 'with profit' : 'with loss'}: ${profit.toFixed(2)} ${currency}`
                 );
+            } catch (purchaseError) {
+                setTradeMessage('');
+                setTradeError(
+                    purchaseError instanceof Error
+                        ? purchaseError.message
+                        : 'Manual Trading could not purchase this contract.'
+                );
+            } finally {
+                setIsPurchasing(false);
+                stopRequestedRef.current = false;
             }
+            return;
+        }
 
-            if (!stopRequestedRef.current) {
-                setTradeMessage(
-                    `${action.label} ${runCount} run${runCount === 1 ? '' : 's'} complete. Total P/L: ${totalProfit.toFixed(2)} ${currency}`
-                );
+        // ── Bulk parallel execution ──────────────────────────────────────────
+        setTradeMessage(`Executing ${runCount} simultaneous trades...`);
+
+        const placeTrade = async (runIndex: number): Promise<{ contract_id: number; run: number }> => {
+            const tradeStartTime = Math.floor(Date.now() / 1000);
+            const verificationId = `manual_${selectedSymbol}_${tradeStartTime}_${runIndex}_${Math.random()
+                .toString(36)
+                .slice(2, 11)}`;
+            const fallbackContract = {
+                buy_price: stake,
+                date_start: tradeStartTime,
+                display_name: selectedMarket.label,
+                underlying_symbol: selectedSymbol,
+                shortcode: `MANUAL_${action.contractType}_${selectedSymbol}_${runIndex}`,
+                contract_type: action.contractType,
+                currency,
+                verification_id: verificationId,
+            };
+            const buy = await buyContractForUi({ parameters, price: stake, source: 'ManualTrading' });
+            const buySnapshot = {
+                ...fallbackContract,
+                buy_price: buy.buy_price,
+                contract_id: buy.contract_id,
+                transaction_ids: { buy: buy.transaction_id },
+            };
+            pushContract(buySnapshot);
+
+            // Stream each contract independently in the background — do not
+            // block the parallel buy phase on settlement.
+            streamContractUntilSettled({
+                contractId: buy.contract_id,
+                fallback: buySnapshot,
+                onUpdate: snapshot => pushContract(snapshot),
+                source: 'ManualTrading',
+            })
+                .then(settled => pushContract(settled))
+                .catch(() => {
+                    /* individual stream errors are non-fatal; contract data
+                       was already pushed at buy time */
+                });
+
+            return { contract_id: buy.contract_id, run: runIndex };
+        };
+
+        try {
+            const results = await Promise.allSettled(
+                Array.from({ length: runCount }, (_, i) => placeTrade(i + 1))
+            );
+
+            const succeeded = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+
+            if (failed === 0) {
+                setTradeMessage(`✓ ${succeeded}/${runCount} trades submitted`);
+            } else if (succeeded === 0) {
+                setTradeMessage('');
+                setTradeError(`All ${runCount} trades failed to submit.`);
+            } else {
+                setTradeMessage(`${succeeded} successful · ${failed} failed`);
             }
         } catch (purchaseError) {
             setTradeMessage('');
             setTradeError(
-                purchaseError instanceof Error ? purchaseError.message : 'Manual Trading could not purchase this contract.'
+                purchaseError instanceof Error ? purchaseError.message : 'Bulk trade execution failed.'
             );
         } finally {
             setIsPurchasing(false);
@@ -1285,7 +1338,7 @@ const ManualTrading = observer(() => {
                     })}
                 </div>
 
-                {isPurchasing && (
+                {isPurchasing && clampRunCount(Number(runCountInput)) === 1 && (
                     <button className='manual-trading-toolbar__apply' type='button' onClick={handleStopRuns}>
                         Stop remaining runs
                     </button>
