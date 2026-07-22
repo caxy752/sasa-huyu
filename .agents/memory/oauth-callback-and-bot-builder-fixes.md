@@ -38,15 +38,19 @@ Market-data calls that need auth must therefore go through the OTP WS.
 
 ## Bot builder "Not available" — OTP WS timing race (recurring)
 
-Even with `contracts_for`/`trading_times` in `TRADE_MSG_TYPES`, the bot builder
-mounts and calls them before `createNewWebSocket()` finishes opening the OTP WS.
-The old guard `if (isNewLoggedIn() && _newSystemWS.readyState === OPEN)` fell
-straight through to the unauthenticated legacy WS → OfferingsInvalidSymbol.
+Even with `contracts_for`/`trading_times` in the proxy, the bot builder mounts
+and calls them before `createNewWebSocket()` finishes opening the OTP WS. The
+guard `if (isNewLoggedIn() && _newSystemWS.readyState === OPEN)` fell straight
+through to the unauthenticated legacy WS → OfferingsInvalidSymbol.
 
-**Fix (api-base.ts):** Added `waitForOtpWsAndSend()` — when a `TRADE_MSG_TYPES`
-call arrives and `isNewLoggedIn()` is true but the WS isn't open yet, poll every
-150 ms (up to 10 s) until it opens, then send via OTP WS. After 10 s, fall back
-to legacy WS.
+**Fix (api-base.ts):** Split routing into two sets:
+- `AUTH_REQUIRED_TYPES` = `{contracts_for, trading_times}` — NEVER touch legacy WS.
+  If OTP WS not ready, `waitForOtpWsAndSend()` polls every 150 ms (up to 12 s).
+  On timeout: return API-style error `{error:{code:'OTPWebSocketTimeout',...}}`.
+- `OTP_MSG_TYPES` = `{proposal, buy, sell, ...}` — send via OTP WS if open, else legacy WS.
+
+**Why:** `contracts_for`/`trading_times` fail silently on the unauthenticated
+legacy WS. Timeout must NEVER fall back to legacy WS — that recreates the bug.
 
 ## AuthWrapper login-page flash — isNewLoggedIn() guard
 

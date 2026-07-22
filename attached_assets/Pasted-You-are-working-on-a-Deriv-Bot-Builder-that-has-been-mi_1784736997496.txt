@@ -1,0 +1,325 @@
+You are working on a Deriv Bot Builder that has been migrated from the legacy authorization system to the new OAuth/OTP authentication system.
+
+Current Problem
+
+The Trade Parameters panel sometimes shows:
+
+Market → Not available
+Trade Type → Not available
+Contract Type → Not available
+
+instead of loading the available markets and contracts.
+
+This happens because Bot Builder depends on successful responses from:
+
+contracts_for
+trading_times
+
+These requests populate the entire Trade Parameters UI.
+
+If either request fails, the Bot Builder falls back to displaying "Not available."
+
+Existing Architecture
+
+There are two completely different WebSockets.
+
+Legacy WebSocket
+
+Created by
+
+generateDerivApiInstance()
+
+This socket:
+
+works for public market data
+supports
+active_symbols
+ticks
+candles
+is NOT authenticated for new OAuth users.
+
+Therefore requests such as
+
+contracts_for
+
+or
+
+trading_times
+
+fail with errors such as
+
+OfferingsInvalidSymbol
+
+or
+
+OutputValidationFailed
+New OAuth OTP WebSocket
+
+Stored as
+
+window._newSystemWS
+
+This socket:
+
+is authenticated
+carries the OAuth session
+is the only socket that can successfully execute
+contracts_for
+trading_times
+proposal
+buy
+sell
+balance
+transaction
+proposal_open_contract
+Current Proxy
+
+The project overrides
+
+api.send()
+
+inside
+
+_setupNewSystemApiProxy()
+
+The proxy currently routes
+
+proposal
+buy
+sell
+balance
+transaction
+contracts_for
+trading_times
+
+through
+
+sendViaNewSystemWithPromise()
+
+when
+
+window._newSystemWS.readyState === WebSocket.OPEN
+
+Otherwise
+
+it falls back to
+
+originalSend()
+
+which sends through the legacy websocket.
+
+Current Issue
+
+The Bot Builder mounts extremely early.
+
+Its initialization order is roughly
+
+Bot Builder mounts
+
+↓
+
+contracts_for requested
+
+↓
+
+trading_times requested
+
+↓
+
+OTP websocket may still be connecting
+
+↓
+
+readyState != OPEN
+
+↓
+
+proxy falls back
+
+↓
+
+legacy websocket receives contracts_for
+
+↓
+
+OfferingsInvalidSymbol
+
+↓
+
+Trade Parameters become "Not available"
+
+The issue is therefore a race condition.
+
+The proxy is correct.
+
+The timing is wrong.
+
+Existing Improvement
+
+The code already converts
+
+sendViaNewSystemWithPromise()
+
+rejections into resolved API-style errors
+
+using
+
+p.catch(err => err)
+
+for
+
+contracts_for
+trading_times
+
+This should remain.
+
+Do not remove it.
+
+What Needs To Be Fixed
+
+The proxy should never immediately fall back to the legacy websocket for
+
+contracts_for
+trading_times
+
+because those requests REQUIRE an authenticated websocket.
+
+Instead:
+
+If
+
+window._newSystemWS.readyState != OPEN
+
+the proxy should wait until the OTP websocket becomes available.
+
+Desired Behaviour
+
+Instead of
+
+Bot Builder
+
+↓
+
+contracts_for
+
+↓
+
+legacy WS
+
+↓
+
+Not available
+
+it should become
+
+Bot Builder
+
+↓
+
+contracts_for
+
+↓
+
+OTP websocket not ready
+
+↓
+
+wait
+
+↓
+
+OTP websocket opens
+
+↓
+
+send contracts_for
+
+↓
+
+success
+
+↓
+
+populate markets
+
+↓
+
+Trade Parameters load correctly
+Required Solution
+
+Implement a robust waiting mechanism.
+
+Requirements:
+
+Wait for the OTP websocket to open before sending:
+contracts_for
+trading_times
+Maximum wait:
+configurable (e.g. 10–15 seconds)
+Polling interval:
+around 100–200 ms
+As soon as
+window._newSystemWS.readyState === WebSocket.OPEN
+
+send the request immediately.
+
+Do not send these requests through the legacy websocket during the waiting period.
+
+Timeout Behaviour
+
+If the timeout expires:
+
+Return a proper API-style error object instead of silently routing to the legacy websocket.
+
+Do NOT allow
+
+contracts_for
+
+or
+
+trading_times
+
+to be executed through the legacy websocket.
+
+Doing so recreates the original bug.
+
+Preserve Existing Behaviour
+
+The following messages should continue behaving exactly as they do today:
+
+active_symbols
+ticks
+candles
+history
+
+These should continue using the legacy websocket because they work without authorization.
+
+Keep existing handling for
+
+forget_all
+
+so that
+
+forget_all: ticks
+forget_all: candles
+
+continue using the legacy websocket.
+
+Otherwise rerun errors like
+
+already subscribed
+
+will return.
+
+Do not modify:
+
+authorization flow
+OAuth logic
+login flow
+token storage
+API initialization
+account switching
+subscription logic
+trade execution logic
+
+The only area to modify is the websocket proxy responsible for routing requests between the legacy websocket and the authenticated OTP websocket.

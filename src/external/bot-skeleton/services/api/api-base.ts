@@ -355,41 +355,62 @@ class APIBase {
             }
         });
 
-        // Override send() – route trade messages + authenticated market-data requests
-        // through the OTP WS when connected.
-        //
-        // Why contracts_for and trading_times are here:
-        //   The legacy WS is unauthenticated for new-auth users.  Without auth,
-        //   contracts_for('R_100') returns OfferingsInvalidSymbol and trading_times
-        //   returns OutputValidationFailed — both cause "Not available" in the bot
-        //   builder trade-parameters panel.  The OTP WS is pre-authenticated via
-        //   OTP, so these calls succeed there.  active_symbols and ticks are left
-        //   on the legacy WS because they work without auth and the OTP WS may not
-        //   be ready when api_base.init() first runs.
-        const TRADE_MSG_TYPES = new Set([
+        // Message types that must go through the authenticated OTP WebSocket.
+        // active_symbols, ticks, candles, history stay on the legacy WS — they
+        // work without auth and the OTP WS may not be ready when init() first runs.
+        const OTP_MSG_TYPES = new Set([
             'proposal', 'buy', 'sell',
             'proposal_open_contract', 'balance', 'transaction',
             'forget', 'forget_all',
-            // Market-data calls that require an authenticated connection:
-            'contracts_for', 'trading_times',
         ]);
-        // Wait up to 10 s for the OTP WebSocket to open, then send via it.
-        // This prevents contracts_for / trading_times from falling through to the
-        // unauthenticated legacy WS when the bot builder mounts before the OTP WS
-        // has finished connecting (which causes "Not available" in trade parameters).
+
+        // These two types REQUIRE an authenticated connection.  They must NEVER
+        // be sent through the unauthenticated legacy WS — doing so causes
+        // OfferingsInvalidSymbol / OutputValidationFailed and "Not available" in
+        // the Bot Builder Trade Parameters panel.
+        const AUTH_REQUIRED_TYPES = new Set(['contracts_for', 'trading_times']);
+
+        // Maximum time (ms) to wait for the OTP WebSocket to open before giving up.
+        const OTP_WS_WAIT_TIMEOUT_MS = 12_000;
+        // How often to check whether the OTP WS has opened (ms).
+        const OTP_WS_POLL_INTERVAL_MS = 150;
+
+        /**
+         * Wait for the OTP WebSocket to reach OPEN state, then send `data` through it.
+         *
+         * CONTRACT: this function NEVER sends through the legacy WebSocket.
+         * On timeout it returns a proper API-style error object so the caller
+         * (and the Bot Builder) can handle the failure gracefully instead of
+         * silently falling back to the unauthenticated socket.
+         */
         const waitForOtpWsAndSend = (data: any): Promise<any> =>
             new Promise(resolve => {
-                const deadline = Date.now() + 10_000;
+                const msgType = (data && typeof data === 'object') ? Object.keys(data)[0] : 'unknown';
+                const deadline = Date.now() + OTP_WS_WAIT_TIMEOUT_MS;
+
                 const poll = () => {
                     if ((window as any)._newSystemWS?.readyState === WebSocket.OPEN) {
-                        resolve(sendViaNewSystemWithPromise(data));
+                        // OTP WS is ready — send through it now.
+                        resolve(sendViaNewSystemWithPromise(data).catch((err: any) => err));
                     } else if (Date.now() >= deadline) {
-                        // OTP WS never opened — fall back to legacy WS
-                        resolve(originalSend(data));
+                        // Timed out waiting — return an API-style error.
+                        // Do NOT fall back to originalSend / legacy WS here.
+                        resolve({
+                            echo_req: data,
+                            error: {
+                                code: 'OTPWebSocketTimeout',
+                                message:
+                                    'The authenticated WebSocket did not connect in time. ' +
+                                    'Please refresh the page and try again.',
+                            },
+                            msg_type: msgType,
+                            req_id: data?.req_id ?? null,
+                        });
                     } else {
-                        setTimeout(poll, 150);
+                        setTimeout(poll, OTP_WS_POLL_INTERVAL_MS);
                     }
                 };
+
                 poll();
             });
 
@@ -414,12 +435,19 @@ class APIBase {
                     }
                 }
 
-                if (TRADE_MSG_TYPES.has(firstKey)) {
+                // Auth-required types: wait for OTP WS — never touch legacy WS.
+                if (AUTH_REQUIRED_TYPES.has(firstKey)) {
+                    if ((window as any)._newSystemWS?.readyState === WebSocket.OPEN) {
+                        return sendViaNewSystemWithPromise(data).catch((err: any) => err);
+                    }
+                    return waitForOtpWsAndSend(data);
+                }
+
+                // Other OTP-routed types: send via OTP WS if ready, legacy WS otherwise.
+                if (OTP_MSG_TYPES.has(firstKey)) {
                     if ((window as any)._newSystemWS?.readyState === WebSocket.OPEN) {
                         return sendViaNewSystemWithPromise(data);
                     }
-                    // OTP WS not ready yet — queue until it opens (avoids legacy WS auth failure)
-                    return waitForOtpWsAndSend(data);
                 }
             }
             return originalSend(data);
