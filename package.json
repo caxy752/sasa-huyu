@@ -167,7 +167,7 @@
         "url": "^0.11.3"
     },
     "optionalDependencies": {
-        "@rspack/binding-linux-x64-gnu": "^1.1.8",
+        "@rspack/binding-linux-x64-gnu": "^1.7.12",
         "sass-embedded-android-arm": "1.85.1",
         "sass-embedded-android-arm64": "1.85.1",
         "sass-embedded-android-ia32": "1.85.1",
