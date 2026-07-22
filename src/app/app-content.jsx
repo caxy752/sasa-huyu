@@ -160,9 +160,16 @@ const AppContent = observer(() => {
 
         const retrieveActiveSymbols = () => {
             const { active_symbols } = ApiHelpers.instance;
-            active_symbols.retrieveActiveSymbols(true).then(() => {
-                setIsLoading(false);
-            });
+            active_symbols
+                .retrieveActiveSymbols(true)
+                .then(() => {
+                    setIsLoading(false);
+                })
+                .catch(() => {
+                    // If the fetch fails (e.g. API error), still dismiss the
+                    // spinner so the app is not permanently blocked.
+                    setIsLoading(false);
+                });
         };
 
         if (ApiHelpers?.instance?.active_symbols) {
