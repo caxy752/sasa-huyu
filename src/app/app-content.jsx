@@ -21,6 +21,7 @@ import initHotjar from '@/utils/hotjar';
 import { setSmartChartsPublicPath } from '@deriv/deriv-charts';
 import { ThemeProvider } from '@deriv-com/quill-ui';
 import { localize } from '@deriv-com/translations';
+import OfflineBanner from '@/components/offline-banner/offline-banner';
 import Audio from '../components/audio';
 import BlocklyLoading from '../components/blockly-loading';
 import BotStopped from '../components/bot-stopped';
@@ -155,28 +156,32 @@ const AppContent = observer(() => {
         });
     };
 
+    const fallbackTimeoutRef = React.useRef(null);
+
     const changeActiveSymbolLoadingState = () => {
         init();
 
+        // Fallback: force loading to resolve after 15s even if active symbols hang
+        // (e.g. trading_times.initialise() never resolves on the legacy WS)
+        if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = setTimeout(() => {
+            setIsLoading(false);
+        }, 15000);
+
         const retrieveActiveSymbols = () => {
             const { active_symbols } = ApiHelpers.instance;
-            active_symbols
-                .retrieveActiveSymbols(true)
-                .then(() => {
-                    setIsLoading(false);
-                })
-                .catch(() => {
-                    // If the fetch fails (e.g. API error), still dismiss the
-                    // spinner so the app is not permanently blocked.
-                    setIsLoading(false);
-                });
+            active_symbols.retrieveActiveSymbols(true).then(() => {
+                if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
+                setIsLoading(false);
+            }).catch(() => {
+                if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
+                setIsLoading(false);
+            });
         };
 
         if (ApiHelpers?.instance?.active_symbols) {
             retrieveActiveSymbols();
         } else {
-            // This is a workaround to fix the issue where the active symbols are not loaded immediately
-            // when the API is initialized. Should be replaced with RxJS pubsub
             const intervalId = setInterval(() => {
                 if (ApiHelpers?.instance?.active_symbols) {
                     clearInterval(intervalId);
@@ -221,6 +226,7 @@ const AppContent = observer(() => {
             <ThemeProvider theme={is_dark_mode_on ? 'dark' : 'light'}>
                 <BlocklyLoading />
                 <div className='bot-dashboard bot' data-testid='dt_bot_dashboard'>
+                    <OfflineBanner />
                     <Audio />
                     <Main />
                     <BotBuilder />
