@@ -158,23 +158,11 @@ const AppContent = observer(() => {
     const changeActiveSymbolLoadingState = () => {
         init();
 
-        // Safety: force dismiss the spinner after 10 s regardless of API state
-        const safetyTimer = setTimeout(() => {
-            setIsLoading(false);
-        }, 10000);
-
         const retrieveActiveSymbols = () => {
             const { active_symbols } = ApiHelpers.instance;
-            active_symbols
-                .retrieveActiveSymbols(true)
-                .then(() => {
-                    clearTimeout(safetyTimer);
-                    setIsLoading(false);
-                })
-                .catch(() => {
-                    clearTimeout(safetyTimer);
-                    setIsLoading(false);
-                });
+            active_symbols.retrieveActiveSymbols(true).then(() => {
+                setIsLoading(false);
+            });
         };
 
         if (ApiHelpers?.instance?.active_symbols) {
@@ -182,17 +170,10 @@ const AppContent = observer(() => {
         } else {
             // This is a workaround to fix the issue where the active symbols are not loaded immediately
             // when the API is initialized. Should be replaced with RxJS pubsub
-            let attempts = 0;
             const intervalId = setInterval(() => {
-                attempts += 1;
                 if (ApiHelpers?.instance?.active_symbols) {
                     clearInterval(intervalId);
                     retrieveActiveSymbols();
-                } else if (attempts >= 10) {
-                    // Gave up after 10 s of polling — dismiss the spinner anyway
-                    clearInterval(intervalId);
-                    clearTimeout(safetyTimer);
-                    setIsLoading(false);
                 }
             }, 1000);
         }
