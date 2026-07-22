@@ -28,6 +28,13 @@ export default class ActiveSymbols {
         if (api_base.has_active_symbols) {
             this.active_symbols = api_base?.active_symbols ?? [];
         } else {
+            // For new OAuth users, active_symbols_promise may be null at this
+            // point because it is set only after authorizeAndSubscribe completes.
+            // If it is null, trigger the fetch now — active_symbols doesn't
+            // require an authorized connection so it is safe to call early.
+            if (!api_base.active_symbols_promise) {
+                api_base.active_symbols_promise = api_base.getActiveSymbols();
+            }
             await api_base.active_symbols_promise;
             this.active_symbols = api_base?.active_symbols ?? [];
         }
