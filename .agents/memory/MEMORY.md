@@ -3,3 +3,4 @@
 - [Zip import missing exports](zip-import-missing-exports.md) — api-base.ts imports getAccountId/removeUrlParameter from account-helpers and isBackendError/handleBackendError from error-handler; these were missing from zip and must be added manually.
 - [Replit rsbuild config rules](rsbuild-replit-rules.md) — always use port 5000 (not 3000), add noErrorOnMissing for deriv-charts fonts glob, keep /api proxy to localhost:3001, keep source.include for @deriv-com/translations.
 - [New OAuth PKCE auth chain](new-oauth-auth-chain.md) — full chain of fixes needed for Bearer-token login to work without WS auth; 4 files touch the critical path.
+- [OAuth callback + bot builder fixes](oauth-callback-and-bot-builder-fixes.md) — callback loops to login (replaceState race); bot builder "Not available" (contracts_for/trading_times need OTP WS, not legacy WS).
